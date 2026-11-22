@@ -514,8 +514,8 @@
     },
     {
       "path": "compat/bootstrap/hmos_probe_v121.c",
-      "bytes": 77859,
-      "sha256": "8451946b7c62c02f2ee9846cddd0e1df9ad8ee006ac09258464ed46ada4e4b7a"
+      "bytes": 77970,
+      "sha256": "65fd52e69ca90cab4e92fc9c64cd3d153a49103a61d1022a9364308ea815fbc7"
     },
     {
       "path": "compat/bootstrap/init_entry.c",
@@ -2454,8 +2454,8 @@
     },
     {
       "path": "tools/packaging/build_marble_phase2_images.py",
-      "bytes": 23540,
-      "sha256": "25513fe8f920e148929132feecdc07ed35d28d4e24798cbd46b81aa2b80a9e62"
+      "bytes": 27479,
+      "sha256": "c0393f0d6ee28e24ab3db7657b3dde9e16cb37d4479fd46b8aeddda261734f70"
     },
     {
       "path": "tools/packaging/build_promax_images.py",

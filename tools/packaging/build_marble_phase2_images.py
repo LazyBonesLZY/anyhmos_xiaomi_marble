@@ -268,8 +268,50 @@ def preserve_and_update_avb_footer(payload: bytes, stock_raw: bytes) -> tuple:
     return bytes(out), True
 
 
+def extract_ko_modinfo(ko_bytes: bytes) -> tuple:
+    """Extract (depends_list, softdep_list) from a compiled .ko ELF's .modinfo section."""
+    if len(ko_bytes) < 64 or ko_bytes[:4] != b'\x7fELF' or ko_bytes[4] != 2 or ko_bytes[5] != 1:
+        return [], []
+    e_shoff = struct.unpack_from('<Q', ko_bytes, 40)[0]
+    e_shentsize, e_shnum, e_shstrndx = struct.unpack_from('<HHH', ko_bytes, 58)
+    if e_shoff == 0 or e_shentsize < 64 or e_shnum == 0 or e_shstrndx >= e_shnum:
+        return [], []
+    if e_shoff + e_shnum * e_shentsize > len(ko_bytes):
+        return [], []
+
+    def shdr(idx):
+        off = e_shoff + idx * e_shentsize
+        return struct.unpack_from('<IIQQQQ', ko_bytes, off)
+
+    _, _, _, _, shstr_off, shstr_size = shdr(e_shstrndx)
+    shstr = ko_bytes[shstr_off:shstr_off + shstr_size]
+    modinfo_blob = b''
+    for idx in range(e_shnum):
+        sh_name, _, _, _, sh_off, sh_size = shdr(idx)
+        end = shstr.find(b'\0', sh_name)
+        name = shstr[sh_name:end if end != -1 else len(shstr)]
+        if name == b'.modinfo':
+            modinfo_blob = ko_bytes[sh_off:sh_off + sh_size]
+            break
+
+    depends = []
+    softdeps = []
+    for entry in modinfo_blob.split(b'\0'):
+        if entry.startswith(b'depends='):
+            val = entry[8:].decode('utf-8', errors='replace').strip()
+            for item in val.split(','):
+                item = item.strip()
+                if item:
+                    depends.append(item)
+        elif entry.startswith(b'softdep='):
+            val = entry[8:].decode('utf-8', errors='replace').strip()
+            if val:
+                softdeps.append(val)
+    return depends, softdeps
+
+
 def prune_module_metadata(entries: dict, valid_ko_names: set) -> None:
-    """Prune removed modules from modules.load* and modules.dep so finit_module never hits stale .ko."""
+    """Prune removed modules from modules.load* and regenerate modules.dep/softdep from actual .ko .modinfo."""
     for load_key in ('lib/modules/modules.load', 'lib/modules/modules.load.recovery'):
         if load_key in entries:
             fields, blob = entries[load_key]
@@ -282,29 +324,80 @@ def prune_module_metadata(entries: dict, valid_ko_names: set) -> None:
             f[6] = len(new_blob)
             entries[load_key] = (f, new_blob)
 
+    norm_to_ko = {name[:-3].replace('_', '-'): name for name in valid_ko_names if name.endswith('.ko')}
+    direct_deps = {}
+    softdep_lines = []
+    has_elf_modinfo = False
+
+    for ko_name in sorted(valid_ko_names):
+        key = 'lib/modules/' + ko_name
+        blob = entries[key][1] if key in entries else b''
+        deps, sdeps = extract_ko_modinfo(blob)
+        if deps or sdeps or (len(blob) >= 4 and blob[:4] == b'\x7fELF'):
+            has_elf_modinfo = True
+        resolved = []
+        for dep in deps:
+            target = norm_to_ko.get(dep.replace('_', '-'))
+            if target and target != ko_name and target not in resolved:
+                resolved.append(target)
+        direct_deps[ko_name] = resolved
+        mod_ident = ko_name[:-3].replace('-', '_')
+        for sd in sdeps:
+            softdep_lines.append(f'softdep {mod_ident} {sd}')
+
     dep_key = 'lib/modules/modules.dep'
     if dep_key in entries:
-        fields, blob = entries[dep_key]
-        new_lines = []
-        for line in blob.decode('utf-8', errors='replace').splitlines():
-            if ':' not in line:
-                continue
-            mod_part, deps_part = line.split(':', 1)
-            mod_name = Path(mod_part.strip()).name
-            if mod_name not in valid_ko_names:
-                continue
-            kept_deps = [
-                d for d in deps_part.split()
-                if Path(d.strip()).name in valid_ko_names
-            ]
-            if kept_deps:
-                new_lines.append(f'{mod_part.strip()}: {" ".join(kept_deps)}')
-            else:
-                new_lines.append(f'{mod_part.strip()}:')
+        fields, old_blob = entries[dep_key]
+        if has_elf_modinfo:
+            # Compute transitive dependency closure (matching depmod order: direct deps first)
+            def closure(mod_name, seen):
+                out = []
+                for d in direct_deps.get(mod_name, []):
+                    if d in seen:
+                        continue
+                    seen.add(d)
+                    out.append(d)
+                    out.extend(closure(d, seen))
+                return out
+
+            new_lines = []
+            for ko_name in sorted(valid_ko_names):
+                all_deps = closure(ko_name, {ko_name})
+                if all_deps:
+                    deps_str = ' '.join(f'/lib/modules/{d}' for d in all_deps)
+                    new_lines.append(f'/lib/modules/{ko_name}: {deps_str}')
+                else:
+                    new_lines.append(f'/lib/modules/{ko_name}:')
+        else:
+            # Fallback for synthetic non-ELF test fixtures
+            new_lines = []
+            for line in old_blob.decode('utf-8', errors='replace').splitlines():
+                if ':' not in line:
+                    continue
+                mod_part, deps_part = line.split(':', 1)
+                mod_name = Path(mod_part.strip()).name
+                if mod_name not in valid_ko_names:
+                    continue
+                kept_deps = [
+                    d for d in deps_part.split()
+                    if Path(d.strip()).name in valid_ko_names
+                ]
+                if kept_deps:
+                    new_lines.append(f'{mod_part.strip()}: {" ".join(kept_deps)}')
+                else:
+                    new_lines.append(f'{mod_part.strip()}:')
         new_blob = ('\n'.join(new_lines) + '\n').encode('utf-8')
         f = fields.copy()
         f[6] = len(new_blob)
         entries[dep_key] = (f, new_blob)
+
+    softdep_key = 'lib/modules/modules.softdep'
+    if softdep_key in entries and has_elf_modinfo and softdep_lines:
+        fields, _ = entries[softdep_key]
+        new_blob = ('# Soft dependencies extracted from compiled modules.\n' + '\n'.join(softdep_lines) + '\n').encode('utf-8')
+        f = fields.copy()
+        f[6] = len(new_blob)
+        entries[softdep_key] = (f, new_blob)
 
 
 def build_phase2_images(
