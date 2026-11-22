@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class MarkerTests(unittest.TestCase):
     def test_verified_paths_and_rejected_states(self):
-        source = (ROOT / 'runtime/compat/graphics/mark-boot-success-v135.sh').read_text(
+        source = (ROOT / 'devices/sheng/runtime/boot/mark-boot-success-v135.sh').read_text(
             encoding='utf-8'
         )
         pattern = re.search(r"grep -Eq '([^']+)'", source).group(1)

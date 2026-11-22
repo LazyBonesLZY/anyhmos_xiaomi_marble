@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'tools/build_promax_ramdisk.py'
+SOURCE = ROOT / 'tools/packaging/build_promax_ramdisk.py'
 TREE = ast.parse(SOURCE.read_text(encoding='utf-8'))
 NAMES = {
     'sha',
@@ -396,13 +396,14 @@ bb() {
                 'foundation_profile': '/system/profile/foundation.json',
             }.items()
         }
-        graphics = ROOT / 'runtime/compat/graphics'
-        desktop = json.loads((graphics / 'init-desktop-services.cfg').read_text())
-        foundation = json.loads((graphics / 'foundation-app-core.json').read_text())
+        sheng_init = ROOT / 'devices/sheng/runtime/init'
+        sheng_profiles = ROOT / 'devices/sheng/runtime/profiles'
+        desktop = json.loads((sheng_init / 'init-desktop-services.cfg').read_text())
+        foundation = json.loads((sheng_profiles / 'foundation-app-core.json').read_text())
         identity = next(
             s
             for s in json.loads(
-                (ROOT / 'runtime/compat/hmos-init-debug.cfg').read_text()
+                (sheng_init / 'hmos-init-debug.cfg').read_text()
             )['services']
             if s['name'] == 'foundation'
         )

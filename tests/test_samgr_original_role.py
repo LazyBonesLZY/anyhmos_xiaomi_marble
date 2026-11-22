@@ -12,12 +12,12 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'tools'))
+sys.path.insert(0, str(ROOT / 'tools/packaging'))
 import samgr_original_role as role
 from private_persist_parameters import prepare_private_persist
 
 
-SOURCE = ROOT / 'tools/build_promax_ramdisk.py'
+SOURCE = ROOT / 'tools/packaging/build_promax_ramdisk.py'
 TREE = ast.parse(SOURCE.read_text(encoding='utf-8'))
 MEMBER = 'sheng-compat-v118/hmos-init-debug.cfg'
 BOOTSTRAP = 'fb1545f6027ded68368b434dcb15e71b0003f2110a385d9ac2084df157e12407'
@@ -171,7 +171,7 @@ class SamgrOriginalRoleTests(unittest.TestCase):
 
     def test_private_hash_chain_uses_repaired_main(self):
         output, _ = self.restore()
-        template = (ROOT / 'runtime/compat/graphics/prepare-private-persist.sh').read_text(
+        template = (ROOT / 'devices/sheng/runtime/boot/prepare-private-persist.sh').read_text(
             encoding='utf-8')
         private, helper, identities = prepare_private_persist(output, template, BOOTSTRAP)
         self.assertEqual(
@@ -225,7 +225,7 @@ class SamgrActualInputTests(unittest.TestCase):
         flags = SimpleNamespace(private_persist_parameters=True,
             core_runtime_services=False, cert_manager_service=False)
         (_, output), report = builder_stage(config, donor_bytes, flags)
-        template = (ROOT / 'runtime/compat/graphics/prepare-private-persist.sh').read_text(
+        template = (ROOT / 'devices/sheng/runtime/boot/prepare-private-persist.sh').read_text(
             encoding='utf-8')
         private, helper, identities = prepare_private_persist(output, template, BOOTSTRAP)
         expected = json.loads(donor_bytes)['services'][0]

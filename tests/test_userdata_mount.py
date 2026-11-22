@@ -16,7 +16,7 @@ import tempfile
 import uuid
 
 ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = ROOT / 'runtime/compat/graphics/init-userdata-ext4.sh'
+SCRIPT = ROOT / 'devices/sheng/runtime/boot/init-userdata-ext4.sh'
 
 
 def run(*args, check=True):

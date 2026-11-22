@@ -18,7 +18,7 @@ from elftools.elf.elffile import ELFFile
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'tools/build_promax_ramdisk.py'
+SOURCE = ROOT / 'tools/packaging/build_promax_ramdisk.py'
 TREE = ast.parse(SOURCE.read_text(encoding='utf-8'))
 HELPERS = {
     'inspect_linux_bootstrap', 'validate_bootstrap_binary',

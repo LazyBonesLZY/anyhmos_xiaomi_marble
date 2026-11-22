@@ -6,13 +6,13 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'tools'))
+sys.path.insert(0, str(ROOT / 'tools/packaging'))
 from private_persist_parameters import prepare_private_persist
 
 
 class PrivatePersistParametersTests(unittest.TestCase):
     def setUp(self):
-        self.config = (ROOT / 'runtime/compat/hmos-init-debug.cfg').read_bytes()
+        self.config = (ROOT / 'devices/sheng/runtime/init/hmos-init-debug.cfg').read_bytes()
         self.template = '\n'.join([
             'BOOTSTRAP_SHA=@BOOTSTRAP_SHA@',
             'BASELINE_SHA=@BASELINE_SHA@',

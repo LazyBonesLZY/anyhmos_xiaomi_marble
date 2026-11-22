@@ -12,7 +12,7 @@ foreach ($Name in @('boot.img','init_boot.img','vendor_boot.img','vbmeta.img','v
 }
 $Manifest = @{kind='sheng-promax-experimental';device_boot_tested=$false;super_bytes=11811160064;userdata_bytes=249497890816;files=$Files}
 $Manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $Fixture 'PACKAGE.json') -Encoding UTF8
-$Source = [IO.File]::ReadAllText((Join-Path $Repo 'tools\Flash-ProMax.ps1'))
+$Source = [IO.File]::ReadAllText((Join-Path $Repo 'tools\packaging\Flash-ProMax.ps1'))
 $Tokens=$ParseErrors=$null
 $Ast=[System.Management.Automation.Language.Parser]::ParseInput($Source,[ref]$Tokens,[ref]$ParseErrors)
 if ($ParseErrors.Count) { throw 'Production script does not parse.' }

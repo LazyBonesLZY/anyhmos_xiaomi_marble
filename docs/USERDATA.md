@@ -20,13 +20,13 @@ Run these tests as root in Linux/WSL. They use disposable loop images in a priva
 
 ```sh
 python3 tests/test_userdata_mount.py
-python3 tools/build_current.py bootstrap
+python3 tools/build/build_current.py bootstrap
 ```
 
-更新镜像时需要同时放入新 bootstrap 程序和 `runtime/compat/graphics/init-userdata-ext4.sh`，并更新 ramdisk 校验清单。修改仅位于 vendor_boot；boot、init_boot 和 super 不需要因这一项修复而更改。旧镜像仍会检查固定 UUID，单独更新 GitHub 源码不会改变设备上的程序。
+更新镜像时需要同时放入新 bootstrap 程序和 `devices/sheng/runtime/boot/init-userdata-ext4.sh`，并更新 ramdisk 校验清单。修改仅位于 vendor_boot；boot、init_boot 和 super 不需要因这一项修复而更改。旧镜像仍会检查固定 UUID，单独更新 GitHub 源码不会改变设备上的程序。
 
 Repack vendor_boot with both the rebuilt bootstrap and the updated mount script, then refresh its integrity manifest. This fix does not require changes to boot, init_boot or super. Existing images retain the old UUID restriction until replaced; updating the repository alone does not update a device.
 
-当前完成的是编译、隔离镜像测试和镜像打包检查，尚未在平板上刷入本次修复。详见[检查报告](../analysis/userdata-ext4-fix-verification.json)。
+当前完成的是编译、隔离镜像测试和镜像打包检查，尚未在平板上刷入本次修复。详见[检查报告](../archive/sheng/analysis/userdata-ext4-fix-verification.json)。
 
-Compilation, isolated image tests and package checks are complete. This fix has not yet been flashed to the tablet. See the [verification report](../analysis/userdata-ext4-fix-verification.json).
+Compilation, isolated image tests and package checks are complete. This fix has not yet been flashed to the tablet. See the [verification report](../archive/sheng/analysis/userdata-ext4-fix-verification.json).

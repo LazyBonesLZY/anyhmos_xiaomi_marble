@@ -1,11 +1,12 @@
 # Generated runtime inputs, proprietary extracts, and personal data
 /work/
+/out/
 /release/
-/output/releases/
-/output/logs/
-/output/screenshots/
-/output/device-backup/
-/output/platform-tools/
+/host-tools/releases/
+/host-tools/logs/
+/host-tools/screenshots/
+/host-tools/device-backup/
+/host-tools/platform-tools/
 __pycache__/
 *.pyc
 .venv/
@@ -17,6 +18,7 @@ node_modules/
 *.so.*
 !/patches/donor/gem-w00-111-sp12/*.json
 !/patches/donor/*.json
+!/archive/sheng/legacy-donor-patches/*.json
 *.ko
 *.o
 *.a

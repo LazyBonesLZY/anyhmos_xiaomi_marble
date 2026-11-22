@@ -15,15 +15,15 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'tools/build_promax_ramdisk.py'
+SOURCE = ROOT / 'tools/packaging/build_promax_ramdisk.py'
 TREE = ast.parse(SOURCE.read_text(encoding='utf-8'))
 SPEC = importlib.util.spec_from_file_location(
-    'hiview_event_service', ROOT / 'tools/hiview_event_service.py'
+    'hiview_event_service', ROOT / 'tools/packaging/hiview_event_service.py'
 )
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 LAUNCHER_SOURCE = ROOT / 'compat/services/hiview_namespace_launcher.c'
-TEMPLATE = ROOT / 'runtime/compat/graphics/prepare-native-hiview-events.sh'
+TEMPLATE = ROOT / 'devices/sheng/runtime/boot/prepare-native-hiview-events.sh'
 BASH = shutil.which('bash') or r'C:\Program Files\Git\bin\bash.exe'
 
 

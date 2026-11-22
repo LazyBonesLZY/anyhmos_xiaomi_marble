@@ -11,7 +11,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'tools/build_promax_ramdisk.py'
+SOURCE = ROOT / 'tools/packaging/build_promax_ramdisk.py'
 NAMES = {'add_huawei_id_service', 'add_huawei_id_startup'}
 TREE = ast.parse(SOURCE.read_text(encoding='utf-8'))
 HELPERS = ast.Module(

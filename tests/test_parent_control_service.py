@@ -15,13 +15,13 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BUILDER = ROOT / 'tools/build_promax_ramdisk.py'
+BUILDER = ROOT / 'tools/packaging/build_promax_ramdisk.py'
 SPEC = importlib.util.spec_from_file_location(
-    'parent_control_service', ROOT / 'tools/parent_control_service.py'
+    'parent_control_service', ROOT / 'tools/packaging/parent_control_service.py'
 )
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
-HELPER = ROOT / 'runtime/compat/graphics/prepare-parentcontrol-el1.sh'
+HELPER = ROOT / 'devices/sheng/runtime/boot/prepare-parentcontrol-el1.sh'
 BASH = shutil.which('bash') or r'C:\Program Files\Git\bin\bash.exe'
 
 
@@ -392,8 +392,9 @@ class ParentControlServiceTests(unittest.TestCase):
                 result = run_shell(stub + script, {
                     'MODE': mode, 'HMOS_TEST_HOST_METADATA': 'windows' if os.name == 'nt' else 'posix',
                 })
-                self.assertEqual(result.returncode == 0, mode == 'ready', result.stderr)
+                self.assertEqual(result.returncode == 0, mode in ('ready', 'missing-el2'), result.stderr)
                 if mode == 'missing-el2':
+                    self.assertIn('PARENTCONTROL_PREPARE_DEFERRED_FIRST_BOOT', result.stdout)
                     self.assertFalse(el2.exists())
                     self.assertFalse((parent / 'parentcontrol').exists())
                 else:

@@ -4,7 +4,7 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'tools'))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'tools/packaging'))
 from android_sparse import SparseImage
 
 

@@ -9,7 +9,7 @@ import zipfile
 
 spec = importlib.util.spec_from_file_location(
     'extract_huawei_full_ota',
-    Path(__file__).resolve().parents[1] / 'tools/extract_huawei_full_ota.py',
+    Path(__file__).resolve().parents[1] / 'tools/packaging/extract_huawei_full_ota.py',
 )
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)

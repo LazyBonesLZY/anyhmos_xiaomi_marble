@@ -7,13 +7,13 @@ This is a current-only source tree. Shared code and required ABI layers are reta
 维护源码后运行：
 
 ```sh
-python3 tools/refresh_manifest.py
-python3 tools/verify_sources.py
+python3 tools/maint/refresh_manifest.py
+python3 tools/maint/verify_sources.py
 ```
 
 - `SOURCE-MANIFEST.json`：文件路径、字节数和 SHA-256，排除自身及 `SHA256SUMS`。
 - `SHA256SUMS`：文件与 manifest 的校验值。
-- `RELEASE.json`：当前选取策略和功能基线。
+- `archive/sheng/RELEASE.json`：原 `sheng` 选取策略与历史基线归档。
 
 上述命令不生成 ZIP、不上传 GitHub，也不触碰设备。编译产物、原厂库、固件、设备备份、账号令牌和私人日志不应提交。个人路径、序列号与网络标识已在发布副本脱敏；构建前配置本地依赖。
 

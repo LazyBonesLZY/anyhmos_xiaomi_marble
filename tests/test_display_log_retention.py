@@ -12,8 +12,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'tools/build_promax_ramdisk.py'
-TRACKED = ROOT / 'runtime/compat/graphics/apply-hardware-v116.sh'
+SOURCE = ROOT / 'tools/packaging/build_promax_ramdisk.py'
+TRACKED = ROOT / 'devices/sheng/runtime/boot/apply-hardware-v116.sh'
 TREE = ast.parse(SOURCE.read_text(encoding='utf-8'))
 BEGIN = '# SHENG_DISPLAY_LOG_RETENTION_BEGIN\n'
 END = '# SHENG_DISPLAY_LOG_RETENTION_END\n'

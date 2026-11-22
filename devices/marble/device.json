@@ -1,0 +1,62 @@
+{
+  "codename": "marble",
+  "models": [
+    "Redmi Note 12 Turbo",
+    "POCO F5"
+  ],
+  "soc": {
+    "name": "Qualcomm Snapdragon 7+ Gen 2",
+    "model": "SM7475",
+    "platform": "ukee",
+    "family": "sm8450"
+  },
+  "kernel": {
+    "gki_branch": "android12-5.10",
+    "version_family": "5.10",
+    "uts_release": "TBD_COLLECT_ON_DEVICE"
+  },
+  "partitions": {
+    "ab_slots": true,
+    "has_init_boot": false,
+    "generic_ramdisk_partition": "boot",
+    "compat_payload_partition": "vendor_boot",
+    "boot_bytes_nominal": 201326592,
+    "vendor_boot_bytes_nominal": 100663296,
+    "recovery_bytes_nominal": 104857600,
+    "super_bytes_nominal": 9663676416
+  },
+  "display": {
+    "panel_type": "OLED",
+    "dsi_mode": "single",
+    "width": 1080,
+    "height": 2400,
+    "refresh_rates_hz": [
+      60,
+      90,
+      120
+    ],
+    "split_scanout": false
+  },
+  "gpu": {
+    "model": "Adreno 725",
+    "mesa_target": "freedreno-turnip-kgsl"
+  },
+  "touch": {
+    "mode": "kernel-evdev",
+    "candidates": [
+      "goodix_core",
+      "focaltech_touch"
+    ],
+    "thp_bridge_required": false
+  },
+  "wireless": {
+    "chipset": "QCA6490 / WCN6855",
+    "wifi_driver": "qcacld-3.0"
+  },
+  "audio": {
+    "architecture": "qcom-pal-agm-adsp",
+    "sound_card_family": "ukee",
+    "has_headphone_jack": true
+  },
+  "port_status": "phase-0-baseline-pending"
+}

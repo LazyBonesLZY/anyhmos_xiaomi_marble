@@ -11,8 +11,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'tools'))
-spec = importlib.util.spec_from_file_location('package_sensors', ROOT / 'tools/package_sensors.py')
+sys.path.insert(0, str(ROOT / 'tools/packaging'))
+spec = importlib.util.spec_from_file_location('package_sensors', ROOT / 'tools/packaging/package_sensors.py')
 package = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(package)
 
@@ -93,7 +93,7 @@ class SensorPackagingTests(unittest.TestCase):
             run = subprocess.run([bash, '-n', str(path)], capture_output=True, text=True)
             self.assertEqual(run.returncode, 0, run.stderr)
         for name in package.SCRIPTS:
-            path = ROOT / 'runtime/compat/sensors' / name
+            path = ROOT / 'devices/sheng/runtime/sensors' / name
             self.assertNotIn(b'\r', path.read_bytes())
             run = subprocess.run([bash, '-n', str(path)], capture_output=True, text=True)
             self.assertEqual(run.returncode, 0, run.stderr)

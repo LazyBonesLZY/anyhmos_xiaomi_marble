@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 spec = importlib.util.spec_from_file_location(
-    'audit_donor', Path(__file__).resolve().parents[1] / 'tools/audit_donor.py'
+    'audit_donor', Path(__file__).resolve().parents[1] / 'tools/packaging/audit_donor.py'
 )
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)

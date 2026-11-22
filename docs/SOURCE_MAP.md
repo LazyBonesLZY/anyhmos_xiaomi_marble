@@ -8,22 +8,23 @@ One selected implementation is retained per component, together with the shared 
 
 | 功能 / Component | 当前源码 / Current sources | 选取依据 / Selection |
 | --- | --- | --- |
-| 内核接口 / Kernel | `compat/kernel/`, `external/overlays/hmos-work--gki-sheng-exports/` | 匹配 303 配置的 GKI 与类型化 IPC 导出。 |
-| Binder / AccessToken | `compat/ipc/` | 实际使用的 v16 类型化导出实现；删除旧 kprobe 解析实现。 |
-| 显示、亮度、熄屏 / Display, brightness, screen power | `compat/display/composer_vdi.cpp`, `native_display_wake.cpp` | v145 compositor，已含亮度/帧节奏和 OFF latch；唤醒 helper v2。 |
-| Buffer / 媒体元数据 | `compat/display/buffer_vdi.cpp` | v130，包含此前 crop/YUV/RGB 与全局 alpha 支持。 |
-| GPU / EGL | `external/patches/source--mesa3d.patch`, `external/overlays/source--mesa3d/` | Turnip v128，已部署 EGL v126；删除 v144 EGL 实验和额外 GPU 调频。 |
-| 触控 / Touch | `compat/touch/` | service-v2 bridge、原坐标解析/过滤及 launcher。 |
-| 音频 / Audio | `compat/audio/` | v142 VDI、PAL server/client/lifecycle、服务发布及 PD mapper；各司其职，非重复音频实现。 |
-| Wi-Fi | `compat/wifi/`, `runtime/compat/graphics/*wifi*` | 当前连接路径与 v134 真实协议代际适配。 |
-| 蓝牙 / Bluetooth | `compat/bluetooth/`, `runtime/compat/bluetooth-v136/` | v139 当前检查接口、仍需要的 v136 后端，以及 v141 能力纠正。接口文件名延续原运行路径。 |
-| 电池 / Battery | `compat/battery/` | v131 真电量 HDI 发布与对照读取。 |
-| 账户与数据 / Account and database | `compat/framework/account/`, `database/` | account HMAC 和 storage launcher、database v2；无旧 database v1。 |
-| UserIAM | `compat/useriam/` | 当前软件 4.0 backend + 4.1 ABI adapter；两层都被当前代码调用，不能把 4.0 误删为旧试验。 |
-| 服务等待与内存 / Service waits and memory | `compat/framework/memmgr/`, `runtime/compat/graphics/apply-memmgr-v2.sh`, `apply-msdp-local-v1.sh` | 最新实际加载的修补脚本与汇编；不再需要旧版脚本生成新版。 |
-| 启动、按键与桌面 / Startup and desktop | `compat/bootstrap/`, `compat/services/`, `runtime/` | v118 最小入口、v121 USB probe、v143 启动声音逻辑及当前锁屏 helper v5。 |
-| BootControl | `compat/bootcontrol/`, `runtime/compat/graphics/mark-boot-success-v135.sh` | 原 HAL 与桌面验收门槛。 |
-| 调试 / Host tools | `output/*.ps1`, `tests/` | 当前串口/传输/截图、三启动分区备份恢复及当前有意义的协议/分配器测试。 |
+| 内核接口 / Kernel | `devices/sheng/kernel/`（及未来的 `devices/marble/kernel/`） | 匹配官方配置的 GKI 与类型化 IPC 导出。 |
+| Binder / AccessToken | `compat/ipc/` | 实际使用的类型化导出与单向发送方 PID 实现。 |
+| 显示、亮度、熄屏 / Display, brightness, screen power | `compat/display/composer_vdi.cpp`, `native_display_wake.cpp`, `native_refresh_rate.cpp` | 直扫/帧节奏/144Hz 模式切换与 OFF latch；唤醒 helper。 |
+| Buffer / 媒体元数据 | `compat/display/buffer_vdi.cpp` | v130，包含 crop/YUV/RGB 与全局 alpha 支持。 |
+| GPU / EGL / 同步 | `compat/graphics/`（`mesa-turnip.patch`、`mesa-gallium-egl.patch`、`dmabuf_sync/`） | 当前冻结 Turnip/Gallium-EGL 配置及 dma-buf 同步内核模块（旧补丁归档于 `archive/sheng/legacy-mesa/`）。 |
+| 触控 / Touch | `compat/touch/` | `sheng` service-v2 bridge、原坐标解析/过滤及 launcher（`marble` 计划走内核原生 evdev）。 |
+| 音频 / Audio | `compat/audio/`, `devices/sheng/runtime/audio/` | VDI（含实验采集）、PAL server/client/lifecycle、服务发布及 PD mapper。 |
+| Wi-Fi | `compat/wifi/`, `devices/sheng/runtime/wifi/` | 当前连接路径与 v134 真实协议代际适配。 |
+| 蓝牙 / Bluetooth | `compat/bluetooth/`, `devices/sheng/runtime/bluetooth/` | v139 当前检查接口、v136 Bionic 后端，以及 v141 能力纠正。 |
+| 电池与温控 / Battery and thermal | `compat/battery/`, `compat/power/`, `devices/sheng/runtime/power/` | 真电量/快充适配器 HDI、原厂充电与温控服务兼容。 |
+| 传感器 / Sensors | `compat/sensors/`, `devices/sheng/runtime/sensors/` | 高通 SSC（加速度/陀螺仪）后端与 HDI 服务。 |
+| 账户与数据 / Account and database | `compat/framework/account/`, `compat/framework/database/` | account HMAC 和 storage launcher、database v2。 |
+| UserIAM | `compat/useriam/` | 软件 4.0 backend + 4.1 ABI adapter；两层协同调用。 |
+| 服务等待与内存 / Service waits and memory | `compat/framework/memmgr/`, `devices/sheng/runtime/boot/apply-memmgr-v2.sh`, `apply-msdp-local-v1.sh` | 实际加载的修补脚本与汇编。 |
+| 启动、按键与桌面 / Startup and desktop | `compat/bootstrap/`, `compat/services/`, `devices/sheng/runtime/` | 最小入口、v121 USB probe、启动声音、锁屏 helper 与 PC 模式默认配置。 |
+| BootControl | `compat/bootcontrol/`, `devices/sheng/runtime/boot/mark-boot-success-v135.sh` | 原 HAL 与桌面验收门槛。 |
+| 宿主机调试与测试 / Host tools & tests | `host-tools/*.ps1`, `tools/`, `tests/` | 串口/传输/截图、分区备份恢复、编译打包脚本与离线契约测试。 |
 
 `runtime/` 中脚本和配置从 v146 ramdisk 的最终内容提取，文件名保留被 init 和启动程序引用的名称。文件名中的 v116/v136 等不表示仓库同时维护多套旧实现。原厂库、固件、应用、编译产物和完整镜像不在仓库内。
 
