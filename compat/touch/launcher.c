@@ -24,7 +24,7 @@ static int publish(void)
         char path[512],name[128];
         snprintf(path,sizeof(path),"/sys/class/input/%s/device/name",entry->d_name);
         FILE *file=fopen(path,"r");if(!file)continue;
-        int match=fgets(name,sizeof(name),file)&&!strcmp(name,"Sheng THP Compat Touchscreen\n");fclose(file);if(!match)continue;
+        int match=fgets(name,sizeof(name),file)&&!strcmp(name,"Hmos THP Compat Touchscreen\n");fclose(file);if(!match)continue;
         snprintf(path,sizeof(path),"/sys/class/input/%s/dev",entry->d_name);
         unsigned major,minor;file=fopen(path,"r");if(!file)break;
         int fields=fscanf(file,"%u:%u",&major,&minor);fclose(file);if(fields!=2)break;
@@ -39,12 +39,12 @@ static int publish(void)
 }
 int main(void)
 {
-    int log=open("/data/local/tmp/sheng-thp-service.txt",O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC,0600);
+    int log=open("/data/local/tmp/hmos-thp-service.txt",O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC,0600);
     if(log<0)return 2;dup2(log,1);dup2(log,2);close(log);setbuf(stdout,NULL);
     struct sigaction sa={0};sa.sa_handler=forward;sigemptyset(&sa.sa_mask);
     sigaction(SIGTERM,&sa,NULL);sigaction(SIGINT,&sa,NULL);
     pid_t child=fork();if(child<0)return 3;
-    if(!child){execl("/compat/bin/sheng_thp_bridge","sheng_thp_bridge","--service",(char*)NULL);perror("exec bridge");_exit(127);}
+    if(!child){execl("/compat/bin/hmos_thp_bridge","hmos_thp_bridge","--service",(char*)NULL);perror("exec bridge");_exit(127);}
     bridge=child;int status=0,ready=0;
     for(unsigned i=0;i<100;i++) {
         if(waitpid(child,&status,WNOHANG)==child){printf("THP_CHILD_EARLY_EXIT status=%d\n",status);return 4;}

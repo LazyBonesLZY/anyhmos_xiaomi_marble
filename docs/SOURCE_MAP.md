@@ -8,7 +8,7 @@ One selected implementation is retained per component, together with the shared 
 
 | 功能 / Component | 当前源码 / Current sources | 选取依据 / Selection |
 | --- | --- | --- |
-| 内核接口 / Kernel | `devices/sheng/kernel/`（及未来的 `devices/marble/kernel/`） | 匹配官方配置的 GKI 与类型化 IPC 导出。 |
+| 内核接口 / Kernel | `devices/marble/kernel/`（及参考 `devices/sheng/kernel/`） | 匹配内核配置的类型化 IPC 导出表（`hmos_ipc_api_v1`）。 |
 | Binder / AccessToken | `compat/ipc/` | 实际使用的类型化导出与单向发送方 PID 实现。 |
 | 显示、亮度、熄屏 / Display, brightness, screen power | `compat/display/composer_vdi.cpp`, `native_display_wake.cpp`, `native_refresh_rate.cpp` | 直扫/帧节奏/144Hz 模式切换与 OFF latch；唤醒 helper。 |
 | Buffer / 媒体元数据 | `compat/display/buffer_vdi.cpp` | v130，包含 crop/YUV/RGB 与全局 alpha 支持。 |

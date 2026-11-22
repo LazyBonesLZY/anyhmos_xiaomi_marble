@@ -18,7 +18,7 @@
 
 - [`device.json`](device.json)：机器可读的 `marble` 实机硬件与内核规格定义。
 - [`scripts/collect-marble-baseline.sh`](scripts/collect-marble-baseline.sh)：Phase 0 只读实机信息采集脚本。
-- [`kernel/gki-exports.patch`](kernel/gki-exports.patch) 与 [`kernel/gki-exports/`](kernel/gki-exports/drivers/android/sheng_hmos_exports.c)：为 `Pzqqt/android_kernel_xiaomi_marble` 注入带 CFI 类型检查的 `sheng_hmos_ipc_api_v1` 内核导出表。
+- [`kernel/marble-exports.patch`](kernel/marble-exports.patch) 与 [`kernel/marble-exports/`](kernel/marble-exports/drivers/android/marble_hmos_exports.c)：为 `Pzqqt/android_kernel_xiaomi_marble` 注入带 CFI 类型检查的 `hmos_ipc_api_v1` 内核导出表。
 - 构建脚本：[`../../tools/build/build_marble_kernel.sh`](../../tools/build/build_marble_kernel.sh)
 - GitHub Actions 工作流：[`../../.github/workflows/build-marble-kernel.yml`](../../.github/workflows/build-marble-kernel.yml)
 - `runtime/`（Phase 2~5 创建）：按 `init/`、`profiles/`、`boot/`、`graphics/`、`audio/`、`wifi/`、`bluetooth/`、`sensors/`、`power/` 组织的运行时脚本与配置。

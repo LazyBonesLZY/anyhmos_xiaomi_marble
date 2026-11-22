@@ -23,15 +23,14 @@
 
 ## `marble` 移植状态
 
-当前处于 **Phase 0（基线准备与架构整备）**：
+当前已完成 **Phase 0 实机采集** 与 **Phase 1 5.10 内核/IPC 编译审计**，共享兼容层 `compat/` 已去机型化统一为 `hmos_*` 命名：
 
 - [x] 导入 `sheng` 完整参考基线并完成多机型分层重构
-- [x] 提供 `marble` 实机只读采集脚本：[collect-marble-baseline.sh](devices/marble/scripts/collect-marble-baseline.sh)
-- [ ] Phase 0：在真机备份启动分区并采集内核配置、模块树与 sysfs 档案
-- [ ] Phase 1：适配 Linux `android12-5.10` GKI 导出表与 `compat/ipc` 模块
-- [ ] Phase 2：`boot.img` ramdisk + `vendor_boot.img` 引导与 USB ACM 串口闭环
+- [x] Phase 0：在真机运行 [collect-marble-baseline.sh](devices/marble/scripts/collect-marble-baseline.sh) 并回填 [devices/marble/device.json](devices/marble/device.json)
+- [x] Phase 1：完成 Linux 5.10.274 内核导出补丁（`marble_hmos_exports.c` / `hmos_ipc_api_v1`）、`hmos_ipc.ko`、`hmos_dmabuf_sync.ko`、配套模块与静态 IPC 契约测试编译及 CFI/CRC 审计
+- [ ] Phase 2：`boot.img` ramdisk + `vendor_boot.img` 引导与 USB ACM 串口闭环（含实机备份与 IPC 契约验收）
 - [ ] Phase 3：9 GiB `super` 打包、ext4 `userdata` 挂载与鸿蒙核心服务拉起
-- [ ] Phase 4：单 DSI 1080×2400 显示重构、Adreno 725 Turnip 与 Goodix/FocalTech 原生触控点亮桌面
+- [ ] Phase 4：单 DSI 1080×2400 显示重构、Adreno 725 Turnip 与 Goodix 原生触控点亮桌面
 - [ ] Phase 5：Wi-Fi（QCA6490）、PAL 音频、蓝牙与电池充电连通
 - [ ] Phase 6：SSC 传感器、温控、120Hz 刷新率优化与手机 Donor 迁移
 

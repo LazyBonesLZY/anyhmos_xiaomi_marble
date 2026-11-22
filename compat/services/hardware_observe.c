@@ -1,4 +1,4 @@
-/* Bounded read-only sheng diagnostics: never become DRM master or grab input. */
+/* Bounded read-only hmos diagnostics: never become DRM master or grab input. */
 #define _GNU_SOURCE
 #include <drm/drm.h>
 #include <drm/drm_mode.h>

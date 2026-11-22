@@ -69,8 +69,8 @@ static int run(int argc,char **argv,char **envp)
     if (count!=2 || active>1 || active!=(unsigned)(slot[1]-'a')) return 13;
     for (unsigned i=0;i<count;i++)
         printf("BOOTCONTROL_ORIGINAL_STATUS slot=%u bootable=%d successful=%d\n",i,bootable(module,i),success(module,i));
-#ifdef SHENG_ALLOW_MARK_BOOT_SUCCESS
-    const char *requested=getenv("SHENG_MARK_SUCCESS_BOOT_ID");
+#ifdef HMOS_ALLOW_MARK_BOOT_SUCCESS
+    const char *requested=getenv("HMOS_MARK_SUCCESS_BOOT_ID");
     char boot_id[64]={0};
     FILE *f=fopen("/proc/sys/kernel/random/boot_id","re");
     if (!f || !fgets(boot_id,sizeof(boot_id),f)) { if (f) fclose(f); return 14; }
@@ -92,7 +92,7 @@ static int run(int argc,char **argv,char **envp)
     fclose(f);
     struct stat capture;
     if (!boot_match || !desktop || !unlock || !complete ||
-        stat("/hmos-root/data/local/tmp/sheng-capture/display0.jpeg",&capture) ||
+        stat("/hmos-root/data/local/tmp/hmos-capture/display0.jpeg",&capture) ||
         !S_ISREG(capture.st_mode) || capture.st_size<65536) {
         puts("BOOTCONTROL_MARK_DENIED_DESKTOP_GATES");return 17;
     }

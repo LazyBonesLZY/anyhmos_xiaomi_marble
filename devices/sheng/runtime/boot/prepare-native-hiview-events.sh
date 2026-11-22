@@ -5,7 +5,7 @@ umask 077
 B=/busybox
 R=/hmos-root
 P=/graphics/promax
-D=$R/data/local/tmp/sheng-hiview-events-v1
+D=$R/data/local/tmp/hmos-hiview-events-v1
 launcher_sha=@HIVIEW_LAUNCHER_SHA256@
 assets_sha=@HIVIEW_ASSETS_SHA256@
 

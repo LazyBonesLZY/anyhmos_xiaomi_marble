@@ -179,13 +179,13 @@ class NativeHiViewEventsTests(unittest.TestCase):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 runtime, payload = root / 'runtime', root / 'payload'
-                for directory in ('compat/bin', 'data/local/tmp/sheng-hiview-events-v1',
+                for directory in ('compat/bin', 'data/local/tmp/hmos-hiview-events-v1',
                                   'data/system', 'data/log', 'log'):
                     (runtime / directory).mkdir(parents=True, exist_ok=True)
                 payload.mkdir()
                 (payload / 'hiview_namespace_launcher').write_bytes(self.launcher)
                 (payload / 'hiview-events-assets.tar.gz').write_bytes(archive)
-                request = runtime / 'data/local/tmp/sheng-hiview-events-v1/request'
+                request = runtime / 'data/local/tmp/hmos-hiview-events-v1/request'
                 request.write_bytes(b'abcd\n')
                 mountinfo = root / 'mountinfo'
                 mountinfo.write_bytes(b'')

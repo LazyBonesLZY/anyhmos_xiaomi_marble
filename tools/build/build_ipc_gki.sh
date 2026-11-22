@@ -146,7 +146,7 @@ manifest = {
 PY
 stage=module-build
 make -C "$kernel_dir" O="$output" "${options[@]}" M="$module_dir" -j2 modules
-module=$module_dir/sheng_hmos_ipc.ko
+module=$module_dir/hmos_ipc.ko
 test -s "$module"
 stage=module-audit
 llvm-readelf -h -S -s -r "$module" > "$artifacts/module-elf.txt"
@@ -171,8 +171,8 @@ for line in pathlib.Path(sys.argv[2]).read_text().splitlines():
     if expected.get(name) != int(crc, 16):
         raise SystemExit("Module symbol version mismatch: " + name)
 PY
-cp "$module" "$artifacts/sheng_hmos_ipc.ko"
-sha256sum "$artifacts/sheng_hmos_ipc.ko" > "$artifacts/module-sha256.txt"
+cp "$module" "$artifacts/hmos_ipc.ko"
+sha256sum "$artifacts/hmos_ipc.ko" > "$artifacts/module-sha256.txt"
 cat "$artifacts/module-sha256.txt"
 stage=complete
 printf 'ARTIFACT_DIRECTORY=%s\n' "$artifacts"

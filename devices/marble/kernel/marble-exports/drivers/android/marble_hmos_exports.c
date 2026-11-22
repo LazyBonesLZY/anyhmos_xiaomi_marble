@@ -5,12 +5,12 @@
  * entries. Raw kallsyms/export implementation addresses are not used.
  * Original security/MM implementations and CFI enforcement remain intact. */
 #include <linux/export.h>
-#include "sheng_hmos_api_v1.h"
+#include "hmos_ipc_api_v1.h"
 
-const struct sheng_hmos_ipc_api_v1 sheng_hmos_ipc_api_v1 = {
-	.magic = SHENG_HMOS_API_MAGIC,
+const struct hmos_ipc_api_v1 hmos_ipc_api_v1 = {
+	.magic = HMOS_IPC_API_MAGIC,
 	.version = 1,
-	.size = sizeof(struct sheng_hmos_ipc_api_v1),
+	.size = sizeof(struct hmos_ipc_api_v1),
 	.api___list_lru_init = __list_lru_init,
 	.api___wake_up_pollfree = __wake_up_pollfree,
 	.api_close_fd_get_file = close_fd_get_file,
@@ -32,4 +32,4 @@ const struct sheng_hmos_ipc_api_v1 sheng_hmos_ipc_api_v1 = {
 	.api_task_work_add = task_work_add,
 	.api_zap_page_range = zap_page_range,
 };
-EXPORT_SYMBOL_GPL(sheng_hmos_ipc_api_v1);
+EXPORT_SYMBOL_GPL(hmos_ipc_api_v1);

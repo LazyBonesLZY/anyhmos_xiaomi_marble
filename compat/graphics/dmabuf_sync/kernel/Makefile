@@ -1,1 +1,1 @@
-obj-m += sheng_dmabuf_sync.o
+obj-m += hmos_dmabuf_sync.o

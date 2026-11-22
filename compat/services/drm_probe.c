@@ -44,7 +44,7 @@ static int native(const struct drm_mode_modeinfo *m) {
 }
 static void print_mode(const struct drm_mode_modeinfo *m) {
     printf("mode %.32s %ux%u refresh=%u clock=%u flags=0x%x type=0x%x%s\n",
-        m->name,m->hdisplay,m->vdisplay,m->vrefresh,m->clock,m->flags,m->type,native(m)?" native-sheng":"");
+        m->name,m->hdisplay,m->vdisplay,m->vrefresh,m->clock,m->flags,m->type,native(m)?" native-hmos":"");
 }
 struct buffer { uint32_t handle,pitch,fb;uint64_t size;int dmafd,dumb;void *map; };
 static void release(int fd,struct buffer *b) {

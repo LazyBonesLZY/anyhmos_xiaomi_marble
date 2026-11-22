@@ -1,4 +1,4 @@
-// Sheng 显示后端：保留客户端合成，按原生同步协议直扫不透明单层
+// Hmos 显示后端：保留客户端合成，按原生同步协议直扫不透明单层
 #include "composer_exports.h"
 #include "log.h"
 #include <cerrno>
@@ -23,10 +23,10 @@
 #include <xf86drmMode.h>
 #include <drm_fourcc.h>
 
-#ifndef SHENG_DEFAULT_DISPLAY_ROUTE
-#define SHENG_DEFAULT_DISPLAY_ROUTE 0
+#ifndef HMOS_DEFAULT_DISPLAY_ROUTE
+#define HMOS_DEFAULT_DISPLAY_ROUTE 0
 #endif
-static_assert(SHENG_DEFAULT_DISPLAY_ROUTE == 0 || SHENG_DEFAULT_DISPLAY_ROUTE == 2,
+static_assert(HMOS_DEFAULT_DISPLAY_ROUTE == 0 || HMOS_DEFAULT_DISPLAY_ROUTE == 2,
     "Default display route must be 0 or 2");
 
 namespace OHOS::HDI::Display::Composer {
@@ -90,7 +90,7 @@ int scanoutPolicyOverride = -1;
 #endif
 std::mutex mutex;
 int drm = -1;
-// SHENG_SPLIT_SCANOUT_V1: each DSI half needs its own SSPP plane.
+// HMOS_SPLIT_SCANOUT_V1: each DSI half needs its own SSPP plane.
 uint32_t connector = 0, crtc = 0, plane = 0, secondPlane = 0, modeBlob = 0, currentFb = 0;
 uint32_t mmWidth = 0, mmHeight = 0, nextLayer = 1;
 drmModeModeInfo mode{};
@@ -252,7 +252,7 @@ int Initialize()
         Log("hardware vsync requires monotonic kernel timestamps"); CleanupDrm(); return FAIL;
     }
     clientCrop = {0, 0, mode.hdisplay, mode.vdisplay};
-    Ace5Log("discovered Sheng dual DSI=%u CRTC=%u planes=%u,%u %ux%u@%u mm=%ux%u",
+    Ace5Log("discovered Hmos dual DSI=%u CRTC=%u planes=%u,%u %ux%u@%u mm=%ux%u",
         connector, crtc, plane, secondPlane, mode.hdisplay, mode.vdisplay, mode.vrefresh, mmWidth, mmHeight);
     return OK;
 }
@@ -372,7 +372,7 @@ bool Linear(const BufferHandle &b)
 void Metric(const char *format, ...)
 {
     int saved = errno;
-    FILE *file = fopen("/data/local/tmp/sheng-composer-metrics.txt", "ae");
+    FILE *file = fopen("/data/local/tmp/hmos-composer-metrics.txt", "ae");
     if (file) {
         fprintf(file, "t_ns=%llu ", (unsigned long long)MonotonicNs());
         va_list args; va_start(args, format); vfprintf(file, format, args); va_end(args);
@@ -516,11 +516,11 @@ int ReadScanoutPolicy()
 #ifdef ACE5_DIRECT_TEST
     if (scanoutPolicyOverride >= 0) return scanoutPolicyOverride;
 #endif
-    int fd = open("/dev/sheng-display-route-mode",
+    int fd = open("/dev/hmos-display-route-mode",
         O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
     // 控制文件缺失时使用构建默认，其他打开失败保持原路径
     if (fd < 0) {
-#if SHENG_DEFAULT_DISPLAY_ROUTE == 2
+#if HMOS_DEFAULT_DISPLAY_ROUTE == 2
         return errno == ENOENT ? 2 : 0;
 #else
         return 0;
@@ -982,7 +982,7 @@ extern "C" int32_t RegHotPlugCallback(HotPlugCallback cb, void *data)
 }
 extern "C" int32_t GetDisplayCapability(uint32_t id, DisplayCapability &info)
 {
-    DEVICE_LOCK(id); info = {}; info.name = "Sheng DSI"; // The donor directly casts the HDI value to GraphicInterfaceType, which
+    DEVICE_LOCK(id); info = {}; info.name = "Hmos DSI"; // The donor directly casts the HDI value to GraphicInterfaceType, which
     // includes UNKNOWN=0. Its live dump identified 9 as VGA; MIPI is 10.
     info.type = static_cast<decltype(info.type)>(10);
     info.phyWidth = mmWidth; info.phyHeight = mmHeight; info.supportLayers = 64;
@@ -1054,7 +1054,7 @@ extern "C" int32_t SetDisplayPowerStatus(uint32_t id, V::DispPowerStatus status)
     else {
         auto *request = drmModeAtomicAlloc();
         if (!request) return FAIL;
-        // SHENG_FULL_POWER_OFF_V1: detach all objects, so reactivation
+        // HMOS_FULL_POWER_OFF_V1: detach all objects, so reactivation
         // rebuilds the complete routing state instead of retaining a mode.
         bool valid = true;
         for (uint32_t target : {plane, secondPlane}) {

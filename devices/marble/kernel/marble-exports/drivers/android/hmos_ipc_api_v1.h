@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#ifndef SHENG_HMOS_API_V1_H
-#define SHENG_HMOS_API_V1_H
+#ifndef HMOS_IPC_API_V1_H
+#define HMOS_IPC_API_V1_H
 #include <linux/cache.h>
 #include <linux/list_lru.h>
 #include <linux/poll.h>
@@ -10,8 +10,8 @@
 #include <linux/security.h>
 #include <linux/task_work.h>
 #include <linux/mm.h>
-#define SHENG_HMOS_API_MAGIC 0x5348454e47495043ULL
-struct sheng_hmos_ipc_api_v1 {
+#define HMOS_IPC_API_MAGIC 0x484d4f5349504331ULL
+struct hmos_ipc_api_v1 {
 	u64 magic;
 	u32 version;
 	u32 size;

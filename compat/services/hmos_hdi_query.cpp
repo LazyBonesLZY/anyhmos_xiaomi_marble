@@ -21,7 +21,7 @@ int main(){
     int result=service->RegHotPlugCallback(callback);printf("HDI_REG_CALLBACK result=%d\n",result);CHECK(result==0);
     for(unsigned i=0;i<100&&!callbacks;i++)usleep(10000);CHECK(callbacks.load()>0);
     C::V1_0::DisplayCapability capability{};result=service->GetDisplayCapability(screen,capability);
-    printf("HDI_CAPABILITY result=%d name=%s layers=%u mm=%ux%u\n",result,capability.name.c_str(),capability.supportLayers,capability.phyWidth,capability.phyHeight);CHECK(result==0&&capability.name=="Sheng DSI");
+    printf("HDI_CAPABILITY result=%d name=%s layers=%u mm=%ux%u\n",result,capability.name.c_str(),capability.supportLayers,capability.phyWidth,capability.phyHeight);CHECK(result==0&&capability.name=="Hmos DSI");
     std::vector<C::V1_0::DisplayModeInfo> modes;CHECK(service->GetDisplaySupportedModes(screen,modes)==0&&!modes.empty());
     for(const auto &m:modes)printf("HDI_MODE %dx%d refresh=%u id=%u\n",m.width,m.height,m.freshRate,m.id);
     CHECK((modes[0].width==3048&&modes[0].height==2032)||(modes[0].width==2032&&modes[0].height==3048));

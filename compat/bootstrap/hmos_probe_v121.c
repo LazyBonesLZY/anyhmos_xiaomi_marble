@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: MIT
- * sheng HMOS autonomous compatibility bootstrap with diagnostic collector.
+ * hmos HMOS autonomous compatibility bootstrap with diagnostic collector.
  * System changes are RAM overlays; framework data uses the ext4 userdata partition.
  * Vendor logical partitions remain read-only and are never covered.
  */
@@ -39,12 +39,12 @@
 #include <linux/watchdog.h>
 #include <linux/reboot.h>
 
-#ifndef SHENG_IPC_ONEWAY_PID
-#define SHENG_IPC_ONEWAY_PID 0
+#ifndef HMOS_IPC_ONEWAY_PID
+#define HMOS_IPC_ONEWAY_PID 0
 #endif
-_Static_assert(SHENG_IPC_ONEWAY_PID==0||SHENG_IPC_ONEWAY_PID==1,
-               "SHENG_IPC_ONEWAY_PID must be 0 or 1");
-#if SHENG_IPC_ONEWAY_PID
+_Static_assert(HMOS_IPC_ONEWAY_PID==0||HMOS_IPC_ONEWAY_PID==1,
+               "HMOS_IPC_ONEWAY_PID must be 0 or 1");
+#if HMOS_IPC_ONEWAY_PID
 static int ipc_pair_loaded;
 #endif
 
@@ -379,7 +379,7 @@ static void usb_setup(void) {
      * causing another probe; this small init must request that retry itself. */
     if(access("/sys/bus/i2c/devices/1-0028",F_OK)==0&&access("/sys/bus/i2c/devices/1-0028/driver",F_OK)!=0){int r=put("/sys/bus/i2c/drivers_probe","1-0028");note("USB PS5169 reprobe result=%d errno=%d",r,r<0?errno:0);}
     if(access("/sys/bus/platform/devices/a600000.ssusb",F_OK)==0&&access("/sys/bus/platform/devices/a600000.ssusb/driver",F_OK)!=0){int r=put("/sys/bus/platform/drivers_probe","a600000.ssusb");note("USB controller reprobe result=%d errno=%d",r,r<0?errno:0);}
-    /* sheng recovery explicitly switches the Qualcomm wrapper to peripheral
+    /* hmos recovery explicitly switches the Qualcomm wrapper to peripheral
      * before waiting for its child UDC. Waiting for UDC first deadlocks setup. */
     const char *mode="/sys/bus/platform/devices/a600000.ssusb/mode";
     if(!usb_mode_set&&access(mode,F_OK)==0){if(put(mode,"peripheral")==0){usb_mode_set=1;note("USB Qualcomm mode set to peripheral");}else note("USB peripheral mode: %s",strerror(errno));}
@@ -390,7 +390,7 @@ static void usb_setup(void) {
     const char *g="/config/usb_gadget/hmos_probe";makedir(g);char p[512];
 #define ATTR(k,v) do{snprintf(p,sizeof(p),"%s/%s",g,k);if(put(p,v)<0)note("USB attr %s: %s",k,strerror(errno));}while(0)
     ATTR("idVendor","0x1d6b");ATTR("idProduct","0x0104");ATTR("bcdUSB","0x0200");ATTR("bcdDevice","0x0100");ATTR("bDeviceClass","0x02");
-    makedir("/config/usb_gadget/hmos_probe/strings/0x409");ATTR("strings/0x409/serialnumber","sheng-hmos-probe");ATTR("strings/0x409/manufacturer","Local bring-up");ATTR("strings/0x409/product","sheng HMOS early log");
+    makedir("/config/usb_gadget/hmos_probe/strings/0x409");ATTR("strings/0x409/serialnumber","hmos-probe");ATTR("strings/0x409/manufacturer","Local bring-up");ATTR("strings/0x409/product","hmos HMOS early log");
     makedir("/config/usb_gadget/hmos_probe/configs/c.1");ATTR("configs/c.1/MaxPower","250");
     makedir("/config/usb_gadget/hmos_probe/functions/acm.usb0");
     if(access("/config/usb_gadget/hmos_probe/functions/acm.usb0/port_num",F_OK)){note("FAIL USB ACM function unavailable");return;}
@@ -429,7 +429,7 @@ static int ipc_nodes(const char *directory) {
         }line=strtok_r(NULL,"\n",&save);
     }return count;
 }
-#if SHENG_IPC_ONEWAY_PID
+#if HMOS_IPC_ONEWAY_PID
 /* 封印候选副本并核对完整内容 */
 static int ipc_verified_fd(int source) {
     static const uint8_t expected[32]={
@@ -451,7 +451,7 @@ static int ipc_verified_fd(int source) {
         if(n<=0){if(!n)errno=EIO;goto failed;}
         used+=(size_t)n;
     }
-    sealed=memfd_create("sheng-ipc-verified",MFD_CLOEXEC|MFD_ALLOW_SEALING);
+    sealed=memfd_create("hmos-ipc-verified",MFD_CLOEXEC|MFD_ALLOW_SEALING);
     if(sealed<0)goto failed;
     for(size_t used=0;used<size;){
         ssize_t n=write(sealed,data+used,size-used);
@@ -485,7 +485,7 @@ static int ipc_pair_params(char *buffer,size_t size,int stage) {
 /* 仅验证内存文件与参数，不调用模块加载 */
 static int ipc_pair_selftest(void) {
     alarm(10);
-    int fd=memfd_create("sheng-ipc-selftest",MFD_CLOEXEC|MFD_ALLOW_SEALING);
+    int fd=memfd_create("hmos-ipc-selftest",MFD_CLOEXEC|MFD_ALLOW_SEALING);
     if(fd<0){perror("selftest memfd");return 1;}
     int sealed=-1,failed=1;
     sealed=ipc_verified_fd(fd);
@@ -538,15 +538,15 @@ static int ipc_pid_nodes(void) {
 #endif
 static void ipc_test(int which) {
     if(ipc_test_pid>0||ipc_pid>0){note("IPC test rejected: another IPC operation is running");return;}
-    if(access("/sys/module/sheng_hmos_ipc",F_OK)<0||ipc_nodes("/dev")!=4){note("IPC test requires a loaded driver and all four verified misc nodes");return;}
+    if(access("/sys/module/hmos_ipc",F_OK)<0||ipc_nodes("/dev")!=4){note("IPC test requires a loaded driver and all four verified misc nodes");return;}
     const char *program=which==1?"/token_contract":"/binder_nested";
     int timeout=35;
-#if SHENG_IPC_ONEWAY_PID
+#if HMOS_IPC_ONEWAY_PID
     /* 仅在独立节点验证保留发送方标识 */
     if(which==3){
         char mode[16];
         if(!ipc_pair_loaded||
-           readfile("/sys/module/sheng_hmos_ipc/parameters/oneway_sender_pid",mode,sizeof(mode))<0||
+           readfile("/sys/module/hmos_ipc/parameters/oneway_sender_pid",mode,sizeof(mode))<0||
            (strcmp(mode,"Y\n")&&strcmp(mode,"1\n"))||ipc_pid_nodes()!=2){
             note("IPC PID contract requires the verified pair, retained mode and both private nodes");return;
         }
@@ -556,7 +556,7 @@ static void ipc_test(int which) {
     note("IPC CONTRACT begin %s; %d-second process-group timeout",program,timeout);
     pid_t child=fork();
     if(child==0){if(setsid()<0)_exit(126);int out=open("/dev/kmsg",O_WRONLY|O_CLOEXEC);if(out<0)_exit(126);dup2(out,1);dup2(out,2);close(out);
-#if SHENG_IPC_ONEWAY_PID
+#if HMOS_IPC_ONEWAY_PID
         if(which==3){
             char *args[]={(char*)program,"/dev/hmos_pidtest","/dev/hmos_pidtest_ns","1",NULL};
             execv(program,args);dprintf(2,"IPC PID contract exec failed: %s\n",strerror(errno));_exit(126);
@@ -573,13 +573,13 @@ static void ipc_test_tick(void) {
 }
 static void ipc_load(void) {
     if(ipc_pid>0){note("IPC LOAD already running pid=%ld",(long)ipc_pid);return;}
-    if(access("/sys/module/sheng_hmos_ipc",F_OK)==0){note("IPC module already loaded; reboot before another load");return;}
+    if(access("/sys/module/hmos_ipc",F_OK)==0){note("IPC module already loaded; reboot before another load");return;}
     int fd=open("/hmos-ipc.ko",O_RDONLY|O_CLOEXEC
-#if SHENG_IPC_ONEWAY_PID
+#if HMOS_IPC_ONEWAY_PID
                 |O_NOFOLLOW
 #endif
     );if(fd<0){note("IPC candidate missing: %s",strerror(errno));return;}
-#if SHENG_IPC_ONEWAY_PID
+#if HMOS_IPC_ONEWAY_PID
     /* 校验失败时保留串口与恢复入口 */
     int verified=ipc_verified_fd(fd),saved=errno;close(fd);fd=verified;
     if(fd<0){note("IPC pair verification failed: %s; HOLD",strerror(saved));return;}
@@ -591,7 +591,7 @@ static void ipc_load(void) {
     pid_t child=fork();
     if(child==0){
         close(result[0]);
-#if SHENG_IPC_ONEWAY_PID
+#if HMOS_IPC_ONEWAY_PID
         char params[256];
         if(ipc_pair_params(params,sizeof(params),ipc_stage)<0){
             int values[2]={-1,errno};allwrite(result[1],values,sizeof(values));_exit(125);
@@ -600,9 +600,9 @@ static void ipc_load(void) {
         char params[64];snprintf(params,sizeof(params),"diagnostic_stage=%d",ipc_stage);
 #endif
         int out=open("/dev/kmsg",O_WRONLY|O_CLOEXEC);
-        if(out>=0)dprintf(out,"<6>SHENG_IPC user-loader pid=%ld params=%s\n",(long)getpid(),params);
+        if(out>=0)dprintf(out,"<6>HMOS_IPC user-loader pid=%ld params=%s\n",(long)getpid(),params);
         int values[2];values[0]=(int)syscall(SYS_finit_module,fd,params,0);values[1]=values[0]<0?errno:0;
-        if(out>=0)dprintf(out,"<6>SHENG_IPC user-loader result=%d errno=%d\n",values[0],values[1]);
+        if(out>=0)dprintf(out,"<6>HMOS_IPC user-loader result=%d errno=%d\n",values[0],values[1]);
         allwrite(result[1],values,sizeof(values));_exit(values[0]<0?125:0);
     }
     close(fd);close(result[1]);
@@ -617,7 +617,7 @@ static void reap_children(void) {
             int values[2];ssize_t n=read(ipc_resultfd,values,sizeof(values));
             if(n==(ssize_t)sizeof(values))note("IPC LOAD result=%d errno=%d %s",values[0],values[1],values[1]?strerror(values[1]):"success");
             else note("IPC child ended without syscall result; status=%d signal=%d",status,WIFSIGNALED(status)?WTERMSIG(status):0);
-#if SHENG_IPC_ONEWAY_PID
+#if HMOS_IPC_ONEWAY_PID
             ipc_pair_loaded=n==(ssize_t)sizeof(values)&&values[0]==0&&values[1]==0&&
                             WIFEXITED(status)&&WEXITSTATUS(status)==0;
 #endif
@@ -634,7 +634,7 @@ static void serial_command(char *cmd) {
         serial_pos=used;command_start(cmd+4);return;
     }
     char *ipc=strstr(cmd,"ipc");if(ipc){ipc_stage=ipc[3]>='0'&&ipc[3]<='3'?ipc[3]-'0':-1;ipc_requested=1;}if(strstr(cmd,"test-token"))ipc_test_requested=1;if(strstr(cmd,"test-binder"))ipc_test_requested=2;if(strstr(cmd,"replay"))serial_pos=0;if(strstr(cmd,"status"))note("status: pid=%ld traced=%ld held=%d syscalls=%d ipc_child=%ld test_child=%ld; %zu bytes history; persistent=%s",(long)getpid(),(long)traced_pid,trace_held,trace_syscalls,(long)ipc_pid,(long)ipc_test_pid,used,logfd>=0?logpath:"unavailable");if(strstr(cmd,"diag"))process_diag();if(strstr(cmd,"sync")&&logfd>=0)fsync(logfd);if(strstr(cmd,"trace"))trace_requested=1;if(strstr(cmd,"hmos-list"))trace_requested=2;else if(strstr(cmd,"hmos"))trace_requested=3;
-#if SHENG_IPC_ONEWAY_PID
+#if HMOS_IPC_ONEWAY_PID
     if(strstr(cmd,"test-oneway"))ipc_test_requested=3;
 #endif
     if(strstr(cmd,"reboot-recovery")){note("USB requested reboot to recovery");if(logfd>=0)fsync(logfd);sync();syscall(SYS_reboot,LINUX_REBOOT_MAGIC1,LINUX_REBOOT_MAGIC2,LINUX_REBOOT_CMD_RESTART2,"recovery");note("reboot syscall returned: %s",strerror(errno));}
@@ -720,7 +720,7 @@ static int hmos_root(void) {
         note("HMOS logical alias %s -> %s (read-only DM)",logical_parts[i],actual);
     }
     char misc[4096];if(readfile("/proc/misc",misc,sizeof(misc))>0){char *save,*line=strtok_r(misc,"\n",&save);while(line){unsigned minor;char name[128];if(sscanf(line,"%u %127s",&minor,name)==2&&(!strcmp(name,"binder")||!strcmp(name,"hwbinder")||!strcmp(name,"vndbinder"))){char target[256];snprintf(target,sizeof(target),"/hmos-root/dev/%s",name);if(mknod(target,S_IFCHR|0666,makedev(10,minor))<0&&errno!=EEXIST)return -1;note("HMOS stock Android IPC node %s minor=%u; OHOS extensions not assumed",name,minor);}line=strtok_r(NULL,"\n",&save);}}
-    if(access("/sys/module/sheng_hmos_ipc",F_OK)==0&&ipc_nodes("/hmos-root/dev")!=4)return -1;
+    if(access("/sys/module/hmos_ipc",F_OK)==0&&ipc_nodes("/hmos-root/dev")!=4)return -1;
     /* Replace the diagnostic sysfs mount with the flags expected by init. */
     umount2("/sys/kernel/debug",MNT_DETACH);umount2("/sys",MNT_DETACH);
     if(mount("sysfs","/sys","sysfs",0,"")<0)return -1;
@@ -731,13 +731,13 @@ static int hmos_root(void) {
     const char *hide[]={"/hmos-root/system/etc/init","/hmos-root/sys_prod/etc/init","/hmos-root/preload/etc/init"};
     for(unsigned i=0;i<sizeof(hide)/sizeof(hide[0]);i++)if(ram_mount(hide[i],"mode=0755,size=1m")<0)return -1;
     char cfg[32768];if(readfile("/hmos-init-debug.cfg",cfg,sizeof(cfg))<0)return -1;
-    if(textfile("/hmos-root/system/etc/init.cfg",cfg)<0||textfile("/hmos-root/system/etc/fstab.required","# Physical userdata already mounted by sheng bootstrap; never format here.\n")<0)return -1;
-    if(textfile("/hmos-root/system/etc/param/sheng_debug.para","persist.init.debug.loglevel=0\n")<0)return -1;
+    if(textfile("/hmos-root/system/etc/init.cfg",cfg)<0||textfile("/hmos-root/system/etc/fstab.required","# Physical userdata already mounted by hmos bootstrap; never format here.\n")<0)return -1;
+    if(textfile("/hmos-root/system/etc/param/hmos_debug.para","persist.init.debug.loglevel=0\n")<0)return -1;
     char cmdline[32768];if(readfile("/proc/cmdline",cmdline,sizeof(cmdline))<0)return -1;
-    size_t n=strlen(cmdline);if(n+150>=sizeof(cmdline))return -1;strcat(cmdline," ohos.boot.hardware=sheng ohos.boot.selinux=permissive androidboot.selinux=permissive\n");
+    size_t n=strlen(cmdline);if(n+150>=sizeof(cmdline))return -1;strcat(cmdline," ohos.boot.hardware=hmos ohos.boot.selinux=permissive androidboot.selinux=permissive\n");
     if(textfile("/hmos-ram/cmdline",cmdline)<0||mount("/hmos-ram/cmdline","/hmos-root/proc/cmdline",0,MS_BIND,0)<0)return -1;
     char bootconfig[32768];ssize_t z=readfile("/proc/bootconfig",bootconfig,sizeof(bootconfig));if(z<0)bootconfig[0]=0;
-    if(strlen(bootconfig)+150<sizeof(bootconfig)){strcat(bootconfig,"\nohos.boot.hardware = \"sheng\"\nohos.boot.selinux = \"permissive\"\n");if(textfile("/hmos-ram/bootconfig",bootconfig)<0||mount("/hmos-ram/bootconfig","/hmos-root/proc/bootconfig",0,MS_BIND,0)<0)return -1;}
+    if(strlen(bootconfig)+150<sizeof(bootconfig)){strcat(bootconfig,"\nohos.boot.hardware = \"hmos\"\nohos.boot.selinux = \"permissive\"\n");if(textfile("/hmos-ram/bootconfig",bootconfig)<0||mount("/hmos-ram/bootconfig","/hmos-root/proc/bootconfig",0,MS_BIND,0)<0)return -1;}
     put("/sys/fs/selinux/enforce","0");
     note("HMOS debug root prepared: RAM overlays, direct whole-partition ext4 userdata, RAM metadata");return 0;
 }
@@ -871,8 +871,8 @@ static int trace_selftest(int seize,int stress) {
 }
 static void trace_handoff(int kind) {
     if(getpid()!=1)return;
-    if(kind!=0&&access("/sys/module/sheng_hmos_ipc",F_OK)<0){note("HMOS handoff rejected: load the verified IPC module first with ipc");return;}
-#if SHENG_IPC_ONEWAY_PID
+    if(kind!=0&&access("/sys/module/hmos_ipc",F_OK)<0){note("HMOS handoff rejected: load the verified IPC module first with ipc");return;}
+#if HMOS_IPC_ONEWAY_PID
     if(kind!=0&&!ipc_pair_loaded){note("HMOS handoff rejected: verified retained-mode IPC pair is required; HOLD");return;}
 #endif
     if(logfd<0&&serialfd<0){note("TRACE ABORT: neither metadata nor USB log available; HOLD");return;}
@@ -931,7 +931,7 @@ static void trace_handoff(int kind) {
     }
 }
 int main(int argc,char **argv) {
-#if SHENG_IPC_ONEWAY_PID
+#if HMOS_IPC_ONEWAY_PID
     if(argc==2&&!strcmp(argv[1],"--ipc-pair-selftest"))return ipc_pair_selftest();
 #endif
     if(argc==2&&!strcmp(argv[1],"--fb-info"))return framebuffer_probe(0);
@@ -953,9 +953,9 @@ int main(int argc,char **argv) {
     mknod("/dev/console",S_IFCHR|0600,makedev(5,1));consolefd=open("/dev/console",O_WRONLY|O_NONBLOCK|O_CLOEXEC);
     kmsg=open("/dev/kmsg",O_RDONLY|O_NONBLOCK|O_CLOEXEC);makedir("/dev/block");makedir("/dev/block/by-name");makedir("/dev/mapper");makedir("/metadata");makedir("/hmos");
 #ifdef TRACE_ANDROID
-    note("sheng HMOS trace v116 -- collect early logs, then execute original Android init");
+    note("hmos HMOS trace v116 -- collect early logs, then execute original Android init");
 #else
-    note("sheng HMOS probe v121 USB-session recovery payload -- autonomous native startup; vendor read-only; existing isolated data only");
+    note("hmos HMOS probe v121 USB-session recovery payload -- autonomous native startup; vendor read-only; existing isolated data only");
 #endif
     slot_detect();drain();discover();persistent();loadmodules();
     for(int i=0;i<50;i++){discover();persistent();drain();watchdog();usb_setup();serial_tick();usleep(100000);}

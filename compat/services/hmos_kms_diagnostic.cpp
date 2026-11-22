@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: MIT
- * Explicit, bounded sheng-only scanout diagnostic. No image/partition writes.
+ * Explicit, bounded hmos-only scanout diagnostic. No image/partition writes.
  * A hardware color-fill trial isolates SSPP fetch from DSC/DSI scanout.
  */
 #include <cstdio>

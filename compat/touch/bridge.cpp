@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Stock sheng THP mmap transport -> standard Linux uinput; vendor remains intact.
+// Stock hmos THP mmap transport -> standard Linux uinput; vendor remains intact.
 // Touch algorithm and filter adapted from upstream xiaomi-sheng-thp; see ORIGIN.md.
 #include "nvt_touch_core.hpp"
 #include "nvt_finger_filter.hpp"
@@ -55,7 +55,7 @@ public:
             if(ioctl(fd_,UI_SET_ABSBIT,axis)<0)return false;
         if(ioctl(fd_,UI_SET_PROPBIT,INPUT_PROP_DIRECT)<0)return false;
         uinput_setup cfg{};cfg.id.bustype=BUS_VIRTUAL;cfg.id.vendor=0x2717;cfg.id.product=0x3653;cfg.id.version=1;
-        strcpy(cfg.name,"Sheng THP Compat Touchscreen");
+        strcpy(cfg.name,"Hmos THP Compat Touchscreen");
         if(ioctl(fd_,UI_DEV_SETUP,&cfg)<0)return false;
         for(auto item:std::array<std::pair<unsigned,int>,6>{{{ABS_MT_SLOT,11},{ABS_MT_TRACKING_ID,65535},{ABS_MT_POSITION_X,30479},{ABS_MT_POSITION_Y,20319},{ABS_MT_PRESSURE,1000},{ABS_MT_TOUCH_MAJOR,256}}}){
             uinput_abs_setup axis{};axis.code=item.first;axis.absinfo.maximum=item.second;
@@ -120,7 +120,7 @@ int main(int argc,char**argv){
     int seconds=service?0:(argc>1?atoi(argv[1]):300);if(!service&&(seconds<1||seconds>1800))return 2;
     bool dry=argc>2&&!strcmp(argv[2],"--dry-run");setvbuf(stdout,nullptr,_IOLBF,0);
     signal(SIGTERM,stop);signal(SIGINT,stop);
-    int lock=open("/data/local/tmp/sheng-thp-bridge.lock",O_CREAT|O_RDWR|O_CLOEXEC,0600);
+    int lock=open("/data/local/tmp/hmos-thp-bridge.lock",O_CREAT|O_RDWR|O_CLOEXEC,0600);
     if(lock<0||flock(lock,LOCK_EX|LOCK_NB)){perror("touch bridge already running or lock failed");return 10;}
     int fd=open("/dev/xiaomi-touch",O_RDONLY|O_NONBLOCK|O_CLOEXEC);if(fd<0){perror("touch open");return 3;}
     uint8_t p[214]{};

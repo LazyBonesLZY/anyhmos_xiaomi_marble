@@ -31,21 +31,23 @@ python3 tools/build/build_current.py bootstrap init-entry touch touch-launcher w
 
 | 环境变量 / Variable | 默认位置 / Default |
 | --- | --- |
-| `SHENG_DEPS` | `/root/hmos-work/graphics-deps` |
-| `SHENG_SDK` | `/root/hmos-work/sdk-6.0.0.47/installed/native` |
-| `SHENG_UPSTREAM` | `$SHENG_DEPS/source` |
-| `SHENG_DONOR_LINK` | 仓库 `work/donor-hdi-link` |
-| `SHENG_STAGE` | `$SHENG_DEPS/stage` |
-| `SHENG_BIONIC_LINK` | 仓库 `work/audio-bionic-v1/lib64` |
-| `SHENG_PAL_INCLUDE` | `/root/hmos-reference/pal-sm8550-a13/inc` |
-| `SHENG_ANDROID_CPP_HEADERS` | `/root/hmos-work/clang-prebuilt/clang-r450784e/include/c++/v1` |
-| `SHENG_BT_VENDOR_LINK` | 仓库 `work/donor-bluetooth-v136/vendor/lib64` |
+| `HMOS_DEPS`（兼容 `SHENG_DEPS`） | `/root/hmos-work/graphics-deps` |
+| `HMOS_SDK`（兼容 `SHENG_SDK`） | `/root/hmos-work/sdk-6.0.0.47/installed/native` |
+| `HMOS_UPSTREAM`（兼容 `SHENG_UPSTREAM`） | `$HMOS_DEPS/source` |
+| `HMOS_DONOR_LINK`（兼容 `SHENG_DONOR_LINK`） | 仓库 `work/donor-hdi-link` |
+| `HMOS_STAGE`（兼容 `SHENG_STAGE`） | `$HMOS_DEPS/stage` |
+| `HMOS_BIONIC_LINK`（兼容 `SHENG_BIONIC_LINK`） | 仓库 `work/audio-bionic-v1/lib64` |
+| `HMOS_PAL_INCLUDE`（兼容 `SHENG_PAL_INCLUDE`） | `/root/hmos-reference/pal-sm8550-a13/inc` |
+| `HMOS_ANDROID_CPP_HEADERS`（兼容 `SHENG_ANDROID_CPP_HEADERS`） | `/root/hmos-work/clang-prebuilt/clang-r450784e/include/c++/v1` |
+| `HMOS_BT_VENDOR_LINK`（兼容 `SHENG_BT_VENDOR_LINK`） | 仓库 `work/donor-bluetooth-v136/vendor/lib64` |
 
-`compat/ipc/Makefile` 对应当前模块，应在匹配内核源码和配置下构建；`devices/sheng/kernel/gki-sheng-exports.patch` 与对应 overlay 配套。保留 CFI、符号版本与产品/输入哈希校验。
+`compat/ipc/Makefile`（`hmos_ipc.ko`）与 `compat/graphics/dmabuf_sync/kernel/Makefile`（`hmos_dmabuf_sync.ko`）为跨机型共享内核模块，需在匹配内核源码和配置下构建：
+- `marble`（Linux 5.10.274）：配套 `devices/marble/kernel/marble-exports.patch` + `marble_hmos_exports.c`（导出 `hmos_ipc_api_v1`），通过 `tools/build/build_marble_kernel.sh` 或 `.github/workflows/build-marble-kernel.yml` 构建并执行 CFI / vermagic / `Module.symvers` CRC 校验。
+- `sheng`（参考机型 5.15.178）：配套 `devices/sheng/kernel/gki-sheng-exports.patch`。
 
 Mesa 补丁以记录的 upstream HEAD 为基础，当前冻结配置位于 `compat/graphics/`（`apply_mesa.py`、`mesa-gallium-egl.patch`、`mesa-turnip.patch`）；旧版补丁归档于 `archive/sheng/legacy-mesa/`。
 
-UserIAM 使用 `tools/build/build_useriam.py`，需自行准备 target-compatible OpenSSL 头、4.0/4.1 donor stub 和 HDF host 库。`SHENG_USERIAM_VENDOR_LIBS`、`SHENG_USERIAM_HOST_LIBS`、`SHENG_OPENSSL_INCLUDE` 可指定路径。`compat/useriam/software-backend.patch` 描述当前软件后端所需的上游差异，需审查应用到匹配来源；其 4.0 后端和 4.1 adapter 共同组成当前实现，不应互相删减。
+UserIAM 使用 `tools/build/build_useriam.py`，需自行准备 target-compatible OpenSSL 头、4.0/4.1 donor stub 和 HDF host 库。`HMOS_USERIAM_VENDOR_LIBS`、`HMOS_USERIAM_HOST_LIBS`、`HMOS_OPENSSL_INCLUDE`（兼容旧 `SHENG_*` 前缀）可指定路径。`compat/useriam/software-backend.patch` 描述当前软件后端所需的上游差异，需审查应用到匹配来源；其 4.0 后端和 4.1 adapter 共同组成当前实现，不应互相删减。
 
 ## 配置与补丁 / Runtime and patches
 

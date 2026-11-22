@@ -73,11 +73,11 @@ git -C "$repo" rev-parse HEAD > "$artifacts/audit/source-revision.txt"
 export PATH="$clang_bin:$kernel_dir/build-tools:$PATH"
 
 stage=apply-exports
-cp "$repo/devices/marble/kernel/gki-exports/drivers/android/sheng_hmos_exports.c" \
+cp "$repo/devices/marble/kernel/marble-exports/drivers/android/marble_hmos_exports.c" \
 	"$kernel_dir/drivers/android/"
-cp "$repo/devices/marble/kernel/gki-exports/drivers/android/sheng_hmos_api_v1.h" \
+cp "$repo/devices/marble/kernel/marble-exports/drivers/android/hmos_ipc_api_v1.h" \
 	"$kernel_dir/drivers/android/"
-git -C "$kernel_dir" apply "$repo/devices/marble/kernel/gki-exports.patch"
+git -C "$kernel_dir" apply "$repo/devices/marble/kernel/marble-exports.patch"
 
 stage=kernel-config
 export KBUILD_BUILD_USER=anyhmos
@@ -125,7 +125,7 @@ esac
 
 test -s "$output/arch/arm64/boot/Image"
 test -s "$output/Module.symvers"
-grep -Eq '[[:space:]]sheng_hmos_ipc_api_v1[[:space:]]' "$output/Module.symvers"
+grep -Eq '[[:space:]]hmos_ipc_api_v1[[:space:]]' "$output/Module.symvers"
 cp "$output/arch/arm64/boot/Image" "$artifacts/Image"
 cp "$output/Module.symvers" "$artifacts/audit/Module.symvers"
 if [[ -s "$output/vmlinux.symvers" ]]; then
@@ -139,12 +139,12 @@ stage=hmos-modules-build
 cp -a "$repo/compat/ipc" "$ipc_dir"
 make -C "$kernel_dir" "${make_flags[@]}" KCFLAGS="$make_kcflags" \
 	KBUILD_LDFLAGS="$make_kbuild_ldflags" M="$ipc_dir" -j"$jobs" modules
-test -s "$ipc_dir/sheng_hmos_ipc.ko"
+test -s "$ipc_dir/hmos_ipc.ko"
 
 cp -a "$repo/compat/graphics/dmabuf_sync" "$dmabuf_dir"
 make -C "$kernel_dir" "${make_flags[@]}" KCFLAGS="$make_kcflags" \
 	KBUILD_LDFLAGS="$make_kbuild_ldflags" M="$dmabuf_dir/kernel" -j"$jobs" modules
-test -s "$dmabuf_dir/kernel/sheng_dmabuf_sync.ko"
+test -s "$dmabuf_dir/kernel/hmos_dmabuf_sync.ko"
 
 stage=hmos-modules-audit
 audit_module() {
@@ -186,8 +186,8 @@ for line in pathlib.Path(modver_path).read_text().splitlines():
 PY
 }
 
-audit_module "$ipc_dir/sheng_hmos_ipc.ko" "sheng_hmos_ipc"
-audit_module "$dmabuf_dir/kernel/sheng_dmabuf_sync.ko" "sheng_dmabuf_sync"
+audit_module "$ipc_dir/hmos_ipc.ko" "hmos_ipc"
+audit_module "$dmabuf_dir/kernel/hmos_dmabuf_sync.ko" "hmos_dmabuf_sync"
 
 stage=ipc-tests-build
 make -C "$kernel_dir" ARCH=arm64 O="$output" INSTALL_HDR_PATH="$uapi_dir" headers_install
