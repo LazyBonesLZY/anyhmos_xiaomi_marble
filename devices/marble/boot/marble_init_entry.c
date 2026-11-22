@@ -28,6 +28,17 @@ static long link_file(const char *target, const char *name)
     return x0;
 }
 
+static long access_exists(const char *path)
+{
+    register long x8 __asm__("x8") = 48; /* faccessat */
+    register long x0 __asm__("x0") = -100;
+    register long x1 __asm__("x1") = (long)path;
+    register long x2 __asm__("x2") = 0; /* F_OK */
+    register long x3 __asm__("x3") = 0;
+    __asm__ volatile("svc 0" : "+r"(x0) : "r"(x8), "r"(x1), "r"(x2), "r"(x3) : "memory");
+    return x0;
+}
+
 static const char *const required_links[][2] = {
     {P "hmos-ipc.ko", "/hmos-ipc.ko"},
     {P "hmos-dmabuf-sync.ko", "/hmos-dmabuf-sync.ko"},
@@ -39,6 +50,14 @@ static const char *const required_links[][2] = {
 static const char *const optional_links[][2] = {
     {P "busybox", "/busybox"},
     {P "init.android.original", "/init.android.original"},
+    {P "hmos-init-debug.cfg", "/hmos-init-debug.cfg"},
+    {P "hmos-native-hilog", "/hmos-native-hilog"},
+    {P "hmos-hdf-graphics.hcb", "/hmos-hdf-graphics.hcb"},
+};
+
+static const char *const optional_symlinks[][2] = {
+    {P "graphics", "/graphics"},
+    {P "stock-gpu-firmware", "/stock-gpu-firmware"},
 };
 
 __attribute__((noreturn)) void entry(void)
@@ -50,6 +69,10 @@ __attribute__((noreturn)) void entry(void)
     }
     for (unsigned i = 0; !failed && i < sizeof(optional_links) / sizeof(optional_links[0]); ++i) {
         (void)link_file(optional_links[i][0], optional_links[i][1]);
+    }
+    for (unsigned i = 0; !failed && i < sizeof(optional_symlinks) / sizeof(optional_symlinks[0]); ++i) {
+        if (access_exists(optional_symlinks[i][0]) == 0)
+            (void)call3(36, (long)optional_symlinks[i][0], -100, (long)optional_symlinks[i][1]); /* symlinkat */
     }
     char *const args[] = {P "hmos-probe", 0};
     char *const env[] = {0};

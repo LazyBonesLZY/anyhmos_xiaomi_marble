@@ -23,7 +23,11 @@ static int graphics_run_script(const char *script) {
     return 0;
 }
 static int graphics_ram_root(void) {
-    if(access("/hmos-hdf-graphics.hcb",F_OK)<0)return 0;
+    if(access("/hmos-hdf-graphics.hcb",F_OK)<0){
+        if(access("/graphics/stage-phase3-marble.sh",F_OK)==0)
+            return graphics_run_script("/graphics/stage-phase3-marble.sh");
+        return 0;
+    }
     if(mkdirs("/hmos-root/compat/lib64")<0||mkdirs("/hmos-root/compat/bin")<0)return -1;
     /* The legacy lookup alias is RAM-only; no chip_prod partition is needed. */
     const char *configs[]={"/hmos-root/system/etc/hdfconfig/hdf_default.hcb","/hmos-root/chip_prod/etc/hdfconfig/hdf_default.hcb"};

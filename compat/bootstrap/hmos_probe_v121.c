@@ -546,7 +546,7 @@ static int ipc_pid_nodes(void) {
     return count;
 }
 #endif
-#ifdef HMOS_PROBE_ONLY
+#if defined(HMOS_PROBE_ONLY) || defined(HMOS_MARBLE_PHASE3)
 static void dmabuf_load(void) {
     if(access("/sys/module/hmos_dmabuf_sync",F_OK)==0){note("DMABUF module already loaded");return;}
     int fd=open("/hmos-dmabuf-sync.ko",O_RDONLY|O_CLOEXEC);
@@ -638,6 +638,10 @@ static void ipc_load(void) {
         char params[256];
         snprintf(params,sizeof(params),"diagnostic_stage=%d oneway_sender_pid=1 "
                  "devices=hmos_binder,hmos_hwbinder,hmos_vndbinder,hmos_pidtest,hmos_pidtest_ns",ipc_stage);
+#elif defined(HMOS_MARBLE_PHASE3)
+        char params[256];
+        snprintf(params,sizeof(params),"diagnostic_stage=%d oneway_sender_pid=1 "
+                 "devices=hmos_binder,hmos_hwbinder,hmos_vndbinder",ipc_stage);
 #else
         char params[64];snprintf(params,sizeof(params),"diagnostic_stage=%d",ipc_stage);
 #endif
@@ -691,7 +695,7 @@ static void serial_command(char *cmd) {
 #if HMOS_IPC_ONEWAY_PID || defined(HMOS_PROBE_ONLY)
     if(strstr(cmd,"test-oneway"))ipc_test_requested=3;
 #endif
-#ifdef HMOS_PROBE_ONLY
+#if defined(HMOS_PROBE_ONLY) || defined(HMOS_MARBLE_PHASE3)
     if(strstr(cmd,"dmabuf"))dmabuf_load();
 #endif
     if(strstr(cmd,"reboot-recovery")){note("USB requested reboot to recovery");if(logfd>=0)fsync(logfd);sync();syscall(SYS_reboot,LINUX_REBOOT_MAGIC1,LINUX_REBOOT_MAGIC2,LINUX_REBOOT_CMD_RESTART2,"recovery");note("reboot syscall returned: %s",strerror(errno));}
@@ -955,7 +959,10 @@ static void trace_handoff(int kind) {
                         int output=open("/hmos-root/data/local/tmp/v116-autostart.txt",O_CREAT|O_TRUNC|O_WRONLY,0600);
                         if(input!=0||output!=1||dup2(output,2)!=2)_exit(126);
                         dprintf(1,"AUTOSTART_STDIO_READY input=0 output=1 error=2\n");
-                        execl("/busybox","busybox","timeout","900","/busybox","sh","/graphics/start-native-desktop-v116.sh",(char*)0);
+                        const char *autostart = access("/graphics/start-native-desktop-v116.sh",F_OK)==0
+                            ? "/graphics/start-native-desktop-v116.sh"
+                            : "/graphics/start-phase3-marble.sh";
+                        execl("/busybox","busybox","timeout","900","/busybox","sh",autostart,(char*)0);
                         _exit(127);
                     }
                     note("AUTOSTART bootstrap child=%ld; bounded=900s; original init follows",(long)boot);
@@ -1013,6 +1020,8 @@ int main(int argc,char **argv) {
     note("hmos HMOS trace v116 -- collect early logs, then execute original Android init");
 #elif defined(HMOS_PROBE_ONLY)
     note("hmos HMOS probe v121 PHASE2-ONLY -- USB ACM serial & kernel/IPC contract verification (no super/userdata mutation)");
+#elif defined(HMOS_MARBLE_PHASE3)
+    note("hmos HMOS probe v121 MARBLE-PHASE3 -- read-only super + ext4 userdata + HarmonyOS core service bring-up");
 #else
     note("hmos HMOS probe v121 USB-session recovery payload -- autonomous native startup; vendor read-only; existing isolated data only");
 #endif
@@ -1040,6 +1049,9 @@ int main(int argc,char **argv) {
 #ifdef TRACE_ANDROID
     trace_handoff(0);
 #else
+#ifdef HMOS_MARBLE_PHASE3
+    dmabuf_load();
+#endif
     note("AUTOSTART loading verified IPC module before native init");
     ipc_load();trace_requested=3;
 #endif
