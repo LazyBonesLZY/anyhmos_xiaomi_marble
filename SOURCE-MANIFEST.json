@@ -514,8 +514,8 @@
     },
     {
       "path": "compat/bootstrap/hmos_probe_v121.c",
-      "bytes": 75911,
-      "sha256": "bc690a3a7338649b81b3d423a430c04c48a2e4565ae8055cbf08725143b65f75"
+      "bytes": 77859,
+      "sha256": "8451946b7c62c02f2ee9846cddd0e1df9ad8ee006ac09258464ed46ada4e4b7a"
     },
     {
       "path": "compat/bootstrap/init_entry.c",
@@ -2028,6 +2028,11 @@
       "sha256": "a0f4021d0bb5f1e9235f91219964b46c0628a83dd58e0925a87d59c2c0a335ee"
     },
     {
+      "path": "patches/donor/ady-al10-111-sp10/init.json",
+      "bytes": 530,
+      "sha256": "dbf17483f0896a4d08855a65f5f2c7b9d261a8f1be48270745cbbbc8a947d22a"
+    },
+    {
       "path": "patches/donor/gem-w00-111-sp12/init.json",
       "bytes": 530,
       "sha256": "f0ee584a1fa4259fa0975587feaa253651c4f5a821229d1485063e018dd281b6"
@@ -2234,8 +2239,8 @@
     },
     {
       "path": "tests/test_marble_phase2.py",
-      "bytes": 7661,
-      "sha256": "d0c66e49981b69fc8afe070295035c07398d61d534f6b1f7a204281ca751d35f"
+      "bytes": 10201,
+      "sha256": "3e8b63c976bb92221e937e481949b0d5009248ce8dc99890968757ae982e9cfe"
     },
     {
       "path": "tests/test_native_hiview_events.py",
@@ -2364,13 +2369,13 @@
     },
     {
       "path": "tools/packaging/audit_donor.py",
-      "bytes": 5121,
-      "sha256": "239060b1fe7ff464ec0f3dc53b2fcfcb1c6de7ed146baab85d5db9295cc89102"
+      "bytes": 5154,
+      "sha256": "5415d5696e32349dc9c17f7d9174706ee157345aa21a1ddaefe09f771f98a80b"
     },
     {
       "path": "tools/packaging/build_marble_phase2_images.py",
-      "bytes": 20995,
-      "sha256": "d2e55de9a1ea9b2d7e9fc9ee429b40b346016a5ed763228f859b228a9d716292"
+      "bytes": 23540,
+      "sha256": "25513fe8f920e148929132feecdc07ed35d28d4e24798cbd46b81aa2b80a9e62"
     },
     {
       "path": "tools/packaging/build_promax_images.py",

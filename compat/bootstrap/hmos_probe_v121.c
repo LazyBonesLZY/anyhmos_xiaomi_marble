@@ -269,7 +269,7 @@ static void loadmodules(void) {
     /* Normal first-stage modules.load omits the USB drivers that Android loads
      * later. Include both sm8550 (sheng) and sm7475 (marble) USB module names;
      * missing modules for the current board are logged and skipped cleanly. */
-    const char *usbmods[]={"pinctrl-spmi-gpio.ko","pinctrl-spmi-mpp.ko","bam_dma.ko","gpi.ko","msm_gpi.ko","i2c-msm-geni.ko","pmic_glink.ko","ucsi_glink.ko","usb_bam.ko","phy-generic.ko","phy-msm-ssusb-qmp.ko","phy-msm-snps-hs.ko","phy-msm-snps-eusb2.ko","phy-msm-m31-eusb2.ko","repeater.ko","repeater-qti-pmic-eusb2.ko","repeater-i2c-eusb2.ko","redriver.ko","nb7vpq904m.ko","eud.ko","ps5169.ko","dwc3-msm.ko"};
+    const char *usbmods[]={"mtd.ko","block2mtd.ko","pm8941-pwrkey.ko","mtdoops.ko","pinctrl-spmi-gpio.ko","pinctrl-spmi-mpp.ko","bam_dma.ko","gpi.ko","msm_gpi.ko","i2c-msm-geni.ko","pmic_glink.ko","ucsi_glink.ko","usb_bam.ko","phy-generic.ko","phy-msm-ssusb-qmp.ko","phy-msm-snps-hs.ko","phy-msm-snps-eusb2.ko","phy-msm-m31-eusb2.ko","repeater.ko","repeater-qti-pmic-eusb2.ko","repeater-i2c-eusb2.ko","redriver.ko","nb7vpq904m.ko","eud.ko","ps5169.ko","dwc3-msm.ko"};
     for(unsigned j=0;j<sizeof(usbmods)/sizeof(usbmods[0]);j++){loadmod(usbmods[j],0);discover();persistent();}
     if(access("/hmos-hdf-graphics.hcb",F_OK)==0)loadmod("msm_drm.ko",0);
 }
@@ -383,7 +383,8 @@ static void usb_setup(void) {
     /* hmos recovery explicitly switches the Qualcomm wrapper to peripheral
      * before waiting for its child UDC. Waiting for UDC first deadlocks setup. */
     const char *mode="/sys/bus/platform/devices/a600000.ssusb/mode";
-    if(!usb_mode_set&&access(mode,F_OK)==0){if(put(mode,"peripheral")==0){usb_mode_set=1;note("USB Qualcomm mode set to peripheral");}else note("USB peripheral mode: %s",strerror(errno));}
+    const char *role_sw="/sys/class/usb_role/a600000.ssusb-role-switch/role";
+    if(!usb_mode_set&&access(mode,F_OK)==0){if(put(mode,"peripheral")==0){usb_mode_set=1;note("USB Qualcomm mode set to peripheral");}else note("USB peripheral mode: %s",strerror(errno));if(access(role_sw,F_OK)==0)put(role_sw,"device");}
     DIR *d=opendir("/sys/class/udc");if(!d)d=opendir("/sys/class/UDC");if(!d)return;struct dirent *de;char controller[256]="";
     while((de=readdir(d))){
         if(de->d_name[0]=='.')continue;
@@ -668,7 +669,19 @@ static void reap_children(void) {
         else note("Child reaped pid=%ld status=%d",(long)done,status);
     }
 }
+#ifdef HMOS_PROBE_ONLY
+static time_t phase2_last_activity;
+static void phase2_flush_latest(void) {
+    if(access("/metadata/hmos-debug",F_OK)<0)return;
+    int fd=open("/metadata/hmos-debug/phase2-latest.log",O_CREAT|O_TRUNC|O_WRONLY|O_CLOEXEC|O_NOFOLLOW,0600);
+    if(fd<0)return;
+    history_write(fd);fsync(fd);close(fd);
+}
+#endif
 static void serial_command(char *cmd) {
+#ifdef HMOS_PROBE_ONLY
+    {struct timespec ts_act;clock_gettime(CLOCK_MONOTONIC,&ts_act);phase2_last_activity=ts_act.tv_sec;}
+#endif
     if(!strncmp(cmd,"cmd ",4)){
         // An explicit command takes priority over old unsolicited USB replay.
         // Persistent history remains available through the replay command.
@@ -1008,7 +1021,19 @@ int main(int argc,char **argv) {
     char misc[2048];if(readfile("/proc/misc",misc,sizeof(misc))>0){char *save,*p=strtok_r(misc,"\n",&save);while(p){unsigned n;char name[128];if(sscanf(p,"%u %127s",&n,name)==2&&!strcmp(name,"device-mapper"))mknod("/dev/mapper/control",S_IFCHR|0600,makedev(10,n));p=strtok_r(NULL,"\n",&save);}}
 #ifdef HMOS_PROBE_ONLY
     partitions("/dev/block/by-name/super",1);snapshots();drain();
-    note("PHASE2 READY: USB ACM commands available: status, replay, diag, ipc, dmabuf, test-token, test-binder, test-oneway, cmd <id> <b64>, reboot-bootloader, reboot-recovery");
+    note("PHASE2 AUTORUN: executing kernel module load (hmos_ipc.ko, hmos_dmabuf_sync.ko) and 3 IPC contract tests");
+    ipc_load();
+    for(int w=0;w<80&&ipc_pid>0;w++){drain();watchdog();usb_setup();serial_tick();reap_children();usleep(100000);}
+    dmabuf_load();
+    for(int t=1;t<=3;t++){
+        ipc_test(t);
+        for(int w=0;w<650&&ipc_test_pid>0;w++){drain();watchdog();usb_setup();serial_tick();ipc_test_tick();reap_children();usleep(100000);}
+        for(int w=0;w<5;w++){drain();usleep(50000);}
+    }
+    note("PHASE2 AUTORUN COMPLETE: all logs flushed to /metadata/hmos-debug/phase2-latest.log");
+    note("PHASE2 READY: USB ACM commands available: status, replay, diag, ipc, dmabuf, test-token, test-binder, test-oneway, cmd <id> <b64>, reboot-bootloader, reboot-recovery (auto-reboot to bootloader in 25s if idle)");
+    phase2_flush_latest();if(logfd>=0)fsync(logfd);sync();
+    {struct timespec ts_now;clock_gettime(CLOCK_MONOTONIC,&ts_now);phase2_last_activity=ts_now.tv_sec;}
 #else
     partitions("/dev/block/by-name/super",0);snapshots();drain();
 #ifdef TRACE_ANDROID
@@ -1018,5 +1043,14 @@ int main(int argc,char **argv) {
     ipc_load();trace_requested=3;
 #endif
 #endif
-    time_t flush_second=-1;for(;;){drain();watchdog();hilog_tick();serial_tick();command_tick();ipc_test_tick();if(ipc_requested){ipc_requested=0;if(getpid()==1&&!trace_hmos)ipc_load();else note("IPC LOAD rejected after OS handoff");}if(ipc_test_requested){int which=ipc_test_requested;ipc_test_requested=0;if(getpid()==1&&!trace_hmos)ipc_test(which);else note("IPC contracts only run before native OS handoff");}if(trace_requested&&getpid()==1&&ipc_pid==0&&ipc_test_pid==0&&command_pid==0){int kind=trace_requested-1;trace_requested=0;trace_handoff(kind);}if(traced_pid>0)trace_poll();else reap_children();struct timespec ts;clock_gettime(CLOCK_MONOTONIC,&ts);if(ts.tv_sec!=flush_second){flush_second=ts.tv_sec;runtime_persistent();if(traced_pid<=0){discover();persistent();usb_setup();}if(logfd>=0)fsync(logfd);}struct pollfd p={.fd=kmsg,.events=POLLIN};struct timespec delay={.tv_nsec=traced_pid>0&&!trace_held&&(trace_syscalls||trace_followers_active())?100000:5000000};ppoll(&p,1,&delay,NULL);}
+    time_t flush_second=-1;for(;;){drain();watchdog();hilog_tick();serial_tick();command_tick();ipc_test_tick();if(ipc_requested){ipc_requested=0;if(getpid()==1&&!trace_hmos)ipc_load();else note("IPC LOAD rejected after OS handoff");}if(ipc_test_requested){int which=ipc_test_requested;ipc_test_requested=0;if(getpid()==1&&!trace_hmos)ipc_test(which);else note("IPC contracts only run before native OS handoff");}if(trace_requested&&getpid()==1&&ipc_pid==0&&ipc_test_pid==0&&command_pid==0){int kind=trace_requested-1;trace_requested=0;trace_handoff(kind);}if(traced_pid>0)trace_poll();else reap_children();struct timespec ts;clock_gettime(CLOCK_MONOTONIC,&ts);if(ts.tv_sec!=flush_second){flush_second=ts.tv_sec;runtime_persistent();if(traced_pid<=0){discover();persistent();usb_setup();}
+#ifdef HMOS_PROBE_ONLY
+        phase2_flush_latest();
+        if(phase2_last_activity>0&&ipc_pid==0&&ipc_test_pid==0&&command_pid==0&&(ts.tv_sec-phase2_last_activity)>=25){
+            note("PHASE2 AUTO-RETURN: 25s idle elapsed; syncing logs and rebooting to bootloader");
+            phase2_flush_latest();if(logfd>=0)fsync(logfd);sync();
+            syscall(SYS_reboot,LINUX_REBOOT_MAGIC1,LINUX_REBOOT_MAGIC2,LINUX_REBOOT_CMD_RESTART2,"bootloader");
+        }
+#endif
+        if(logfd>=0)fsync(logfd);}struct pollfd p={.fd=kmsg,.events=POLLIN};struct timespec delay={.tv_nsec=traced_pid>0&&!trace_held&&(trace_syscalls||trace_followers_active())?100000:5000000};ppoll(&p,1,&delay,NULL);}
 }

@@ -218,6 +218,56 @@ def extract_full_single_vendor_ramdisk(stock_vendor_boot: Path, dst: Path) -> bo
     return True
 
 
+def attach_boot_v4_signature(boot_payload: bytes, sig_path: Path) -> bytes:
+    """Preserve the 4096-byte GKI v4 boot_signature extracted from stock boot.img."""
+    if not sig_path.is_file():
+        return boot_payload
+    sig = sig_path.read_bytes()
+    if not sig or len(boot_payload) < 1584 or boot_payload[:8] != b'ANDROID!':
+        return boot_payload
+    out = bytearray(boot_payload)
+    if len(out) % 4096:
+        out.extend(bytes(4096 - (len(out) % 4096)))
+    struct.pack_into('<I', out, 1580, len(sig))
+    out.extend(sig)
+    return bytes(out)
+
+
+def preserve_and_update_avb_footer(payload: bytes, stock_raw: bytes) -> tuple:
+    """Update AVB0 hash descriptor and full-partition AVBf footer when present in stock image.
+
+    Prevents stale AVBf footers at the end of boot_a (192 MiB) or vendor_boot_a (96 MiB)
+    from pointing into overwritten payload offsets during Qualcomm ABL AvbSlotVerify.
+    """
+    if len(stock_raw) < 64 or stock_raw[-64:-60] != b'AVBf':
+        return payload, False
+    part_size = len(stock_raw)
+    footer = bytearray(stock_raw[-64:])
+    magic, vmaj, vmin, old_orig, old_vb_off, vb_size = struct.unpack('>4sIIQQQ', footer[:36])
+    if old_vb_off + vb_size > part_size:
+        return payload, False
+    vb = bytearray(stock_raw[old_vb_off:old_vb_off + vb_size])
+    if vb[:4] != b'AVB0':
+        return payload, False
+    tag, _ = struct.unpack_from('>QQ', vb, 256)
+    if tag == 2:
+        part_name_len, salt_len, digest_len = struct.unpack_from('>III', vb, 256 + 16 + 8 + 32)
+        var_off = 256 + 132
+        salt = bytes(vb[var_off + part_name_len:var_off + part_name_len + salt_len])
+        new_digest = hashlib.sha256(salt + payload).digest()
+        struct.pack_into('>Q', vb, 256 + 16, len(payload))
+        vb[var_off + part_name_len + salt_len:var_off + part_name_len + salt_len + digest_len] = new_digest
+    new_orig = len(payload)
+    struct.pack_into('>QQQ', footer, 12, new_orig, new_orig, vb_size)
+    out = bytearray(payload)
+    out.extend(vb)
+    if len(out) + 64 > part_size:
+        raise ValueError(f'Payload ({len(payload)}) + VBMeta ({vb_size}) exceeds partition size ({part_size})')
+    out.extend(bytes(part_size - len(out) - 64))
+    out.extend(footer)
+    return bytes(out), True
+
+
 def prune_module_metadata(entries: dict, valid_ko_names: set) -> None:
     """Prune removed modules from modules.load* and modules.dep so finit_module never hits stale .ko."""
     for load_key in ('lib/modules/modules.load', 'lib/modules/modules.load.recovery'):
@@ -313,6 +363,9 @@ def build_phase2_images(
     boot_repack_args = replace_arg_value(boot_repack_args, '--ramdisk', str(boot_ramdisk_out))
     boot_out = out_dir / 'boot_phase2.img'
     subprocess.run(['mkbootimg', *boot_repack_args, '--output', str(boot_out)], check=True)
+    boot_payload = attach_boot_v4_signature(boot_out.read_bytes(), boot_unpack / 'boot_signature')
+    boot_final, boot_avb_updated = preserve_and_update_avb_footer(boot_payload, stock_boot.read_bytes())
+    boot_out.write_bytes(boot_final)
     if boot_out.stat().st_size > BOOT_LIMIT_BYTES:
         raise ValueError(f'boot_phase2.img exceeds 192 MiB limit: {boot_out.stat().st_size}')
 
@@ -349,7 +402,8 @@ def build_phase2_images(
         target_entries = parse_cpio_newc(cpio_path.read_bytes())
 
     vb_inode = [max((f[0] for f, _ in target_entries.values()), default=100) + 1]
-    built_mods = extract_tar_modules(vb_mods_tar)
+    vb_only_mods = extract_tar_modules(vb_mods_tar)
+    built_mods = dict(vb_only_mods)
     if vd_mods_tar.is_file():
         for k, v in extract_tar_modules(vd_mods_tar).items():
             built_mods.setdefault(k, v)
@@ -369,19 +423,12 @@ def build_phase2_images(
                 del target_entries[name]
                 removed_stale_mods.append(base)
 
-    # Ensure critical marble USB modules exist in /lib/modules/
+    # Ensure all compiled vendor_boot modules (including USB, touch, hdcp) exist in /lib/modules/
     added_usb_mods = []
-    usb_required = [
-        'pinctrl-spmi-gpio.ko', 'pinctrl-spmi-mpp.ko', 'bam_dma.ko', 'gpi.ko',
-        'i2c-msm-geni.ko', 'pmic_glink.ko', 'ucsi_glink.ko', 'usb_bam.ko',
-        'phy-generic.ko', 'phy-msm-ssusb-qmp.ko', 'phy-msm-snps-hs.ko',
-        'phy-msm-snps-eusb2.ko', 'repeater.ko', 'repeater-i2c-eusb2.ko',
-        'redriver.ko', 'nb7vpq904m.ko', 'eud.ko', 'dwc3-msm.ko',
-    ]
-    for mod in usb_required:
+    for mod, blob in sorted(vb_only_mods.items()):
         rel = mod_prefix + mod
-        if rel not in target_entries and mod in built_mods:
-            put_file(target_entries, rel, built_mods[mod], 0o644, vb_inode)
+        if rel not in target_entries:
+            put_file(target_entries, rel, blob, 0o644, vb_inode)
             added_usb_mods.append(mod)
 
     valid_ko_names = {
@@ -436,6 +483,9 @@ def build_phase2_images(
 
     vb_out = out_dir / 'vendor_boot_phase2.img'
     subprocess.run(['mkbootimg', *vb_repack_args, '--vendor_boot', str(vb_out)], check=True)
+    vb_payload = vb_out.read_bytes()
+    vb_final, vb_avb_updated = preserve_and_update_avb_footer(vb_payload, stock_vendor_boot.read_bytes())
+    vb_out.write_bytes(vb_final)
     if vb_out.stat().st_size > VENDOR_BOOT_LIMIT_BYTES:
         raise ValueError(f'vendor_boot_phase2.img exceeds 96 MiB limit: {vb_out.stat().st_size}')
 
@@ -461,13 +511,16 @@ def build_phase2_images(
         'boot_phase2': {
             'path': str(boot_out),
             'bytes': boot_out.stat().st_size,
+            'payload_bytes': len(boot_payload),
             'limit_bytes': BOOT_LIMIT_BYTES,
             'ramdisk_compression': boot_comp,
+            'avb_footer_updated': boot_avb_updated,
             'sha256': sha256_bytes(boot_out.read_bytes()),
         },
         'vendor_boot_phase2': {
             'path': str(vb_out),
             'bytes': vb_out.stat().st_size,
+            'payload_bytes': len(vb_payload),
             'limit_bytes': VENDOR_BOOT_LIMIT_BYTES,
             'target_ramdisk': target_rd.name,
             'ramdisk_compression': target_rd_comp,
@@ -475,6 +528,7 @@ def build_phase2_images(
             'replaced_modules_count': len(replaced_mods),
             'added_usb_modules': added_usb_mods,
             'removed_stale_modules': removed_stale_mods,
+            'avb_footer_updated': vb_avb_updated,
             'sha256': sha256_bytes(vb_out.read_bytes()),
         },
         'compat_manifest': manifest,

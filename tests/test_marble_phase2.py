@@ -52,8 +52,51 @@ class MarblePhase2Tests(unittest.TestCase):
     def test_usb_setup_skips_dummy_udc_and_includes_marble_usb_modules(self):
         probe_src = (ROOT / 'compat/bootstrap/hmos_probe_v121.c').read_text(encoding='utf-8')
         self.assertIn('strncmp(de->d_name,"dummy_udc",9)', probe_src)
-        for mod in ('gpi.ko', 'phy-msm-snps-hs.ko', 'nb7vpq904m.ko', 'dwc3-msm.ko'):
+        for mod in ('gpi.ko', 'phy-msm-snps-hs.ko', 'nb7vpq904m.ko', 'dwc3-msm.ko', 'mtdoops.ko'):
             self.assertIn(f'"{mod}"', probe_src)
+        self.assertIn('PHASE2 AUTORUN:', probe_src)
+        self.assertIn('PHASE2 AUTO-RETURN:', probe_src)
+
+    def test_avb_footer_and_boot_v4_signature_preservation(self):
+        import hashlib
+        import struct
+        payload = b'ANDROID!' + b'\x00' * (4096 - 8)
+        with tempfile.TemporaryDirectory() as td:
+            sig_path = Path(td) / 'boot_signature'
+            sig_path.write_bytes(b'AVB0' + b'\xaa' * 4092)
+            with_sig = PHASE2.attach_boot_v4_signature(payload, sig_path)
+            self.assertEqual(len(with_sig), 8192)
+            self.assertEqual(struct.unpack_from('<I', with_sig, 1580)[0], 4096)
+
+            # Build synthetic stock image with AVB0 hash descriptor + AVBf footer
+            part_size = 65536
+            old_orig = 4096
+            salt = b'\x11' * 32
+            old_digest = hashlib.sha256(salt + b'\x00' * old_orig).digest()
+            part_name = b'boot'
+            vb = bytearray(512)
+            vb[:4] = b'AVB0'
+            struct.pack_into('>QQ', vb, 256, 2, 116 + len(part_name) + len(salt) + len(old_digest))
+            struct.pack_into('>Q', vb, 256 + 16, old_orig)
+            vb[256 + 24:256 + 31] = b'sha256\x00'
+            struct.pack_into('>III', vb, 256 + 56, len(part_name), len(salt), len(old_digest))
+            var_off = 256 + 132
+            vb[var_off:var_off + len(part_name)] = part_name
+            vb[var_off + len(part_name):var_off + len(part_name) + len(salt)] = salt
+            vb[var_off + len(part_name) + len(salt):var_off + len(part_name) + len(salt) + 32] = old_digest
+            footer = bytearray(64)
+            struct.pack_into('>4sIIQQQ', footer, 0, b'AVBf', 1, 0, old_orig, old_orig, len(vb))
+            stock_raw = b'\x00' * old_orig + bytes(vb) + b'\x00' * (part_size - old_orig - len(vb) - 64) + bytes(footer)
+
+            updated, ok = PHASE2.preserve_and_update_avb_footer(with_sig, stock_raw)
+            self.assertTrue(ok)
+            self.assertEqual(len(updated), part_size)
+            _, _, _, new_orig, new_vb_off, new_vb_sz = struct.unpack('>4sIIQQQ', updated[-64:-28])
+            self.assertEqual((new_orig, new_vb_off, new_vb_sz), (8192, 8192, 512))
+            expected_digest = hashlib.sha256(salt + with_sig).digest()
+            got_vb = updated[new_vb_off:new_vb_off + new_vb_sz]
+            self.assertEqual(struct.unpack_from('>Q', got_vb, 256 + 16)[0], 8192)
+            self.assertEqual(got_vb[var_off + len(part_name) + len(salt):var_off + len(part_name) + len(salt) + 32], expected_digest)
 
     @unittest.skipUnless(
         all(shutil.which(tool) for tool in ('aarch64-linux-gnu-gcc', 'mkbootimg', 'unpack_bootimg', 'lz4')),

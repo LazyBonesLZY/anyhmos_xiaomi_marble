@@ -65,7 +65,7 @@ def audit(root, recipe_root):
     checks = []
     for recipe_path in sorted(recipe_root.glob('*.json')):
         recipe = json.loads(recipe_path.read_text(encoding='utf-8-sig'))
-        name = recipe['name']
+        name = recipe.get('name') or Path(recipe['path']).name
         candidates = by_name.get(name, [])
         # Each path is checked separately: a matching basename is not identity.
         results = []
