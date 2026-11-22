@@ -18,9 +18,11 @@ permissions:
 jobs:
   marble-kernel:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
     env:
       CCACHE_DIR: /home/runner/.ccache
+      CCACHE_BASEDIR: /home/runner/marble-build-work
+      CCACHE_NOHASHDIR: "true"
       LLVM_TARBALL: /home/runner/build_toolchain/llvm-23.1.6-x86_64.tar.xz
       LLVM_URL: https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-23.1.6-x86_64.tar.xz
     steps:
@@ -70,6 +72,7 @@ jobs:
 
       - name: Build marble kernel, HMOS IPC/dmabuf modules & IPC tests
         env:
+          MARBLE_WORK_DIR: /home/runner/marble-build-work
           MARBLE_CLANG_BIN: /home/runner/build_toolchain/llvm-23.1.6-x86_64/bin
           MARBLE_BUILD_MODE: ${{ inputs.build_mode || 'full' }}
           MARBLE_ARTIFACT_DIR: ${{ runner.temp }}/marble-kernel-artifacts

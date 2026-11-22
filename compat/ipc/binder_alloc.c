@@ -780,7 +780,16 @@ static void binder_alloc_clear_buf(struct binder_alloc *alloc,
 		page = binder_alloc_get_page(alloc, buffer,
 					     buffer_offset, &pgoff);
 		size = min_t(size_t, bytes, PAGE_SIZE - pgoff);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)
+		{
+			void *kptr = kmap(page) + pgoff;
+
+			memset(kptr, 0, size);
+			kunmap(page);
+		}
+#else
 		memset_page(page, pgoff, 0, size);
+#endif
 		bytes -= size;
 		buffer_offset += size;
 	}
@@ -1260,9 +1269,15 @@ binder_alloc_copy_user_to_buffer(struct binder_alloc *alloc,
 		page = binder_alloc_get_page(alloc, buffer,
 					     buffer_offset, &pgoff);
 		size = min_t(size_t, bytes, PAGE_SIZE - pgoff);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)
+		kptr = kmap(page) + pgoff;
+		ret = copy_from_user(kptr, from, size);
+		kunmap(page);
+#else
 		kptr = kmap_local_page(page) + pgoff;
 		ret = copy_from_user(kptr, from, size);
 		kunmap_local(kptr);
+#endif
 		if (ret)
 			return bytes - size + ret;
 		bytes -= size;

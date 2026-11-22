@@ -14,8 +14,8 @@
     },
     {
       "path": ".github/workflows/build-marble-kernel.yml",
-      "bytes": 3010,
-      "sha256": "3a1d6fb38d8b34008cf029cab5d09858e25ca6641712a3bcae97d014a28aea78"
+      "bytes": 3153,
+      "sha256": "7bf9ca01f36cec799561bee5b08be14e85eed488b0cb55d72e91f2d71db71100"
     },
     {
       "path": ".gitignore",
@@ -749,8 +749,8 @@
     },
     {
       "path": "compat/ipc/binder_alloc.c",
-      "bytes": 36251,
-      "sha256": "d35f26e0e09e5d29f40cb7f6da05755fb9a88e04455941277cedf0cdb26988a2"
+      "bytes": 36552,
+      "sha256": "411035dff2437acffe5ba364f533a85804db5254179aae55d06699d497f7924c"
     },
     {
       "path": "compat/ipc/binder_alloc.h",
@@ -2294,8 +2294,8 @@
     },
     {
       "path": "tools/build/build_marble_kernel.sh",
-      "bytes": 11281,
-      "sha256": "7c3a402d6777315dec0c0e8160028f8f7e068be146ad89a5df506fcf866fef0f"
+      "bytes": 11907,
+      "sha256": "17b223d29ce50860281f8f464ff26d73e6e6f96d0713a78b51719954c5b1c7a7"
     },
     {
       "path": "tools/build/build_sensors.py",

@@ -2,7 +2,12 @@
 set -euo pipefail
 
 repo=$(realpath "${1:?source checkout required}")
-work=$(mktemp -d "${RUNNER_TEMP:-/tmp}/marble-kernel-build.XXXXXX")
+if [[ -n "${MARBLE_WORK_DIR:-}" ]]; then
+	work=$MARBLE_WORK_DIR
+	mkdir -p "$work"
+else
+	work=$(mktemp -d "${RUNNER_TEMP:-/tmp}/marble-kernel-build.XXXXXX")
+fi
 
 kernel_repo=${MARBLE_KERNEL_REPO:-https://github.com/Pzqqt/android_kernel_xiaomi_marble.git}
 kernel_commit=${MARBLE_KERNEL_COMMIT:-987b4d173c77aa702f7fe848090e6d42d9f021a5}
@@ -37,18 +42,31 @@ if [[ -n "${MARBLE_CLANG_BIN:-}" && -x "${MARBLE_CLANG_BIN}/clang" ]]; then
 	clang_bin=$(realpath "$MARBLE_CLANG_BIN")
 else
 	mkdir -p "$work/toolchain"
-	curl --fail --location --retry 3 "$llvm_url" -o "$work/toolchain/llvm.tar.xz"
-	tar -xJf "$work/toolchain/llvm.tar.xz" -C "$work/toolchain"
-	clang_bin=$(dirname "$(find "$work/toolchain" -maxdepth 3 -type f -name clang | head -n 1)")
+	existing_clang=$(find "$work/toolchain" -maxdepth 3 -type f -name clang 2>/dev/null | head -n 1 || true)
+	if [[ -z "$existing_clang" ]]; then
+		if [[ ! -s "$work/toolchain/llvm.tar.xz" ]]; then
+			curl --fail --location --retry 3 "$llvm_url" -o "$work/toolchain/llvm.tar.xz"
+		fi
+		tar -xJf "$work/toolchain/llvm.tar.xz" -C "$work/toolchain"
+		existing_clang=$(find "$work/toolchain" -maxdepth 3 -type f -name clang | head -n 1)
+	fi
+	clang_bin=$(dirname "$existing_clang")
 fi
-export PATH="$clang_bin:$PATH"
+export PATH="$clang_bin:$PATH:/usr/sbin:/sbin"
 clang --version | tee "$artifacts/audit/clang-version.txt"
 
 stage=source-fetch
-git -C "$kernel_dir" init -q
-git -C "$kernel_dir" remote add origin "$kernel_repo"
-git -C "$kernel_dir" fetch --depth=1 origin "$kernel_commit"
-git -C "$kernel_dir" checkout -q --detach FETCH_HEAD
+if [[ -d "$kernel_dir/.git" ]]; then
+	git -C "$kernel_dir" reset --hard -q
+	git -C "$kernel_dir" clean -fdx -q
+else
+	git -C "$kernel_dir" init -q
+	git -C "$kernel_dir" remote add origin "$kernel_repo"
+fi
+if ! git -C "$kernel_dir" cat-file -e "${kernel_commit}^{commit}" 2>/dev/null; then
+	git -C "$kernel_dir" fetch --depth=1 origin "$kernel_commit"
+fi
+git -C "$kernel_dir" checkout -q --detach "$kernel_commit"
 test "$(git -C "$kernel_dir" rev-parse HEAD)" = "$kernel_commit"
 git -C "$kernel_dir" rev-parse HEAD > "$artifacts/audit/kernel-revision.txt"
 git -C "$repo" rev-parse HEAD > "$artifacts/audit/source-revision.txt"
@@ -66,6 +84,7 @@ export KBUILD_BUILD_USER=anyhmos
 export KBUILD_BUILD_HOST=marble
 export LOCALVERSION="$localversion"
 
+rm -rf "$ipc_dir" "$dmabuf_dir" "$uapi_dir" "$uapi_android_dir"
 make_flags=(ARCH=arm64 LLVM=1 LLVM_IAS=1 O="$output")
 if ! command -v ccache >/dev/null 2>&1; then
 	make_flags+=(CCACHE=)
