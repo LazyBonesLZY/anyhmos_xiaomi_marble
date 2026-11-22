@@ -13,6 +13,11 @@
       "sha256": "fa983a88812452ff0c416dcde501b1cf828547f8907fe74081909b3901d91934"
     },
     {
+      "path": ".github/workflows/build-marble-kernel.yml",
+      "bytes": 3010,
+      "sha256": "3a1d6fb38d8b34008cf029cab5d09858e25ca6641712a3bcae97d014a28aea78"
+    },
+    {
       "path": ".gitignore",
       "bytes": 478,
       "sha256": "a0df5079e5338597c88d186c42e0ae0846c67b21603dee7078022efa9d65a14f"
@@ -694,8 +699,8 @@
     },
     {
       "path": "compat/graphics/dmabuf_sync/kernel/sheng_dmabuf_sync.c",
-      "bytes": 9351,
-      "sha256": "ae6142f7d510283d243caa1c5b083c131c9ed34e7b870f2b35c7167f9e2faef2"
+      "bytes": 9798,
+      "sha256": "d2e9179de76ccb37233e0bd217f0a15b8bc6825cff31e33d516188bd9ff9bbd0"
     },
     {
       "path": "compat/graphics/dmabuf_sync/uapi/sheng_dmabuf_sync.h",
@@ -744,8 +749,8 @@
     },
     {
       "path": "compat/ipc/binder_alloc.c",
-      "bytes": 36076,
-      "sha256": "9e7e01f90668876d8215929c056cc82631b91162534fe1c68ab764e70272d836"
+      "bytes": 36251,
+      "sha256": "d35f26e0e09e5d29f40cb7f6da05755fb9a88e04455941277cedf0cdb26988a2"
     },
     {
       "path": "compat/ipc/binder_alloc.h",
@@ -1204,13 +1209,28 @@
     },
     {
       "path": "devices/marble/README.md",
-      "bytes": 2052,
-      "sha256": "653157c945861b9f955bc247314454521a374b2146023bd059b92211b8380d30"
+      "bytes": 3347,
+      "sha256": "999f591864c9765370d599dbfc93e96cb59969868f5400dfbdde64dba70dd0de"
     },
     {
       "path": "devices/marble/device.json",
-      "bytes": 1361,
-      "sha256": "2ac2b9a22c5adc185907874bb57a396f3e2cad3ab6705cebc939f72b6718ec1d"
+      "bytes": 4139,
+      "sha256": "dbe8da12dcba5ff0fb80d5565bad4da08208880809f058ab3db0a65e4434383f"
+    },
+    {
+      "path": "devices/marble/kernel/gki-exports/drivers/android/sheng_hmos_api_v1.h",
+      "bytes": 1585,
+      "sha256": "93486b3fdd9389d87a56dc268606ae55d0d844fb93c78b8bc5b3a069ef125c58"
+    },
+    {
+      "path": "devices/marble/kernel/gki-exports/drivers/android/sheng_hmos_exports.c",
+      "bytes": 1639,
+      "sha256": "d77aeb77e582e8dc78a3922e774151d0d31d4638f679ccd044fa968e1d1d38a6"
+    },
+    {
+      "path": "devices/marble/kernel/gki-exports.patch",
+      "bytes": 461,
+      "sha256": "e76f0133aebdd5cbad420b582a2078f4582b2fd8454387a7bbd8370e66700953"
     },
     {
       "path": "devices/marble/scripts/collect-marble-baseline.sh",
@@ -2271,6 +2291,11 @@
       "path": "tools/build/build_ipc_gki.sh",
       "bytes": 7718,
       "sha256": "40730e6fdc9a15df667da0d722baf2f8f1824d66201383b5bbff934a3835e59b"
+    },
+    {
+      "path": "tools/build/build_marble_kernel.sh",
+      "bytes": 11281,
+      "sha256": "7c3a402d6777315dec0c0e8160028f8f7e068be146ad89a5df506fcf866fef0f"
     },
     {
       "path": "tools/build/build_sensors.py",

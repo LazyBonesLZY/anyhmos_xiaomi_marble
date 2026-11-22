@@ -1,0 +1,89 @@
+name: Build Marble Kernel & HMOS IPC
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_mode:
+        description: "Build mode: 'full' (Image + HMOS modules + vendor_boot/vendor_dlkm modules + DTBs + IPC tests) or 'ipc-only' (fast Image + HMOS modules + IPC tests)"
+        required: true
+        default: "full"
+        type: choice
+        options:
+          - full
+          - ipc-only
+
+permissions:
+  contents: read
+
+jobs:
+  marble-kernel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CCACHE_DIR: /home/runner/.ccache
+      LLVM_TARBALL: /home/runner/build_toolchain/llvm-23.1.6-x86_64.tar.xz
+      LLVM_URL: https://mirrors.edge.kernel.org/pub/tools/llvm/files/llvm-23.1.6-x86_64.tar.xz
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential bc bison flex libssl-dev libelf-dev \
+            ccache kmod curl git python3 python-is-python3 python3-rich \
+            rsync cpio file gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+
+      - name: Restore Slim LLVM 23.1.6 cache
+        id: llvm-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.LLVM_TARBALL }}
+          key: marble-slim-llvm-23.1.6-x86_64
+
+      - name: Download Slim LLVM 23.1.6
+        if: steps.llvm-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$(dirname "$LLVM_TARBALL")"
+          curl --fail --location --retry 3 "$LLVM_URL" -o "$LLVM_TARBALL"
+
+      - name: Extract Slim LLVM 23.1.6
+        run: |
+          mkdir -p /home/runner/build_toolchain
+          tar -xJf "$LLVM_TARBALL" -C /home/runner/build_toolchain
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: marble-ccache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            marble-ccache-${{ runner.os }}-
+
+      - name: Configure ccache
+        run: |
+          ccache --max-size=2G
+          ccache --zero-stats
+
+      - name: Build marble kernel, HMOS IPC/dmabuf modules & IPC tests
+        env:
+          MARBLE_CLANG_BIN: /home/runner/build_toolchain/llvm-23.1.6-x86_64/bin
+          MARBLE_BUILD_MODE: ${{ inputs.build_mode || 'full' }}
+          MARBLE_ARTIFACT_DIR: ${{ runner.temp }}/marble-kernel-artifacts
+        run: bash tools/build/build_marble_kernel.sh "$GITHUB_WORKSPACE"
+
+      - name: Show ccache stats
+        if: always()
+        run: ccache --show-stats
+
+      - name: Upload marble kernel & IPC artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: marble-kernel-${{ inputs.build_mode || 'full' }}-${{ github.sha }}
+          path: ${{ runner.temp }}/marble-kernel-artifacts
+          if-no-files-found: warn
+          retention-days: 14

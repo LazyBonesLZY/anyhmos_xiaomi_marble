@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #ifdef SHENG_SYNC_HOST_TEST
 #include "bridge_host_shim.h"
+#define sheng_dma_resv_get_fences dma_resv_get_fences
 #else
 #include <linux/compat.h>
 #include <linux/dma-buf.h>
@@ -13,6 +14,17 @@
 #include <linux/slab.h>
 #include <linux/sync_file.h>
 #include <linux/uaccess.h>
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 14, 0)
+static inline int sheng_dma_resv_get_fences(struct dma_resv *obj,
+	struct dma_fence **pfence_excl, unsigned int *pshared_count,
+	struct dma_fence ***pshared)
+{
+	return dma_resv_get_fences_rcu(obj, pfence_excl, pshared_count, pshared);
+}
+#else
+#define sheng_dma_resv_get_fences dma_resv_get_fences
+#endif
 #endif
 #include "../uapi/sheng_dmabuf_sync.h"
 
@@ -166,7 +178,7 @@ static struct dma_fence *sheng_snapshot(struct dma_resv *reservation, bool write
 	unsigned int count = 0;
 	int error;
 
-	error = dma_resv_get_fences(reservation, write ? NULL : &exclusive,
+	error = sheng_dma_resv_get_fences(reservation, write ? NULL : &exclusive,
 		&count, &shared);
 	if (error) {
 		sheng_put_fences(shared, count);
@@ -264,7 +276,7 @@ static long sheng_import(void __user *user)
 		goto put_fence;
 	if (request.flags & SHENG_DMABUF_SYNC_WRITE) {
 		// 旧版独占槽会清空读者，先合并未完成依赖再替换
-		error = dma_resv_get_fences(buffer->resv, NULL, &count, &previous);
+		error = sheng_dma_resv_get_fences(buffer->resv, NULL, &count, &previous);
 		if (!error) {
 			merged = sheng_merge_fences(previous, count, fence);
 			if (IS_ERR(merged)) {

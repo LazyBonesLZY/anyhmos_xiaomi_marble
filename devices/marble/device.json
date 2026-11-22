@@ -7,42 +7,114 @@
   "soc": {
     "name": "Qualcomm Snapdragon 7+ Gen 2",
     "model": "SM7475",
+    "board_platform": "taro",
     "platform": "ukee",
     "family": "sm8450"
   },
   "kernel": {
     "gki_branch": "android12-5.10",
     "version_family": "5.10",
-    "uts_release": "TBD_COLLECT_ON_DEVICE"
+    "source_repo": "https://github.com/Pzqqt/android_kernel_xiaomi_marble",
+    "source_branch": "bouquet_ci",
+    "source_commit": "987b4d173c77aa702f7fe848090e6d42d9f021a5",
+    "defconfig": "marble_defconfig",
+    "toolchain": "Slim LLVM 23.1.6",
+    "kbuild_version": "5.10.274",
+    "baseline_observed_uts_release": "5.10.265-Glow-v5.1",
+    "cfi_clang": true,
+    "lto_clang_thin": true,
+    "modversions": true
   },
   "partitions": {
     "ab_slots": true,
+    "virtual_ab": true,
+    "dynamic_partitions": true,
     "has_init_boot": false,
     "generic_ramdisk_partition": "boot",
     "compat_payload_partition": "vendor_boot",
-    "boot_bytes_nominal": 201326592,
-    "vendor_boot_bytes_nominal": 100663296,
-    "recovery_bytes_nominal": 104857600,
-    "super_bytes_nominal": 9663676416
+    "boot_bytes": 201326592,
+    "vendor_boot_bytes": 100663296,
+    "recovery_bytes": 104857600,
+    "super_bytes": 9663676416,
+    "bluetooth_bytes": 4194304,
+    "persist_bytes": 33554432,
+    "metadata_bytes": 67108864,
+    "block_devices": {
+      "boot_a": "/dev/block/sde14",
+      "boot_b": "/dev/block/sde42",
+      "vendor_boot_a": "/dev/block/sde24",
+      "vendor_boot_b": "/dev/block/sde52",
+      "recovery_a": "/dev/block/sde27",
+      "recovery_b": "/dev/block/sde54",
+      "super": "/dev/block/sda32",
+      "userdata": "/dev/block/sda33",
+      "bluetooth_a": "/dev/block/sde8",
+      "persist": "/dev/block/sdf7",
+      "metadata": "/dev/block/sda17"
+    }
   },
   "display": {
     "panel_type": "OLED",
+    "connector": "card0-DSI-1",
+    "panel_driver": "qcom,mdss_dsi_m16t_36_0d_0b_dsc_vid",
     "dsi_mode": "single",
     "width": 1080,
     "height": 2400,
     "refresh_rates_hz": [
+      30,
       60,
       90,
       120
     ],
-    "split_scanout": false
+    "modes": [
+      "1080x2400x60vid",
+      "1080x2400x120vid",
+      "1080x2400x90vid",
+      "1080x2400x30vid"
+    ],
+    "backlight_sysfs": "/sys/class/backlight/panel0-backlight",
+    "max_brightness": 4095,
+    "split_scanout": false,
+    "drm_module": "msm_drm.ko"
   },
   "gpu": {
     "model": "Adreno 725",
+    "kgsl_gpu_model": "Adreno725v1",
+    "clock_module": "gpucc-waipio.ko",
+    "kgsl_module": "msm_kgsl.ko",
+    "firmware": [
+      "a730_sqe.fw",
+      "gmu_gen70000.bin"
+    ],
     "mesa_target": "freedreno-turnip-kgsl"
+  },
+  "usb": {
+    "controller": "a600000.ssusb",
+    "udc": "a600000.dwc3",
+    "mode_sysfs": "/sys/bus/platform/devices/a600000.ssusb/mode",
+    "role_sysfs": "/sys/class/usb_role/a600000.ssusb-role-switch/role",
+    "modules": [
+      "dwc3-msm.ko",
+      "phy-msm-snps-eusb2.ko",
+      "phy-msm-snps-hs.ko",
+      "phy-msm-ssusb-qmp.ko",
+      "repeater.ko",
+      "repeater-i2c-eusb2.ko",
+      "redriver.ko",
+      "nb7vpq904m.ko",
+      "eud.ko",
+      "pmic_glink.ko",
+      "ucsi_glink.ko",
+      "usb_bam.ko"
+    ]
   },
   "touch": {
     "mode": "kernel-evdev",
+    "verified_driver": "goodix_core",
+    "verified_input_name": "goodix_ts",
+    "aux_modules": [
+      "xiaomi_touch"
+    ],
     "candidates": [
       "goodix_core",
       "focaltech_touch"
@@ -51,12 +123,31 @@
   },
   "wireless": {
     "chipset": "QCA6490 / WCN6855",
-    "wifi_driver": "qcacld-3.0"
+    "wifi_driver": "qcacld-3.0",
+    "wifi_module": "qca_cld3_qca6490.ko",
+    "wifi_firmware_dir": "/vendor/firmware_mnt/image/qca6490",
+    "bt_modules": [
+      "btpower.ko",
+      "bt_fm_slim.ko",
+      "msm_geni_serial.ko"
+    ]
   },
   "audio": {
     "architecture": "qcom-pal-agm-adsp",
-    "sound_card_family": "ukee",
-    "has_headphone_jack": true
+    "sound_card": "ukee-mtp-snd-card",
+    "has_headphone_jack": true,
+    "remoteproc_adsp": "3000000.remoteproc-adsp",
+    "speaker_pa_module": "aw882xx_dlkm.ko"
   },
-  "port_status": "phase-0-baseline-pending"
+  "sensors": {
+    "architecture": "qcom-ssc-slpi",
+    "remoteproc_slpi": "2400000.remoteproc-slpi",
+    "ssc_module": "sensors_ssc.ko"
+  },
+  "battery": {
+    "sysfs_class": "/sys/class/qcom-battery",
+    "power_supply": "/sys/class/power_supply/battery",
+    "charger_module": "qti_battery_charger_main.ko"
+  },
+  "port_status": "phase-1-kernel-ipc-bringup"
 }

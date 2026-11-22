@@ -1,23 +1,26 @@
 # 小米 `marble`（Redmi Note 12 Turbo / POCO F5）设备目录
 
-本目录用于存放 `marble`（高通 **SM7475 / Snapdragon 7+ Gen 2**，`ukee` 平台）专属的硬件参数、Linux 5.10 GKI 内核配置/导出补丁、模块加载脚本与运行时配置。
+本目录存放 `marble`（高通 **SM7475 / Snapdragon 7+ Gen 2**，`taro`/`ukee` 平台）的实机验证硬件基线、Linux 5.10 内核符号导出补丁、构建脚本与后续运行时配置。
 
-## 关键硬件特征（相对参考机型 `sheng`）
+## 已实机验证的关键硬件特征（Phase 0 基线）
 
-- **内核**：`android12-5.10` GKI（区别于 `sheng` 的 `5.15.178`，IPC 与 `dmabuf_sync` 需适配 5.10 内核 API）。
-- **引导分区**：无 `init_boot` 分区；`boot`（~192 MiB）包含内核与 generic ramdisk，`vendor_boot`（~96 MiB）存放厂商模块与 `/compat` 载荷，另有独立 `recovery`（~100 MiB）。
-- **`super` 分区**：约 **9 GiB**（`0x240000000` 字节，小于 `sheng` 的 11 GiB）。
-- **显示**：6.67 英寸 **1080×2400 OLED 60/90/120Hz 单 DSI**（`composer_vdi.cpp` 需去除 `sheng` 的双 DSI 3048×2032 强制分屏）。
-- **GPU**：**Adreno 725**（`a725`，Mesa Turnip + KGSL）。
-- **USB**：Type-C **USB 2.0**（无 DP Retimer `ps5169`）。
-- **触控**：Goodix Berlin（`goodix_core.ko`）或 FocalTech（`focaltech_touch.ko`）+ `xiaomi_touch.ko`，内核原生 `evdev` 上报（大概率无需 `sheng` 的 THP 用户态桥接）。
-- **无线与音频**：WCN6855 / QCA6490（Wi-Fi 6/6E + BT 5.3）、高通 PAL/AGM + ADSP（`ukee` 声卡，双扬声器 + 3.5mm 耳机孔）、高通 SSC 传感器。
+- **内核基线**：开源内核选用 [`Pzqqt/android_kernel_xiaomi_marble`](https://github.com/Pzqqt/android_kernel_xiaomi_marble)（`bouquet_ci` 分支，Linux `5.10.274`，`marble_defconfig`，Slim LLVM 23.1.6，启用 `CONFIG_CFI_CLANG` + `CONFIG_LTO_CLANG_THIN` + `CONFIG_MODVERSIONS`）。
+- **引导分区**：无 `init_boot` 分区；`boot_a`/`boot_b` = **192 MiB**（`201326592` 字节，含内核 + generic ramdisk），`vendor_boot_a`/`vendor_boot_b` = **96 MiB**（`100663296` 字节，存放厂商模块与 `/compat` 载荷），独立 `recovery_a`/`recovery_b` = **100 MiB**（`104857600` 字节）。
+- **`super` 分区**：精确 **9 GiB**（`9663676416` 字节，`/dev/block/sda32`）。
+- **显示**：单 DSI `card0-DSI-1`（`qcom,mdss_dsi_m16t_36_0d_0b_dsc_vid`，OLED），模式 `1080x2400` @ `30/60/90/120Hz`，背光 `/sys/class/backlight/panel0-backlight`（`max_brightness=4095`），无需双 DSI 分屏。
+- **GPU**：**Adreno 725**（`Adreno725v1`，`gpucc-waipio.ko` + `msm_kgsl.ko`，固件 `a730_sqe.fw` / `gmu_gen70000.bin`，Mesa Turnip + KGSL）。
+- **USB**：`a600000.ssusb` / `a600000.dwc3`（`mode=peripheral`），驱动包含 `dwc3-msm.ko`、`phy-msm-snps-eusb2.ko`、`phy-msm-snps-hs.ko`、`phy-msm-ssusb-qmp.ko`、`repeater-i2c-eusb2.ko`、`nb7vpq904m.ko`、`pmic_glink.ko`、`ucsi_glink.ko`。
+- **触控**：`goodix_core.ko` + `xiaomi_touch.ko`，内核原生注册 Linux `evdev` 输入节点 `goodix_ts`（无需 `sheng` 的 THP 用户态桥接）。
+- **无线与音频**：Wi-Fi `qca_cld3_qca6490.ko`（固件 `/vendor/firmware_mnt/image/qca6490/`）+ BT `btpower.ko`/`bt_fm_slim.ko`/`msm_geni_serial.ko`；音频声卡 `ukee-mtp-snd-card`（`aw882xx_dlkm.ko` + `wcd938x_dlkm.ko` + `spf_core_dlkm.ko`，`remoteproc0 = 3000000.remoteproc-adsp`）。
+- **传感器与供电**：传感器位于独立 SLPI（`remoteproc3 = 2400000.remoteproc-slpi` + `sensors_ssc.ko`）；快充节点 `/sys/class/qcom-battery/` 与现有 `compat/battery/` 兼容。
 
-## 目录规划
+## 目录结构
 
-- `device.json`：机器可读的 `marble` 平台规格定义（实机采集后回填精确字节数与版本串）。
-- `scripts/collect-marble-baseline.sh`：Phase 0 只读实机信息采集脚本（在已 Root 的原厂系统或 TWRP Shell 中运行）。
-- `kernel/`（Phase 1 创建）：`marble` 5.10 `kernel.config` 与内核符号导出补丁。
+- [`device.json`](device.json)：机器可读的 `marble` 实机硬件与内核规格定义。
+- [`scripts/collect-marble-baseline.sh`](scripts/collect-marble-baseline.sh)：Phase 0 只读实机信息采集脚本。
+- [`kernel/gki-exports.patch`](kernel/gki-exports.patch) 与 [`kernel/gki-exports/`](kernel/gki-exports/drivers/android/sheng_hmos_exports.c)：为 `Pzqqt/android_kernel_xiaomi_marble` 注入带 CFI 类型检查的 `sheng_hmos_ipc_api_v1` 内核导出表。
+- 构建脚本：[`../../tools/build/build_marble_kernel.sh`](../../tools/build/build_marble_kernel.sh)
+- GitHub Actions 工作流：[`../../.github/workflows/build-marble-kernel.yml`](../../.github/workflows/build-marble-kernel.yml)
 - `runtime/`（Phase 2~5 创建）：按 `init/`、`profiles/`、`boot/`、`graphics/`、`audio/`、`wifi/`、`bluetooth/`、`sensors/`、`power/` 组织的运行时脚本与配置。
 
-详细分阶段 Bring-up 计划见 [../../docs/MARBLE_PORTING_PLAN.md](../../docs/MARBLE_PORTING_PLAN.md)。
+详细分阶段 Bring-up 计划见 [`../../docs/MARBLE_PORTING_PLAN.md`](../../docs/MARBLE_PORTING_PLAN.md)。

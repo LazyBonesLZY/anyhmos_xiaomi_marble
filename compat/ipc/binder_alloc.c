@@ -24,6 +24,7 @@
 #include <linux/uaccess.h>
 #include <linux/highmem.h>
 #include <linux/sizes.h>
+#include <linux/version.h>
 #include "binder_internal.h"
 #include "binder_trace.h"
 
@@ -1095,7 +1096,13 @@ enum lru_status binder_alloc_free_page(struct list_head *item,
 	index = page - alloc->pages;
 	page_addr = (uintptr_t)alloc->buffer + index * PAGE_SIZE;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 13, 0)
+	vma = find_vma(mm, page_addr);
+	if (vma && page_addr < vma->vm_start)
+		vma = NULL;
+#else
 	vma = vma_lookup(mm, page_addr);
+#endif
 	if (vma && vma != binder_alloc_get_vma(alloc))
 		goto err_invalid_vma;
 
