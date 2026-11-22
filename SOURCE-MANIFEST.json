@@ -514,8 +514,8 @@
     },
     {
       "path": "compat/bootstrap/hmos_probe_v121.c",
-      "bytes": 73513,
-      "sha256": "871b35e0d6051728ef6ce03aed9991f0f0cf028bc77073de7c6bfeb01f1ed001"
+      "bytes": 75911,
+      "sha256": "bc690a3a7338649b81b3d423a430c04c48a2e4565ae8055cbf08725143b65f75"
     },
     {
       "path": "compat/bootstrap/init_entry.c",
@@ -1209,8 +1209,13 @@
     },
     {
       "path": "devices/marble/README.md",
-      "bytes": 3354,
-      "sha256": "3c14b202b4725e31c0073e2a1b49ad81890add7f73bb131ec0819fb09811e661"
+      "bytes": 4023,
+      "sha256": "d0c4c76255bd81d7aba9e0204bb837ffa2c90dad77658b83419db6d9ca0d20b1"
+    },
+    {
+      "path": "devices/marble/boot/marble_init_entry.c",
+      "bytes": 2512,
+      "sha256": "2326ae9610a16d802f3d73acbeea860fa0ed64a21b1580f71719823501c7999f"
     },
     {
       "path": "devices/marble/device.json",
@@ -1231,6 +1236,11 @@
       "path": "devices/marble/kernel/marble-exports.patch",
       "bytes": 462,
       "sha256": "19d8efe2d0bb9116a9d66708ab58c24c234d23b91ef54eb1610c758d24ea38b6"
+    },
+    {
+      "path": "devices/marble/scripts/backup-marble-boot.sh",
+      "bytes": 2744,
+      "sha256": "ed2c0c4d60c0a19f241f9c710d9a4514b4dd82450dad32e7d21df10f1fd33a60"
     },
     {
       "path": "devices/marble/scripts/collect-marble-baseline.sh",
@@ -2223,6 +2233,11 @@
       "sha256": "563955cebe3424db571f5d72adb570cc9b7ffb6a6c33b8a1091b191f8def577e"
     },
     {
+      "path": "tests/test_marble_phase2.py",
+      "bytes": 7281,
+      "sha256": "f1c4d6ba7b872855532ffa38acc82df753c39a85d5ac1364ef5798fe884d7a0f"
+    },
+    {
       "path": "tests/test_native_hiview_events.py",
       "bytes": 19458,
       "sha256": "0089b12b2b14ba7026e66d74e281a04a111d254907dce6ffc5d7348eff4addca"
@@ -2313,6 +2328,11 @@
       "sha256": "b15ecce250930c185fda3e898a1e488166f4a6278e8f2524466b94b8092ee49e"
     },
     {
+      "path": "tools/maint/hmos_serial.py",
+      "bytes": 4961,
+      "sha256": "46b889f55721bd1eda4d708d2106671fe5ca6e209e0644a36f7b84e89cbfcb2c"
+    },
+    {
       "path": "tools/maint/refresh_manifest.py",
       "bytes": 2198,
       "sha256": "7cc6999648fd1996ff048b2adb5d99ab573397169902ba2944a0d8c7c41d6440"
@@ -2348,6 +2368,11 @@
       "sha256": "239060b1fe7ff464ec0f3dc53b2fcfcb1c6de7ed146baab85d5db9295cc89102"
     },
     {
+      "path": "tools/packaging/build_marble_phase2_images.py",
+      "bytes": 17992,
+      "sha256": "efe45c9b7b2d18759984b0d391b20c94776813f3d212753f206ccb1a5ca91ef9"
+    },
+    {
       "path": "tools/packaging/build_promax_images.py",
       "bytes": 11713,
       "sha256": "1011fe13dce1bc9b5f056b9cdcdd105b3d9591e2756d1d21a410978e3fcbcd56"
@@ -2355,7 +2380,7 @@
     {
       "path": "tools/packaging/build_promax_ramdisk.py",
       "bytes": 90154,
-      "sha256": "9d3ae85cdaade7d55cc0bb7926878ba47e99059c04b3096c1cec6233d06b3eb0"
+      "sha256": "ec81146155ead19d1168bf29c9a64a1d600a41c89104c8f2ed5b8663ca65b4e8"
     },
     {
       "path": "tools/packaging/experience_rule_service.py",

@@ -18,9 +18,11 @@
 
 - [`device.json`](device.json)：机器可读的 `marble` 实机硬件与内核规格定义。
 - [`scripts/collect-marble-baseline.sh`](scripts/collect-marble-baseline.sh)：Phase 0 只读实机信息采集脚本。
+- [`scripts/backup-marble-boot.sh`](scripts/backup-marble-boot.sh)：Phase 2 只读分区备份脚本（通过已 Root ADB 导出 `boot`/`vendor_boot`/`dtbo`/`vbmeta*` 并做双向 SHA-256 校验，同时解包分析引导头结构）。
+- [`boot/marble_init_entry.c`](boot/marble_init_entry.c)：Phase 2 极简无 libc PID1 入口（放入 `boot.img` ramdisk，将 `vendor_boot` 中的 `/hmos-compat-marble/*` 链接至根并转交 `hmos-probe`）。
 - [`kernel/marble-exports.patch`](kernel/marble-exports.patch) 与 [`kernel/marble-exports/`](kernel/marble-exports/drivers/android/marble_hmos_exports.c)：为 `Pzqqt/android_kernel_xiaomi_marble` 注入带 CFI 类型检查的 `hmos_ipc_api_v1` 内核导出表。
-- 构建脚本：[`../../tools/build/build_marble_kernel.sh`](../../tools/build/build_marble_kernel.sh)
-- GitHub Actions 工作流：[`../../.github/workflows/build-marble-kernel.yml`](../../.github/workflows/build-marble-kernel.yml)
+- 构建与打包脚本：[`../../tools/build/build_marble_kernel.sh`](../../tools/build/build_marble_kernel.sh)、[`../../tools/packaging/build_marble_phase2_images.py`](../../tools/packaging/build_marble_phase2_images.py)、[`../../tools/maint/hmos_serial.py`](../../tools/maint/hmos_serial.py)
+- GitHub Actions 工作流（按需手动触发）：[`../../.github/workflows/build-marble-kernel.yml`](../../.github/workflows/build-marble-kernel.yml)
 - `runtime/`（Phase 2~5 创建）：按 `init/`、`profiles/`、`boot/`、`graphics/`、`audio/`、`wifi/`、`bluetooth/`、`sensors/`、`power/` 组织的运行时脚本与配置。
 
 详细分阶段 Bring-up 计划见 [`../../docs/MARBLE_PORTING_PLAN.md`](../../docs/MARBLE_PORTING_PLAN.md)。

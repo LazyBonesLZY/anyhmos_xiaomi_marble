@@ -58,7 +58,7 @@ BOOTSTRAP_IPC_PAIR = {
 BOOTSTRAP_CANDIDATES = {
     BOOTSTRAP_IPC_PAIR['bootstrap_sha256']: {
         'variant': 'ring-history-retained-oneway-pid',
-        'source_sha256': '871b35e0d6051728ef6ce03aed9991f0f0cf028bc77073de7c6bfeb01f1ed001',
+        'source_sha256': 'bc690a3a7338649b81b3d423a430c04c48a2e4565ae8055cbf08725143b65f75',
         'serial_source_sha256': '3835dc47955a9024fccd64f38160e88d231eabaec02bac7ab42548ffe991b1d3',
     },
     '059218af4184b79ab42557acc9d8f73e607992078bbef754b7da8c1c66cd49cb': {

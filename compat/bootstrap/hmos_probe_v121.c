@@ -267,8 +267,9 @@ static void loadmodules(void) {
     if(!f){note("FAIL no stock vendor ramdisk modules.load; use matching stock vendor_boot");return;}
     int i=0;while(fgets(line,sizeof(line),f)){line[strcspn(line,"# \t\r\n")]=0;if(*line)loadmod(line,0);if((++i%8)==0){discover();persistent();}}fclose(f);
     /* Normal first-stage modules.load omits the USB drivers that Android loads
-     * later. These are present in this device's vendor recovery ramdisk. */
-    const char *usbmods[]={"pinctrl-spmi-gpio.ko","pinctrl-spmi-mpp.ko","bam_dma.ko","msm_gpi.ko","i2c-msm-geni.ko","pmic_glink.ko","ucsi_glink.ko","usb_bam.ko","phy-generic.ko","phy-msm-ssusb-qmp.ko","phy-msm-snps-eusb2.ko","phy-msm-m31-eusb2.ko","repeater.ko","repeater-qti-pmic-eusb2.ko","repeater-i2c-eusb2.ko","redriver.ko","eud.ko","ps5169.ko","dwc3-msm.ko"};
+     * later. Include both sm8550 (sheng) and sm7475 (marble) USB module names;
+     * missing modules for the current board are logged and skipped cleanly. */
+    const char *usbmods[]={"pinctrl-spmi-gpio.ko","pinctrl-spmi-mpp.ko","bam_dma.ko","gpi.ko","msm_gpi.ko","i2c-msm-geni.ko","pmic_glink.ko","ucsi_glink.ko","usb_bam.ko","phy-generic.ko","phy-msm-ssusb-qmp.ko","phy-msm-snps-hs.ko","phy-msm-snps-eusb2.ko","phy-msm-m31-eusb2.ko","repeater.ko","repeater-qti-pmic-eusb2.ko","repeater-i2c-eusb2.ko","redriver.ko","nb7vpq904m.ko","eud.ko","ps5169.ko","dwc3-msm.ko"};
     for(unsigned j=0;j<sizeof(usbmods)/sizeof(usbmods[0]);j++){loadmod(usbmods[j],0);discover();persistent();}
     if(access("/hmos-hdf-graphics.hcb",F_OK)==0)loadmod("msm_drm.ko",0);
 }
@@ -384,7 +385,13 @@ static void usb_setup(void) {
     const char *mode="/sys/bus/platform/devices/a600000.ssusb/mode";
     if(!usb_mode_set&&access(mode,F_OK)==0){if(put(mode,"peripheral")==0){usb_mode_set=1;note("USB Qualcomm mode set to peripheral");}else note("USB peripheral mode: %s",strerror(errno));}
     DIR *d=opendir("/sys/class/udc");if(!d)d=opendir("/sys/class/UDC");if(!d)return;struct dirent *de;char controller[256]="";
-    while((de=readdir(d)))if(de->d_name[0]!='.'){snprintf(controller,sizeof(controller),"%s",de->d_name);break;}
+    while((de=readdir(d))){
+        if(de->d_name[0]=='.')continue;
+        /* Skip virtual dummy_hcd UDCs (e.g. dummy_udc.0 when CONFIG_USB_DUMMY_HCD=y). */
+        if(!strncmp(de->d_name,"dummy_udc",9))continue;
+        snprintf(controller,sizeof(controller),"%s",de->d_name);
+        break;
+    }
     closedir(d);if(!*controller)return;
     makedir("/config");if(mount("configfs","/config","configfs",MS_NOSUID|MS_NODEV|MS_NOEXEC,"")<0&&errno!=EBUSY){note("configfs: %s",strerror(errno));return;}
     const char *g="/config/usb_gadget/hmos_probe";makedir(g);char p[512];
@@ -514,6 +521,8 @@ done:
     puts(failed?"FAIL IPC pair memfd/hash/options selftest":"PASS IPC pair memfd/hash/options; module loading was not called");
     return failed;
 }
+#endif
+#if HMOS_IPC_ONEWAY_PID || defined(HMOS_PROBE_ONLY)
 /* 仅创建合约专用节点，不占用系统上下文 */
 static int ipc_pid_nodes(void) {
     char misc[8192];int count=0;
@@ -536,19 +545,47 @@ static int ipc_pid_nodes(void) {
     return count;
 }
 #endif
+#ifdef HMOS_PROBE_ONLY
+static void dmabuf_load(void) {
+    if(access("/sys/module/hmos_dmabuf_sync",F_OK)==0){note("DMABUF module already loaded");return;}
+    int fd=open("/hmos-dmabuf-sync.ko",O_RDONLY|O_CLOEXEC);
+    if(fd<0){note("DMABUF candidate missing: %s",strerror(errno));return;}
+    int r=(int)syscall(SYS_finit_module,fd,"",0),e=errno;close(fd);
+    if(r<0&&e!=EEXIST)note("DMABUF LOAD FAIL errno=%d %s",e,strerror(e));
+    else note("DMABUF LOAD OK");
+    char misc[8192];
+    if(readfile("/proc/misc",misc,sizeof(misc))>0){
+        char *save,*line=strtok_r(misc,"\n",&save);
+        while(line){
+            unsigned minor;char name[128];
+            if(sscanf(line,"%u %127s",&minor,name)==2&&!strcmp(name,"hmos_dmabuf_sync")){
+                if(mknod("/dev/hmos_dmabuf_sync",S_IFCHR|0600,makedev(10,minor))==0||errno==EEXIST)
+                    note("DMABUF node /dev/hmos_dmabuf_sync device=10:%u",minor);
+                break;
+            }
+            line=strtok_r(NULL,"\n",&save);
+        }
+    }
+    drain();
+}
+#endif
 static void ipc_test(int which) {
     if(ipc_test_pid>0||ipc_pid>0){note("IPC test rejected: another IPC operation is running");return;}
     if(access("/sys/module/hmos_ipc",F_OK)<0||ipc_nodes("/dev")!=4){note("IPC test requires a loaded driver and all four verified misc nodes");return;}
     const char *program=which==1?"/token_contract":"/binder_nested";
     int timeout=35;
-#if HMOS_IPC_ONEWAY_PID
+#if HMOS_IPC_ONEWAY_PID || defined(HMOS_PROBE_ONLY)
     /* 仅在独立节点验证保留发送方标识 */
     if(which==3){
         char mode[16];
-        if(!ipc_pair_loaded||
-           readfile("/sys/module/hmos_ipc/parameters/oneway_sender_pid",mode,sizeof(mode))<0||
-           (strcmp(mode,"Y\n")&&strcmp(mode,"1\n"))||ipc_pid_nodes()!=2){
+#if HMOS_IPC_ONEWAY_PID
+        if(!ipc_pair_loaded){
             note("IPC PID contract requires the verified pair, retained mode and both private nodes");return;
+        }
+#endif
+        if(readfile("/sys/module/hmos_ipc/parameters/oneway_sender_pid",mode,sizeof(mode))<0||
+           (strcmp(mode,"Y\n")&&strcmp(mode,"1\n"))||ipc_pid_nodes()!=2){
+            note("IPC PID contract requires retained mode and both private nodes");return;
         }
         program="/binder_oneway_pid";timeout=60;
     }
@@ -556,7 +593,7 @@ static void ipc_test(int which) {
     note("IPC CONTRACT begin %s; %d-second process-group timeout",program,timeout);
     pid_t child=fork();
     if(child==0){if(setsid()<0)_exit(126);int out=open("/dev/kmsg",O_WRONLY|O_CLOEXEC);if(out<0)_exit(126);dup2(out,1);dup2(out,2);close(out);
-#if HMOS_IPC_ONEWAY_PID
+#if HMOS_IPC_ONEWAY_PID || defined(HMOS_PROBE_ONLY)
         if(which==3){
             char *args[]={(char*)program,"/dev/hmos_pidtest","/dev/hmos_pidtest_ns","1",NULL};
             execv(program,args);dprintf(2,"IPC PID contract exec failed: %s\n",strerror(errno));_exit(126);
@@ -596,6 +633,10 @@ static void ipc_load(void) {
         if(ipc_pair_params(params,sizeof(params),ipc_stage)<0){
             int values[2]={-1,errno};allwrite(result[1],values,sizeof(values));_exit(125);
         }
+#elif defined(HMOS_PROBE_ONLY)
+        char params[256];
+        snprintf(params,sizeof(params),"diagnostic_stage=%d oneway_sender_pid=1 "
+                 "devices=hmos_binder,hmos_hwbinder,hmos_vndbinder,hmos_pidtest,hmos_pidtest_ns",ipc_stage);
 #else
         char params[64];snprintf(params,sizeof(params),"diagnostic_stage=%d",ipc_stage);
 #endif
@@ -634,8 +675,11 @@ static void serial_command(char *cmd) {
         serial_pos=used;command_start(cmd+4);return;
     }
     char *ipc=strstr(cmd,"ipc");if(ipc){ipc_stage=ipc[3]>='0'&&ipc[3]<='3'?ipc[3]-'0':-1;ipc_requested=1;}if(strstr(cmd,"test-token"))ipc_test_requested=1;if(strstr(cmd,"test-binder"))ipc_test_requested=2;if(strstr(cmd,"replay"))serial_pos=0;if(strstr(cmd,"status"))note("status: pid=%ld traced=%ld held=%d syscalls=%d ipc_child=%ld test_child=%ld; %zu bytes history; persistent=%s",(long)getpid(),(long)traced_pid,trace_held,trace_syscalls,(long)ipc_pid,(long)ipc_test_pid,used,logfd>=0?logpath:"unavailable");if(strstr(cmd,"diag"))process_diag();if(strstr(cmd,"sync")&&logfd>=0)fsync(logfd);if(strstr(cmd,"trace"))trace_requested=1;if(strstr(cmd,"hmos-list"))trace_requested=2;else if(strstr(cmd,"hmos"))trace_requested=3;
-#if HMOS_IPC_ONEWAY_PID
+#if HMOS_IPC_ONEWAY_PID || defined(HMOS_PROBE_ONLY)
     if(strstr(cmd,"test-oneway"))ipc_test_requested=3;
+#endif
+#ifdef HMOS_PROBE_ONLY
+    if(strstr(cmd,"dmabuf"))dmabuf_load();
 #endif
     if(strstr(cmd,"reboot-recovery")){note("USB requested reboot to recovery");if(logfd>=0)fsync(logfd);sync();syscall(SYS_reboot,LINUX_REBOOT_MAGIC1,LINUX_REBOOT_MAGIC2,LINUX_REBOOT_CMD_RESTART2,"recovery");note("reboot syscall returned: %s",strerror(errno));}
     /* 同步日志后返回引导加载器 */
@@ -954,18 +998,25 @@ int main(int argc,char **argv) {
     kmsg=open("/dev/kmsg",O_RDONLY|O_NONBLOCK|O_CLOEXEC);makedir("/dev/block");makedir("/dev/block/by-name");makedir("/dev/mapper");makedir("/metadata");makedir("/hmos");
 #ifdef TRACE_ANDROID
     note("hmos HMOS trace v116 -- collect early logs, then execute original Android init");
+#elif defined(HMOS_PROBE_ONLY)
+    note("hmos HMOS probe v121 PHASE2-ONLY -- USB ACM serial & kernel/IPC contract verification (no super/userdata mutation)");
 #else
     note("hmos HMOS probe v121 USB-session recovery payload -- autonomous native startup; vendor read-only; existing isolated data only");
 #endif
     slot_detect();drain();discover();persistent();loadmodules();
     for(int i=0;i<50;i++){discover();persistent();drain();watchdog();usb_setup();serial_tick();usleep(100000);}
     char misc[2048];if(readfile("/proc/misc",misc,sizeof(misc))>0){char *save,*p=strtok_r(misc,"\n",&save);while(p){unsigned n;char name[128];if(sscanf(p,"%u %127s",&n,name)==2&&!strcmp(name,"device-mapper"))mknod("/dev/mapper/control",S_IFCHR|0600,makedev(10,n));p=strtok_r(NULL,"\n",&save);}}
+#ifdef HMOS_PROBE_ONLY
+    partitions("/dev/block/by-name/super",1);snapshots();drain();
+    note("PHASE2 READY: USB ACM commands available: status, replay, diag, ipc, dmabuf, test-token, test-binder, test-oneway, cmd <id> <b64>, reboot-bootloader, reboot-recovery");
+#else
     partitions("/dev/block/by-name/super",0);snapshots();drain();
 #ifdef TRACE_ANDROID
     trace_handoff(0);
 #else
     note("AUTOSTART loading verified IPC module before native init");
     ipc_load();trace_requested=3;
+#endif
 #endif
     time_t flush_second=-1;for(;;){drain();watchdog();hilog_tick();serial_tick();command_tick();ipc_test_tick();if(ipc_requested){ipc_requested=0;if(getpid()==1&&!trace_hmos)ipc_load();else note("IPC LOAD rejected after OS handoff");}if(ipc_test_requested){int which=ipc_test_requested;ipc_test_requested=0;if(getpid()==1&&!trace_hmos)ipc_test(which);else note("IPC contracts only run before native OS handoff");}if(trace_requested&&getpid()==1&&ipc_pid==0&&ipc_test_pid==0&&command_pid==0){int kind=trace_requested-1;trace_requested=0;trace_handoff(kind);}if(traced_pid>0)trace_poll();else reap_children();struct timespec ts;clock_gettime(CLOCK_MONOTONIC,&ts);if(ts.tv_sec!=flush_second){flush_second=ts.tv_sec;runtime_persistent();if(traced_pid<=0){discover();persistent();usb_setup();}if(logfd>=0)fsync(logfd);}struct pollfd p={.fd=kmsg,.events=POLLIN};struct timespec delay={.tv_nsec=traced_pid>0&&!trace_held&&(trace_syscalls||trace_followers_active())?100000:5000000};ppoll(&p,1,&delay,NULL);}
 }
