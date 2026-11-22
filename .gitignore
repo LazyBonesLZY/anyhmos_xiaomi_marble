@@ -17,6 +17,7 @@ node_modules/
 *.so
 *.so.*
 !/patches/donor/gem-w00-111-sp12/*.json
+!/patches/donor/ady-al10-111-sp10/*.json
 !/patches/donor/*.json
 !/archive/sheng/legacy-donor-patches/*.json
 *.ko

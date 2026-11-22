@@ -19,8 +19,8 @@
     },
     {
       "path": ".gitignore",
-      "bytes": 478,
-      "sha256": "a0df5079e5338597c88d186c42e0ae0846c67b21603dee7078022efa9d65a14f"
+      "bytes": 519,
+      "sha256": "7a3b3faf372c132561d42b710cb724097806019d91299f22fba584fbd3ea0ea2"
     },
     {
       "path": "README.md",
@@ -2031,6 +2031,86 @@
       "path": "patches/donor/ady-al10-111-sp10/init.json",
       "bytes": 530,
       "sha256": "dbf17483f0896a4d08855a65f5f2c7b9d261a8f1be48270745cbbbc8a947d22a"
+    },
+    {
+      "path": "patches/donor/ady-al10-111-sp10/libaudio_policy_client.z.so.json",
+      "bytes": 670,
+      "sha256": "32a21bfc18cfacec2839ef30a1a89838bfe619d7296e4f7413e1b9717a7df1d8"
+    },
+    {
+      "path": "patches/donor/ady-al10-111-sp10/libaudio_policy_service.z.so.json",
+      "bytes": 571,
+      "sha256": "6979e67caaa231668537f6f12967a2fde25e0b2aa91a653d49e27601241f8ffc"
+    },
+    {
+      "path": "patches/donor/ady-al10-111-sp10/libcli_tool_client.z.so.json",
+      "bytes": 986,
+      "sha256": "bdfc7eede8abcbfddcdcc72bd538175f5cca3b30fc028028d662c03117b7d8f9"
+    },
+    {
+      "path": "patches/donor/ady-al10-111-sp10/libcode_sign_utils.z.so.json",
+      "bytes": 560,
+      "sha256": "be8496b787046a36fe785d201b0c57d7d3c2edc2bbc1aef89d49547055a96760"
+    },
+    {
+      "path": "patches/donor/ady-al10-111-sp10/libdevicestatus_service.z.so.json",
+      "bytes": 977,
+      "sha256": "a416113d6e72e69c62e7f6d84f7fe3233adf7fb86e04efe3e84b019b608cab45"
+    },
+    {
+      "path": "patches/donor/ady-al10-111-sp10/libdistributeddatasvcfwk.z.so.json",
+      "bytes": 1930,
+      "sha256": "27fc6ad9dffe5788b94490fabe36b5e07b3b87bcde344d4f897178b44e025cfd"
+    },
+    {
+      "path": "patches/donor/ady-al10-111-sp10/libkv_store_crypt.z.so.json",
+      "bytes": 1902,
+      "sha256": "28f76b465c6935cfb62946f839c23064876ca5b345d61465993aed68744a3ce4"
+    },
+    {
+      "path": "patches/donor/ady-al10-111-sp10/libmemmgrservice.z.so.json",
+      "bytes": 2249,
+      "sha256": "7fd188ca9806031e9479aa42165f4c150f5079e4a841b8a17038cf7f0206436f"
+    },
+    {
+      "path": "patches/donor/ady-al10-111-sp10/libnet_tether_manager_if.z.so.json",
+      "bytes": 885,
+      "sha256": "9e89de57bd3d70e22530c0cb2c8e21d48d57f8a92351cdafd4e3528aecffb15c"
+    },
+    {
+      "path": "patches/donor/ady-al10-111-sp10/librelational_store_crypt.z.so.json",
+      "bytes": 2379,
+      "sha256": "4694d49a004cdc59f81e09b96b72a8c5692bf6f15aba2492b0f853b812437b27"
+    },
+    {
+      "path": "patches/donor/ady-al10-111-sp10/librender_service_base.z.so.json",
+      "bytes": 1516,
+      "sha256": "e425c5b22348446f5ff4661348d45aee35a0d4fe77efb4d730e939b85a1a4064"
+    },
+    {
+      "path": "patches/donor/ady-al10-111-sp10/libsensor_client.z.so.json",
+      "bytes": 649,
+      "sha256": "5c5ec21513d73851f92fe69ad14326543c79a8e3fc4b9080dd1184aca297aa71"
+    },
+    {
+      "path": "patches/donor/ady-al10-111-sp10/libsps_privacy_indicator_service_intf.z.so.json",
+      "bytes": 712,
+      "sha256": "0ddcd4e77d457311768578e40caf9807295a4635371c80c7a2b93bda171cf677"
+    },
+    {
+      "path": "patches/donor/ady-al10-111-sp10/libtime_system_ability.z.so.json",
+      "bytes": 1783,
+      "sha256": "ba187e3c571795b9640f765439a8af9ecd49c1fa41c9ab6c294166ab58059c51"
+    },
+    {
+      "path": "patches/donor/ady-al10-111-sp10/libvulkan.so.json",
+      "bytes": 615,
+      "sha256": "f257447ef79e230478a4ce756f4b199242e43a09919bda00580d81793e72f5ae"
+    },
+    {
+      "path": "patches/donor/ady-al10-111-sp10/libwifi_sdk.z.so.json",
+      "bytes": 1146,
+      "sha256": "68a6a0bfd0d21b98e622184e47b7169cc495b19970c492b04332d50d18cbaaa5"
     },
     {
       "path": "patches/donor/gem-w00-111-sp12/init.json",

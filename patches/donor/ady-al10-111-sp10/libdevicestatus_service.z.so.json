@@ -1,0 +1,38 @@
+{
+  "path": "/system/lib64/libdevicestatus_service.z.so",
+  "input_sha256": "734c70510a8e78178be4eb1392261e371b9c017737f8c42f638fda4358fb554c",
+  "output_sha256": "108cea419e331507d9abb0d3aa39dbba9b05f1c9ebaee517f74f8a03b86ebc5e",
+  "changes": [
+    {
+      "offset": 496948,
+      "before": "4a020094",
+      "after": "1f2003d5"
+    },
+    {
+      "offset": 496964,
+      "before": "b0020094",
+      "after": "1f2003d5"
+    }
+  ],
+  "relocation_evidence": [
+    {
+      "old_offset": 524224,
+      "new_offset": 496948,
+      "kind": "normalized_aarch64_context",
+      "anchor_instructions": 13,
+      "symbols": [
+        "_ZN4OHOS4Msdp12DeviceStatus19DeviceStatusService7OnStartEv"
+      ]
+    },
+    {
+      "old_offset": 524244,
+      "new_offset": 496964,
+      "kind": "normalized_aarch64_context",
+      "anchor_instructions": 13,
+      "symbols": [
+        "_ZN4OHOS4Msdp12DeviceStatus19DeviceStatusService7OnStartEv"
+      ]
+    }
+  ],
+  "device_validated": false
+}

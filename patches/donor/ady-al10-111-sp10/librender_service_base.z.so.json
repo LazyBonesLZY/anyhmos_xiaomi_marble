@@ -1,0 +1,52 @@
+{
+  "path": "/system/lib64/librender_service_base.z.so",
+  "input_sha256": "d1482a820092766eb52f77f8268f21dd9eea7149045669553c7aaa66ca6c9b07",
+  "output_sha256": "26478de54aefb7a5b6bdf119657cdb4c6b6b4a2049f27a3d2829c1cfd1b3cf9f",
+  "changes": [
+    {
+      "offset": 4427004,
+      "before": "21008052",
+      "after": "01008052"
+    },
+    {
+      "offset": 4059136,
+      "before": "09009052",
+      "after": "29008052"
+    },
+    {
+      "offset": 4057716,
+      "before": "e9008052",
+      "after": "69008052"
+    }
+  ],
+  "relocation_evidence": [
+    {
+      "old_offset": 9245920,
+      "new_offset": 4427004,
+      "kind": "normalized_aarch64_context",
+      "anchor_instructions": 13,
+      "symbols": [
+        "_ZN4OHOS5Rosen31RSClientToRenderConnectionProxy17CommitTransactionERNSt3__h10unique_ptrINS0_17RSTransactionDataENS2_14default_deleteIS4_EEEE"
+      ]
+    },
+    {
+      "old_offset": 9447112,
+      "new_offset": 4059136,
+      "kind": "normalized_aarch64_context",
+      "anchor_instructions": 13,
+      "symbols": [
+        "_ZN4OHOS5Rosen17NativeBufferUtils13CreateVkImageERNS0_15RsVulkanContextEPP9VkImage_TRK34VkNativeBufferFormatPropertiesOHOSRK10VkExtent3Djb"
+      ]
+    },
+    {
+      "old_offset": 9451828,
+      "new_offset": 4057716,
+      "kind": "normalized_aarch64_context",
+      "anchor_instructions": 13,
+      "symbols": [
+        "_ZN4OHOS5Rosen17NativeBufferUtils34MakeBackendTextureFromNativeBufferEP18NativeWindowBufferiib"
+      ]
+    }
+  ],
+  "device_validated": false
+}

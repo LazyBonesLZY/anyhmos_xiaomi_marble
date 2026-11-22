@@ -1,0 +1,24 @@
+{
+  "path": "/system/lib64/platformsdk/libaudio_policy_client.z.so",
+  "input_sha256": "56322f5d1548d12809e2ef11e444406a7315968e048cd70522c8359fd9a32835",
+  "output_sha256": "58da99ca63058c2ad749a419cb0225f85038eeae2584f48987f4babd62447fb6",
+  "changes": [
+    {
+      "offset": 204612,
+      "before": "80020012",
+      "after": "00008052"
+    }
+  ],
+  "relocation_evidence": [
+    {
+      "old_offset": 239768,
+      "new_offset": 204612,
+      "kind": "normalized_aarch64_context",
+      "anchor_instructions": 13,
+      "symbols": [
+        "_ZN4OHOS13AudioStandard18AudioPolicyManager26GetAudioPolicyManagerProxyEb"
+      ]
+    }
+  ],
+  "device_validated": false
+}
