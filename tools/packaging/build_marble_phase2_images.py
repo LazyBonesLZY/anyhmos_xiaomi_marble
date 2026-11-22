@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 import shutil
 import stat
+import struct
 import subprocess
 import tarfile
 import tempfile
@@ -199,13 +200,70 @@ def extract_tar_modules(tar_path: Path) -> dict:
     return mods
 
 
+def extract_full_single_vendor_ramdisk(stock_vendor_boot: Path, dst: Path) -> bool:
+    """Recover full single vendor_ramdisk when table[0].size was left stale by AnyKernel3."""
+    raw = stock_vendor_boot.read_bytes()
+    if len(raw) < 2128 or raw[:8] != b'VNDRBOOT':
+        return False
+    ver, page = struct.unpack_from('<II', raw, 8)
+    rd_size = struct.unpack_from('<I', raw, 24)[0]
+    hs = struct.unpack_from('<I', raw, 2096)[0]
+    ne = struct.unpack_from('<I', raw, 2116)[0]
+    if ver < 4 or ne != 1 or rd_size == 0:
+        return False
+    rs = (hs + page - 1) // page * page
+    if rs + rd_size > len(raw):
+        return False
+    dst.write_bytes(raw[rs:rs + rd_size])
+    return True
+
+
+def prune_module_metadata(entries: dict, valid_ko_names: set) -> None:
+    """Prune removed modules from modules.load* and modules.dep so finit_module never hits stale .ko."""
+    for load_key in ('lib/modules/modules.load', 'lib/modules/modules.load.recovery'):
+        if load_key in entries:
+            fields, blob = entries[load_key]
+            kept = [
+                line for line in blob.decode('utf-8', errors='replace').splitlines()
+                if line.strip() and Path(line.strip()).name in valid_ko_names
+            ]
+            new_blob = ('\n'.join(kept) + '\n').encode('utf-8')
+            f = fields.copy()
+            f[6] = len(new_blob)
+            entries[load_key] = (f, new_blob)
+
+    dep_key = 'lib/modules/modules.dep'
+    if dep_key in entries:
+        fields, blob = entries[dep_key]
+        new_lines = []
+        for line in blob.decode('utf-8', errors='replace').splitlines():
+            if ':' not in line:
+                continue
+            mod_part, deps_part = line.split(':', 1)
+            mod_name = Path(mod_part.strip()).name
+            if mod_name not in valid_ko_names:
+                continue
+            kept_deps = [
+                d for d in deps_part.split()
+                if Path(d.strip()).name in valid_ko_names
+            ]
+            if kept_deps:
+                new_lines.append(f'{mod_part.strip()}: {" ".join(kept_deps)}')
+            else:
+                new_lines.append(f'{mod_part.strip()}:')
+        new_blob = ('\n'.join(new_lines) + '\n').encode('utf-8')
+        f = fields.copy()
+        f[6] = len(new_blob)
+        entries[dep_key] = (f, new_blob)
+
+
 def build_phase2_images(
     stock_boot: Path,
     stock_vendor_boot: Path,
     artifacts_dir: Path,
     out_dir: Path,
     busybox: Path = None,
-    keep_stock_dtb: bool = False,
+    replace_dtb: bool = False,
     cc: str = 'aarch64-linux-gnu-gcc',
 ) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -219,6 +277,7 @@ def build_phase2_images(
     ipc_ko = artifacts_dir / 'modules/hmos_ipc.ko'
     dmabuf_ko = artifacts_dir / 'modules/hmos_dmabuf_sync.ko'
     vb_mods_tar = artifacts_dir / 'vendor_boot_modules.tar.gz'
+    vd_mods_tar = artifacts_dir / 'vendor_dlkm_modules.tar.gz'
     tests = {
         'token_contract': artifacts_dir / 'tests/token_contract',
         'binder_nested': artifacts_dir / 'tests/binder_nested',
@@ -227,8 +286,8 @@ def build_phase2_images(
     for req in (stock_boot, stock_vendor_boot, kernel_image, ipc_ko, dmabuf_ko, vb_mods_tar, *tests.values()):
         if not req.is_file():
             raise FileNotFoundError(f'Missing required Phase 2 input: {req}')
-    if not keep_stock_dtb and not dtb_image.is_file():
-        raise FileNotFoundError(f'Missing compiled DTB: {dtb_image} (or pass --keep-stock-dtb)')
+    if replace_dtb and not dtb_image.is_file():
+        raise FileNotFoundError(f'Missing compiled DTB: {dtb_image}')
 
     bins = compile_phase2_binaries(work / 'bin', cc=cc)
 
@@ -242,7 +301,7 @@ def build_phase2_images(
     boot_comp = decompress_ramdisk(stock_ramdisk, boot_cpio_in)
     boot_entries = parse_cpio_newc(boot_cpio_in.read_bytes())
     boot_inode = [max((f[0] for f, _ in boot_entries.values()), default=10) + 1]
-    original_init_blob = boot_entries['init'][1] if 'init' in boot_entries else None
+    original_init_blob = boot_entries.get('init.real', boot_entries.get('init', (None, None)))[1]
     put_file(boot_entries, 'init', bins['init_entry'].read_bytes(), 0o755, boot_inode)
 
     boot_cpio_out = work / 'boot-ramdisk-phase2.cpio'
@@ -260,17 +319,23 @@ def build_phase2_images(
     # --- 2. Unpack & repack vendor_boot.img (matching 5.10.274 modules + /hmos-compat-marble/) ---
     vb_unpack = work / 'vendor_boot-unpack'
     vb_args = unpack_with_args(stock_vendor_boot, vb_unpack)
-    vb_ramdisks = sorted(vb_unpack.glob('vendor_ramdisk*'))
+    vb_ramdisks = sorted(p for p in vb_unpack.glob('vendor_ramdisk*') if p.is_file())
     if not vb_ramdisks:
         raise ValueError('No vendor_ramdisk found in stock vendor_boot image')
 
-    # Locate the ramdisk containing /lib/modules/modules.load (or default to first ramdisk)
     target_rd = None
     target_rd_comp = None
     target_entries = None
     for rd in vb_ramdisks:
         cpio_path = work / (rd.name + '.cpio')
-        comp = decompress_ramdisk(rd, cpio_path)
+        try:
+            comp = decompress_ramdisk(rd, cpio_path)
+        except subprocess.CalledProcessError:
+            # Handle stale vendor_ramdisk_table[0].size < header.vendor_ramdisk_size
+            if len(vb_ramdisks) == 1 and extract_full_single_vendor_ramdisk(stock_vendor_boot, rd):
+                comp = decompress_ramdisk(rd, cpio_path)
+            else:
+                raise
         parsed = parse_cpio_newc(cpio_path.read_bytes())
         if any(name.endswith('modules.load') for name in parsed):
             target_rd = rd
@@ -284,21 +349,25 @@ def build_phase2_images(
         target_entries = parse_cpio_newc(cpio_path.read_bytes())
 
     vb_inode = [max((f[0] for f, _ in target_entries.values()), default=100) + 1]
-    built_vb_mods = extract_tar_modules(vb_mods_tar)
+    built_mods = extract_tar_modules(vb_mods_tar)
+    if vd_mods_tar.is_file():
+        for k, v in extract_tar_modules(vd_mods_tar).items():
+            built_mods.setdefault(k, v)
 
     # Replace existing .ko files under lib/modules/ with matching 5.10.274 builds,
-    # and add any missing Phase 2 USB modules so hmos-probe can bring up a600000.dwc3.
+    # and remove any unmatched old kernel modules so no vermagic mismatch remains.
     replaced_mods = []
-    unmatched_stock_mods = []
+    removed_stale_mods = []
     mod_prefix = 'lib/modules/'
     for name in list(target_entries):
         if name.startswith(mod_prefix) and name.endswith('.ko'):
             base = Path(name).name
-            if base in built_vb_mods:
-                put_file(target_entries, name, built_vb_mods[base], 0o644, vb_inode)
+            if base in built_mods:
+                put_file(target_entries, name, built_mods[base], 0o644, vb_inode)
                 replaced_mods.append(base)
             else:
-                unmatched_stock_mods.append(base)
+                del target_entries[name]
+                removed_stale_mods.append(base)
 
     # Ensure critical marble USB modules exist in /lib/modules/
     added_usb_mods = []
@@ -311,9 +380,15 @@ def build_phase2_images(
     ]
     for mod in usb_required:
         rel = mod_prefix + mod
-        if rel not in target_entries and mod in built_vb_mods:
-            put_file(target_entries, rel, built_vb_mods[mod], 0o644, vb_inode)
+        if rel not in target_entries and mod in built_mods:
+            put_file(target_entries, rel, built_mods[mod], 0o644, vb_inode)
             added_usb_mods.append(mod)
+
+    valid_ko_names = {
+        Path(name).name for name in target_entries
+        if name.startswith(mod_prefix) and name.endswith('.ko')
+    }
+    prune_module_metadata(target_entries, valid_ko_names)
 
     # Inject /hmos-compat-marble/ payload
     payload_files = {
@@ -356,7 +431,7 @@ def build_phase2_images(
             replaced_rd_arg = True
     if not replaced_rd_arg:
         raise ValueError(f'Could not locate {target_rd} in vendor_boot mkbootimg args')
-    if not keep_stock_dtb:
+    if replace_dtb:
         vb_repack_args = replace_arg_value(vb_repack_args, '--dtb', str(dtb_image))
 
     vb_out = out_dir / 'vendor_boot_phase2.img'
@@ -396,10 +471,10 @@ def build_phase2_images(
             'limit_bytes': VENDOR_BOOT_LIMIT_BYTES,
             'target_ramdisk': target_rd.name,
             'ramdisk_compression': target_rd_comp,
-            'dtb_source': 'stock' if keep_stock_dtb else str(dtb_image),
+            'dtb_source': str(dtb_image) if replace_dtb else 'stock',
             'replaced_modules_count': len(replaced_mods),
             'added_usb_modules': added_usb_mods,
-            'unmatched_stock_modules': unmatched_stock_mods,
+            'removed_stale_modules': removed_stale_mods,
             'sha256': sha256_bytes(vb_out.read_bytes()),
         },
         'compat_manifest': manifest,
@@ -420,8 +495,8 @@ def main(argv=None):
     parser.add_argument('--out', type=Path, default=ROOT / 'work/marble-phase2-out',
                         help='Output directory for Phase 2 test images')
     parser.add_argument('--busybox', type=Path, help='Optional static AArch64 busybox binary for USB cmd worker')
-    parser.add_argument('--keep-stock-dtb', action='store_true',
-                        help='Keep stock vendor_boot DTB instead of compiled ukee.dtb')
+    parser.add_argument('--replace-dtb', action='store_true',
+                        help='Replace stock vendor_boot DTB table with compiled ukee.dtb')
     parser.add_argument('--cc', default='aarch64-linux-gnu-gcc', help='AArch64 C cross compiler')
     args = parser.parse_args(argv)
     report = build_phase2_images(
@@ -430,7 +505,7 @@ def main(argv=None):
         artifacts_dir=args.artifacts,
         out_dir=args.out,
         busybox=args.busybox,
-        keep_stock_dtb=args.keep_stock_dtb,
+        replace_dtb=args.replace_dtb,
         cc=args.cc,
     )
     print(json.dumps(report, indent=2))

@@ -93,8 +93,10 @@ class MarblePhase2Tests(unittest.TestCase):
 
             vb_entries = {}
             vb_inode = [1]
-            PHASE2.put_file(vb_entries, 'lib/modules/modules.load', b'dwc3-msm.ko\n', 0o644, vb_inode)
+            PHASE2.put_file(vb_entries, 'lib/modules/modules.load', b'dwc3-msm.ko\nmetis.ko\n', 0o644, vb_inode)
+            PHASE2.put_file(vb_entries, 'lib/modules/modules.dep', b'/lib/modules/dwc3-msm.ko: /lib/modules/metis.ko\n/lib/modules/metis.ko:\n', 0o644, vb_inode)
             PHASE2.put_file(vb_entries, 'lib/modules/dwc3-msm.ko', b'OLD_DWC3_KO', 0o644, vb_inode)
+            PHASE2.put_file(vb_entries, 'lib/modules/metis.ko', b'OLD_PROPRIETARY_METIS_KO', 0o644, vb_inode)
             vb_rd_raw = tmp / 'stock_vb_rd.cpio'
             vb_rd_raw.write_bytes(PHASE2.pack_cpio_newc(vb_entries))
             vb_rd_lz4 = tmp / 'stock_vb_rd.lz4'
@@ -145,6 +147,7 @@ class MarblePhase2Tests(unittest.TestCase):
             report = PHASE2.build_phase2_images(stock_boot, stock_vb, art, out_dir)
             self.assertTrue(report['roundtrip_verified'])
             self.assertEqual(report['vendor_boot_phase2']['replaced_modules_count'], 1)
+            self.assertEqual(report['vendor_boot_phase2']['removed_stale_modules'], ['metis.ko'])
             self.assertIn('nb7vpq904m.ko', report['vendor_boot_phase2']['added_usb_modules'])
             self.assertIn('phy-msm-snps-hs.ko', report['vendor_boot_phase2']['added_usb_modules'])
             self.assertIn('hmos-ipc.ko', report['compat_manifest'])

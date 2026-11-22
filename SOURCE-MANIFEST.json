@@ -2234,8 +2234,8 @@
     },
     {
       "path": "tests/test_marble_phase2.py",
-      "bytes": 7281,
-      "sha256": "f1c4d6ba7b872855532ffa38acc82df753c39a85d5ac1364ef5798fe884d7a0f"
+      "bytes": 7661,
+      "sha256": "d0c66e49981b69fc8afe070295035c07398d61d534f6b1f7a204281ca751d35f"
     },
     {
       "path": "tests/test_native_hiview_events.py",
@@ -2369,8 +2369,8 @@
     },
     {
       "path": "tools/packaging/build_marble_phase2_images.py",
-      "bytes": 17992,
-      "sha256": "efe45c9b7b2d18759984b0d391b20c94776813f3d212753f206ccb1a5ca91ef9"
+      "bytes": 20995,
+      "sha256": "d2e55de9a1ea9b2d7e9fc9ee429b40b346016a5ed763228f859b228a9d716292"
     },
     {
       "path": "tools/packaging/build_promax_images.py",
