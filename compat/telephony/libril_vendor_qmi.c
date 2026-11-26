@@ -2,6 +2,7 @@
 #define _GNU_SOURCE
 #endif
 #include "hril_vendor_abi.h"
+#include "ims_core_wire.h"
 
 #include <arpa/inet.h>
 #include <ctype.h>
@@ -297,8 +298,44 @@ struct cached_call_entry {
 	int32_t mode;
 	int32_t mpty;
 	int32_t type;
+	uint8_t call_type; /* QMI_VOICE call_type: 0x00=CS, 0x08=VOICE_IP, 0x09=VT */
 	char number[64];
 };
+
+#ifdef HRIL_VENDOR_HOST_TEST
+static bool g_host_test_ims_call_bridge = false;
+static bool ims_call_bridge_active(void) { return g_host_test_ims_call_bridge; }
+#else
+static bool ims_call_bridge_active(void)
+{
+	return access(MARBLE_IMS_CALL_ACTIVE_PATH, F_OK) == 0;
+}
+#endif
+
+/* Filter parsed QMI_VOICE calls for CSControl: when SA 4014 ImsCallStub is active
+ * (/data/service/el1/public/telephony/ims-call-active exists), filter out IP/IMS calls
+ * (call_type 0x08 VOICE_IP / 0x09 VT) to prevent duplicate incoming call screens while
+ * keeping 100% CS (0x00) and fallback (marker absent) delivery. */
+static size_t filter_cs_call_entries(const struct cached_call_entry *in, size_t n_in,
+				     bool ims_active,
+				     struct cached_call_entry *out, size_t max_out,
+				     size_t *ims_cnt_out)
+{
+	size_t n_out = 0;
+	size_t n_ims = 0;
+	for (size_t i = 0; i < n_in; i++) {
+		bool is_ip = ims_is_ip_call_type(in[i].call_type);
+		if (is_ip)
+			n_ims++;
+		if (!ims_active || !is_ip) {
+			if (out && n_out < max_out)
+				out[n_out++] = in[i];
+		}
+	}
+	if (ims_cnt_out)
+		*ims_cnt_out = n_ims;
+	return n_out;
+}
 
 static pthread_mutex_t g_state_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t g_queue_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -1802,301 +1839,14 @@ static int32_t parse_voice_call_end_reason(const uint8_t *tlvs, size_t len)
 	}
 }
 
-static uint32_t cdma_read_bits(const uint8_t *buf, size_t total_bits,
-			       size_t *bit_pos, int nbits)
-{
-	uint32_t val = 0;
-	for (int i = 0; i < nbits; i++) {
-		val <<= 1;
-		if (*bit_pos < total_bits) {
-			size_t bp = *bit_pos;
-			if ((buf[bp >> 3] >> (7 - (bp & 7u))) & 1u)
-				val |= 1u;
-		}
-		(*bit_pos)++;
-	}
-	return val;
-}
-
-/* Basic ASCII -> GSM 7-bit default alphabet check (subset identical to ASCII
- * plus '@' -> 0x00, '$' -> 0x02, '_' -> 0x11; non-basic chars trigger UCS-2). */
-static int ascii_to_gsm7_septet(uint8_t ch)
-{
-	if (ch == '@')
-		return 0x00;
-	if (ch == '$')
-		return 0x02;
-	if (ch == '\n' || ch == '\r')
-		return (int)ch;
-	if (ch == '_')
-		return 0x11;
-	if ((ch >= 0x20 && ch <= 0x5a && ch != '$' && ch != '@') ||
-	    (ch >= 0x61 && ch <= 0x7a))
-		return (int)ch;
-	return -1;
-}
-
-static size_t pack_gsm7_septets(const uint8_t *septets, size_t n_septets,
-				size_t fill_bits, uint8_t *out, size_t cap)
-{
-	size_t total_bits = fill_bits + n_septets * 7u;
-	size_t n_bytes = (total_bits + 7u) / 8u;
-	if (n_bytes > cap)
-		return 0;
-	memset(out, 0, n_bytes);
-	size_t bit_off = fill_bits;
-	for (size_t i = 0; i < n_septets; i++) {
-		uint8_t s = septets[i] & 0x7fu;
-		for (int b = 0; b < 7; b++) {
-			if ((s >> b) & 1u)
-				out[bit_off >> 3] |= (uint8_t)(1u << (bit_off & 7u));
-			bit_off++;
-		}
-	}
-	return n_bytes;
-}
-
 /* Transcode 3GPP2 C.S0015 Point-to-Point CDMA MO SMS PDU into a 3GPP TS 23.040
- * GSM SMS-SUBMIT PDU (with SMSC prefix) for 4G/5G IMS/3GPP SMS delivery. */
+ * GSM SMS-SUBMIT PDU (with SMSC prefix) via shared clean-room helper in ims_core_wire.h. */
 static bool transcode_cdma_pdu_to_gsm_submit(const uint8_t *cdma, size_t cdma_len,
 					     const uint8_t *smsc_raw, size_t smsc_raw_len,
 					     uint8_t *out, size_t cap, size_t *out_len)
 {
-	if (!cdma || cdma_len < 4 || cdma[0] != 0x00u || !out || !out_len)
-		return false;
-
-	char dest[40] = "";
-	bool dest_intl = false;
-	const uint8_t *bearer = NULL;
-	size_t bearer_len = 0;
-
-	size_t pos = 1;
-	while (pos + 2 <= cdma_len) {
-		uint8_t pid = cdma[pos];
-		uint8_t plen = cdma[pos + 1];
-		pos += 2;
-		if (pos + plen > cdma_len)
-			break;
-		const uint8_t *pv = cdma + pos;
-		if (pid == 0x04u && plen >= 2) { /* Destination Address */
-			size_t bp = 0, tbits = (size_t)plen * 8u;
-			uint32_t digit_mode = cdma_read_bits(pv, tbits, &bp, 1);
-			uint32_t num_mode = cdma_read_bits(pv, tbits, &bp, 1);
-			if (digit_mode == 1u) {
-				if (num_mode == 0u) {
-					uint32_t ntype = cdma_read_bits(pv, tbits, &bp, 3);
-					(void)cdma_read_bits(pv, tbits, &bp, 4); /* num_plan */
-					if (ntype == 1u)
-						dest_intl = true;
-				}
-			}
-			uint32_t nfields = cdma_read_bits(pv, tbits, &bp, 8);
-			size_t di = 0;
-			static const char dtmf_map[16] = {
-				'0', '1', '2', '3', '4', '5', '6', '7',
-				'8', '9', '0', '*', '#', 'a', 'b', 'c'
-			};
-			for (uint32_t i = 0; i < nfields && di + 1 < sizeof(dest); i++) {
-				if (digit_mode == 0u) {
-					uint32_t d = cdma_read_bits(pv, tbits, &bp, 4);
-					if (d >= 1u && d <= 12u)
-						dest[di++] = dtmf_map[d];
-				} else {
-					uint32_t ch = cdma_read_bits(pv, tbits, &bp, 8);
-					if (ch == '+' && di == 0) {
-						dest_intl = true;
-					} else if ((ch >= '0' && ch <= '9') || ch == '*' || ch == '#') {
-						dest[di++] = (char)ch;
-					}
-				}
-			}
-			dest[di] = '\0';
-		} else if (pid == 0x08u && plen >= 3) { /* Bearer Data */
-			bearer = pv;
-			bearer_len = plen;
-		}
-		pos += plen;
-	}
-
-	if (dest[0] == '\0' || !bearer || bearer_len < 3)
-		return false;
-
-	uint8_t msg_ref = 0;
-	bool has_udh = false;
-	uint8_t ud_encoding = 0;
-	const uint8_t *ud_sub = NULL;
-	size_t ud_sub_len = 0;
-
-	size_t bpos = 0;
-	while (bpos + 2 <= bearer_len) {
-		uint8_t sid = bearer[bpos];
-		uint8_t slen = bearer[bpos + 1];
-		bpos += 2;
-		if (bpos + slen > bearer_len)
-			break;
-		const uint8_t *sv = bearer + bpos;
-		if (sid == 0x00u && slen >= 3) { /* Message Identifier */
-			uint16_t mid = (uint16_t)(((sv[0] & 0x0fu) << 12) | (sv[1] << 4) | (sv[2] >> 4));
-			msg_ref = (uint8_t)(mid & 0xffu);
-			has_udh = ((sv[2] & 0x08u) != 0u);
-		} else if (sid == 0x01u && slen >= 2) { /* User Data */
-			ud_sub = sv;
-			ud_sub_len = slen;
-		}
-		bpos += slen;
-	}
-
-	if (!ud_sub || ud_sub_len < 2)
-		return false;
-
-	size_t ubp = 0, utbits = ud_sub_len * 8u;
-	ud_encoding = (uint8_t)cdma_read_bits(ud_sub, utbits, &ubp, 5);
-	if (ud_encoding == 0x01u)
-		(void)cdma_read_bits(ud_sub, utbits, &ubp, 8); /* IS-91 msg_type */
-	uint32_t num_fields = cdma_read_bits(ud_sub, utbits, &ubp, 8);
-
-	/* Extract optional UDH (when header_ind == 1) */
-	uint8_t udh[64];
-	size_t udh_total = 0; /* includes udhl byte */
-	if (has_udh && ubp + 8 <= utbits) {
-		uint8_t udhl = (uint8_t)cdma_read_bits(ud_sub, utbits, &ubp, 8);
-		if ((size_t)(1u + udhl) <= sizeof(udh) && ubp + (size_t)udhl * 8u <= utbits) {
-			udh[0] = udhl;
-			for (uint8_t i = 0; i < udhl; i++)
-				udh[1u + i] = (uint8_t)cdma_read_bits(ud_sub, utbits, &ubp, 8);
-			udh_total = (size_t)(1u + udhl);
-		} else {
-			has_udh = false;
-		}
-	}
-
-	uint8_t tp_dcs = 0x00u;
-	uint8_t tp_udl = 0;
-	uint8_t tp_ud[160];
-	size_t tp_ud_bytes = 0;
-
-	if (ud_encoding == 0x04u) { /* UTF-16BE UNICODE */
-		tp_dcs = 0x08u;
-		size_t hdr_units = (udh_total + 1u) / 2u;
-		size_t text_units = (num_fields > hdr_units) ? (num_fields - hdr_units) : 0;
-		if (has_udh && udh_total > 0) {
-			/* Re-align to byte boundary if udh_total is odd? In 3GPP2 UTF-16BE UDH is packed
-			 * right after num_fields; advance remaining padding bits to match header units. */
-			if (udh_total & 1u)
-				(void)cdma_read_bits(ud_sub, utbits, &ubp, 8);
-			memcpy(tp_ud, udh, udh_total);
-			tp_ud_bytes = udh_total;
-		}
-		for (size_t i = 0; i < text_units && tp_ud_bytes + 2 <= 140; i++) {
-			uint32_t u16 = cdma_read_bits(ud_sub, utbits, &ubp, 16);
-			tp_ud[tp_ud_bytes++] = (uint8_t)((u16 >> 8) & 0xffu);
-			tp_ud[tp_ud_bytes++] = (uint8_t)(u16 & 0xffu);
-		}
-		tp_udl = (uint8_t)tp_ud_bytes;
-	} else if (ud_encoding == 0x02u || ud_encoding == 0x08u || ud_encoding == 0x09u) {
-		int bits_per_field = (ud_encoding == 0x08u) ? 8 : 7;
-		size_t hdr_fields = 0;
-		if (has_udh && udh_total > 0) {
-			if (bits_per_field == 7) {
-				size_t hdr_bits = udh_total * 8u;
-				hdr_fields = (hdr_bits + 6u) / 7u;
-				size_t pad = hdr_fields * 7u - hdr_bits;
-				if (pad > 0)
-					(void)cdma_read_bits(ud_sub, utbits, &ubp, (int)pad);
-			} else {
-				hdr_fields = udh_total;
-			}
-		}
-		size_t text_fields = (num_fields > hdr_fields) ? (num_fields - hdr_fields) : 0;
-		if (text_fields > 160)
-			text_fields = 160;
-		uint8_t chars[160];
-		uint8_t septets[160];
-		bool all_gsm7 = true;
-		for (size_t i = 0; i < text_fields; i++) {
-			uint8_t ch = (uint8_t)cdma_read_bits(ud_sub, utbits, &ubp, bits_per_field);
-			chars[i] = ch;
-			if (ud_encoding == 0x09u) {
-				septets[i] = ch & 0x7fu;
-			} else {
-				int s = ascii_to_gsm7_septet(ch);
-				if (s < 0)
-					all_gsm7 = false;
-				else
-					septets[i] = (uint8_t)s;
-			}
-		}
-		if (all_gsm7) {
-			tp_dcs = 0x00u;
-			size_t fill_bits = 0;
-			size_t hdr_septets = 0;
-			if (has_udh && udh_total > 0) {
-				memcpy(tp_ud, udh, udh_total);
-				tp_ud_bytes = udh_total;
-				hdr_septets = (udh_total * 8u + 6u) / 7u;
-				fill_bits = hdr_septets * 7u - udh_total * 8u;
-			}
-			size_t packed = pack_gsm7_septets(septets, text_fields, fill_bits,
-							  tp_ud + tp_ud_bytes,
-							  sizeof(tp_ud) - tp_ud_bytes);
-			if (text_fields > 0 && packed == 0)
-				return false;
-			tp_ud_bytes += packed;
-			tp_udl = (uint8_t)(hdr_septets + text_fields);
-		} else {
-			tp_dcs = 0x08u;
-			if (has_udh && udh_total > 0) {
-				memcpy(tp_ud, udh, udh_total);
-				tp_ud_bytes = udh_total;
-			}
-			for (size_t i = 0; i < text_fields && tp_ud_bytes + 2 <= 140; i++) {
-				tp_ud[tp_ud_bytes++] = 0x00u;
-				tp_ud[tp_ud_bytes++] = chars[i];
-			}
-			tp_udl = (uint8_t)tp_ud_bytes;
-		}
-	} else {
-		return false;
-	}
-
-	/* Assemble 3GPP SMS-SUBMIT PDU: [SMSC] [TP-FO] [TP-MR] [TP-DA] [TP-PID] [TP-DCS] [TP-VP] [TP-UDL] [TP-UD] */
-	size_t off = 0;
-	size_t sc_len = (smsc_raw && smsc_raw_len > 0 && smsc_raw_len <= 16) ? smsc_raw_len : 1u;
-	size_t dlen = strlen(dest);
-	size_t dbcd_len = (dlen + 1u) / 2u;
-	if (sc_len + 7u + dbcd_len + tp_ud_bytes > cap)
-		return false;
-
-	if (smsc_raw && smsc_raw_len > 0 && smsc_raw_len <= 16) {
-		memcpy(out + off, smsc_raw, smsc_raw_len);
-		off += smsc_raw_len;
-	} else {
-		out[off++] = 0x00u; /* use modem/USIM default SMSC */
-	}
-
-	out[off++] = has_udh ? 0x51u : 0x11u; /* MTI=SUBMIT(1), VPF=relative(2), optional UDHI(0x40) */
-	out[off++] = msg_ref;
-	out[off++] = (uint8_t)dlen;
-	out[off++] = dest_intl ? 0x91u : 0x81u;
-	for (size_t i = 0; i < dlen; i += 2) {
-		uint8_t lo = (dest[i] == '*') ? 0x0au : (dest[i] == '#') ? 0x0bu : (uint8_t)(dest[i] - '0');
-		uint8_t hi = 0x0fu;
-		if (i + 1 < dlen) {
-			char c2 = dest[i + 1];
-			hi = (c2 == '*') ? 0x0au : (c2 == '#') ? 0x0bu : (uint8_t)(c2 - '0');
-		}
-		out[off++] = (uint8_t)((hi << 4) | (lo & 0x0fu));
-	}
-	out[off++] = 0x00u; /* TP-PID */
-	out[off++] = tp_dcs;
-	out[off++] = 0xa7u; /* TP-VP: 24 hours */
-	out[off++] = tp_udl;
-	if (tp_ud_bytes > 0) {
-		memcpy(out + off, tp_ud, tp_ud_bytes);
-		off += tp_ud_bytes;
-	}
-	*out_len = off;
-	return true;
+	return ims_transcode_cdma_pdu_to_gsm_submit(cdma, cdma_len, smsc_raw, smsc_raw_len,
+						    out, cap, out_len);
 }
 
 static size_t build_wms_send_ack_tlvs(uint8_t *buf, uint32_t tx_id, bool success,
@@ -2188,6 +1938,7 @@ static size_t parse_voice_call_list(const uint8_t *tlvs, size_t len, bool is_ind
 		int32_t hstate = qmi_voice_state_to_hril(v_info[pos + 1]);
 		if (hstate < 0)
 			continue;
+		uint8_t ctype = v_info[pos + 2];
 		uint8_t qdir = v_info[pos + 3];
 		uint8_t mpty = v_info[pos + 5];
 		memset(&out[n], 0, sizeof(out[n]));
@@ -2197,6 +1948,7 @@ static size_t parse_voice_call_list(const uint8_t *tlvs, size_t len, bool is_ind
 		out[n].mode = 0; /* voice */
 		out[n].mpty = mpty ? 1 : 0;
 		out[n].type = 129;
+		out[n].call_type = ctype;
 		n++;
 	}
 
@@ -3734,6 +3486,7 @@ static void handle_task(const struct ril_task *t)
 		return;
 	}
 	case TASK_CALL_GET_LIST: {
+		struct cached_call_entry all_entries[MAX_VOICE_CALLS];
 		struct cached_call_entry entries[MAX_VOICE_CALLS];
 		size_t n = 0;
 		uint8_t resp[QMI_MAX_BUF];
@@ -3741,7 +3494,10 @@ static void handle_task(const struct ril_task *t)
 		uint16_t qerr = 0;
 		if (qmi_voice_rpc_slot_locked(slot, QMI_VOICE_GET_ALL_CALL_INFO, NULL, 0,
 					      resp, sizeof(resp), &rl, &qerr) == 0 && qerr == 0) {
-			n = parse_voice_call_list(resp, rl, false, entries, MAX_VOICE_CALLS);
+			size_t n_all = parse_voice_call_list(resp, rl, false, all_entries, MAX_VOICE_CALLS);
+			size_t ims_cnt = 0;
+			n = filter_cs_call_entries(all_entries, n_all, ims_call_bridge_active(),
+						   entries, MAX_VOICE_CALLS, &ims_cnt);
 			g_cached_call_cnt = n;
 			if (n > 0)
 				memcpy(g_cached_calls, entries, n * sizeof(entries[0]));
@@ -5117,8 +4873,13 @@ static void *ind_event_thread(void *arg)
 				if (standalone_qmi_rpc(sv[watch_slot], ep_voice.node, ep_voice.port, rtx++,
 						       QMI_VOICE_GET_ALL_CALL_INFO, NULL, 0,
 						       vresp, sizeof(vresp), &vrl, &vqerr) == 0 && vqerr == 0) {
+					struct cached_call_entry all_entries[MAX_VOICE_CALLS];
 					struct cached_call_entry entries[MAX_VOICE_CALLS];
-					size_t nc = parse_voice_call_list(vresp, vrl, false, entries, MAX_VOICE_CALLS);
+					size_t nc_all = parse_voice_call_list(vresp, vrl, false, all_entries, MAX_VOICE_CALLS);
+					size_t ims_cnt = 0;
+					size_t nc = filter_cs_call_entries(all_entries, nc_all,
+									   ims_call_bridge_active(),
+									   entries, MAX_VOICE_CALLS, &ims_cnt);
 					bool changed = false;
 					pthread_mutex_lock(&g_state_lock);
 					if (nc != g_cached_call_cnt) {
@@ -5231,10 +4992,19 @@ static void *ind_event_thread(void *arg)
 						    &snoti, sizeof(snoti));
 				}
 			} else if (pkind[i] == 1 && msg == QMI_VOICE_ALL_CALL_STATUS_IND && rep && rep->OnCallReport) {
+				struct cached_call_entry all_entries[MAX_VOICE_CALLS];
 				struct cached_call_entry entries[MAX_VOICE_CALLS];
-				size_t nc = parse_voice_call_list(tlvs, plen, true, entries, MAX_VOICE_CALLS);
+				size_t nc_all = parse_voice_call_list(tlvs, plen, true, all_entries, MAX_VOICE_CALLS);
+				bool ims_bridge = ims_call_bridge_active();
+				size_t ims_cnt = 0;
+				size_t nc = filter_cs_call_entries(all_entries, nc_all, ims_bridge,
+								   entries, MAX_VOICE_CALLS, &ims_cnt);
 				int32_t end_reason = parse_voice_call_end_reason(tlvs, plen);
+				size_t prev_cs = 0;
+				bool was_hangup = false;
 				pthread_mutex_lock(&g_state_lock);
+				prev_cs = g_cached_call_cnt;
+				was_hangup = g_hangup_pending;
 				g_cached_call_cnt = nc;
 				if (nc > 0) {
 					memcpy(g_cached_calls, entries, nc * sizeof(entries[0]));
@@ -5245,8 +5015,13 @@ static void *ind_event_thread(void *arg)
 					g_call_watchdog_ticks = 0;
 				}
 				pthread_mutex_unlock(&g_state_lock);
-				emit_report(rep->OnCallReport, ind_slot, NULL, HNOTI_CALL_STATE_UPDATED,
-					    HRIL_REPORT_NOTIFICATION, HRIL_ERR_SUCCESS, NULL, 0);
+				/* When SA 4014 ImsCallStub is active and only IP/IMS calls exist
+				 * (with no active/ending CS call), skip CS HNOTI_CALL_STATE_UPDATED
+				 * to prevent duplicate incoming call screens. */
+				if (!ims_bridge || nc > 0 || prev_cs > 0 || was_hangup) {
+					emit_report(rep->OnCallReport, ind_slot, NULL, HNOTI_CALL_STATE_UPDATED,
+						    HRIL_REPORT_NOTIFICATION, HRIL_ERR_SUCCESS, NULL, 0);
+				}
 			}
 		}
 	}
@@ -5710,7 +5485,6 @@ const HRilOps *RilInitOps(const HRilReport *reportOps)
 
 #ifdef HRIL_VENDOR_HOST_TEST
 #include <assert.h>
-#include "ims_core_wire.h"
 
 static pthread_mutex_t g_test_mu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t g_test_cv = PTHREAD_COND_INITIALIZER;
@@ -6450,6 +6224,39 @@ int main(void)
 		size_t bl = encode_smsc_bcd("+8613334262200", 145, bcd, sizeof(bcd));
 		const uint8_t want[] = { 0x08, 0x91, 0x68, 0x31, 0x33, 0x24, 0x26, 0x02, 0xf0 };
 		assert(bl == sizeof(want) && memcmp(bcd, want, sizeof(want)) == 0);
+	}
+
+	/* 10g. M5 CS/IMS voice call dedup coordination (call_type 0x00 CS vs 0x08 VOICE_IP / 0x09 VT) */
+	{
+		uint8_t vbuf[96];
+		size_t vlen = 0;
+		uint8_t vinfo[22] = {
+			3,
+			1, 0x02, 0x08, 0x02, 0x04, 0, 0, /* id=1, INCOMING(4), VOICE_IP(0x08), MT */
+			2, 0x03, 0x00, 0x01, 0x02, 0, 0, /* id=2, ACTIVE(0),   CS(0x00),       MO */
+			3, 0x05, 0x09, 0x01, 0x04, 0, 0, /* id=3, ALERTING(3), VT(0x09),       MO */
+		};
+		vlen += tlv_append(vbuf + vlen, 0x01, vinfo, sizeof(vinfo));
+		struct cached_call_entry all_e[4], cs_e[4];
+		size_t n_all = parse_voice_call_list(vbuf, vlen, true, all_e, 4);
+		assert(n_all == 3);
+		assert(all_e[0].call_type == 0x08u && all_e[1].call_type == 0x00u && all_e[2].call_type == 0x09u);
+
+		/* When ims-call-active is NOT active, fallback reports ALL 3 calls */
+		size_t ims_cnt = 0;
+		g_host_test_ims_call_bridge = false;
+		size_t n_fb = filter_cs_call_entries(all_e, n_all, ims_call_bridge_active(), cs_e, 4, &ims_cnt);
+		assert(n_fb == 3 && ims_cnt == 2);
+
+		/* When ims-call-active IS active, filter out 0x08/0x09 and keep only 0x00 CS */
+		g_host_test_ims_call_bridge = true;
+		size_t n_cs = filter_cs_call_entries(all_e, n_all, ims_call_bridge_active(), cs_e, 4, &ims_cnt);
+		assert(n_cs == 1 && ims_cnt == 2 && cs_e[0].index == 2 && cs_e[0].call_type == 0x00u);
+
+		/* IP-only call list yields 0 CS calls (so CSControl skips duplicate notification) */
+		size_t n_ip_only = filter_cs_call_entries(all_e, 1, ims_call_bridge_active(), cs_e, 4, &ims_cnt);
+		assert(n_ip_only == 0 && ims_cnt == 1);
+		g_host_test_ims_call_bridge = false;
 	}
 
 	printf("RIL_VENDOR_QMI_HOST_TEST_OK=1\n");

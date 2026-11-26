@@ -4,6 +4,16 @@
 
 The following summarizes local device tests. Private raw logs, app telemetry, network identifiers and screenshots are excluded. Build reports and hashes identify artifacts; they do not independently establish hardware functionality.
 
+## Marble Batch M5（2026-11-26）：7 项实机问题集中修复与复验
+
+当前真机基线 `vendor_boot_a = c4b6a64f857fac5f144662b7240ef147c0687a77f87c0e60b6fac6fbf23a2f07`（冷启动 `BOOT_ID = f93f2eb6-4e82-49d9-ae5d-92fbd94b289b`，`boot_a = c83a8468…` 未动，保留 `userdata`）：
+
+- **IMS 短信真实发包通过**：修正 `QMI_WMS_BIND_SUBSCRIPTION (0x004c)` 及 3GPP `SMS-SUBMIT` (`tech=1`) 路由后，冷启动真机自动发出 3GPP IMS 短信首包即通过运营商网络受理（`IMS_SMS_SEND slot=1 tech=1 att=0 fmt=0x06 ims=1 sc=9 tpdu=124 pdu=133 rc=0 qerr=0x0` → `IMS_SMS_CB_DONE ok=1 ref=193 err=0 ipc_rc=0`）。
+- **HD VoLTE/VoNR 通话接口就绪**：`ImsCallStub` 与 `libril_vendor_qmi` 去重上线，真机 `CellularCall` 回执 `RegisterImsCallCallback success`、`GetImsCallProxy success`、`[slot1] GetImsSwitchStatusResponse active 1, isVolteSupport 1`，`ImsCallRemoteObjectPtr is nullptr` 为 `0`；真实双端语音体验待人工拨打复测。
+- **相机主摄全视场 + 流畅度 + CDAF**：SM7475 机内实测 `4624x3472 RAW10 → 1280x960 NV21` 耗时 **`6.525 ms/帧`**（`1920x1080 NV21` `5.984 ms/帧`）；真机 OV64B40 `4624x3472` 连续采集 25/25 帧，GT9764 CDAF 清晰度从 `81` 自动收敛至 `1092`（锁定 `dac=480`），全 4 颗物理光学镜头 HDI 探针 `errors=0`。
+- **震动 / 双击亮屏 / 抬起亮屏 / 锁屏 96B PIN / 实况窗 AOD+Reminder**：`vibrator_host` 早于 `SA 3602` 启动且 `event6` 保持 `3034:3034`，`SceneBoard` 手势 `IsSupportEffect` 返回 `state:1`；`event10` 自动就绪且 `multimodalinput` 启动即持有 fd；`motion_host` 熄屏实测触发 `STREAM_START mode=tilt_to_wake msgid=514`；`pin_auth` 兼容 64B/96B 宿主机单测与冷启动 `HILOG_BAD_PIN=0`；`SA 3203/3204/65840` 全部在线且 `HILOG_AOD_TO/REM_FAIL/LV_TO=0`。
+- **回归与边界**：`BOOT_COMPLETED=true`、`WLAN0_CARRIER=1`、`DMESG_OOPS=0`。物理 USB 默认保持 COM9 ACM 救援口（未切 HDC）；指纹传感器（TrustZone/SPI）与卓易通/商店华为原厂设备证明和容器镜像属硬件/安全边界。详见 [MARBLE_BATCH_PLAN.md](MARBLE_BATCH_PLAN.md) 与 [MARBLE_HANDOFF.md](MARBLE_HANDOFF.md)。
+
 ## Marble H20：原快手视频黑屏修复
 
 在 `vendor_boot_a=c687adec…`、boot `02573073-bdae-414a-b73e-2b1b76e4f774` 的真实快手前台，原外部 YUV 图像由 `handle=1` 的 Create `-11`（H19 对照）恢复为 `handle=0x8000` 的 Create `0`、Allocate `true`、Bind `0`；同线程 RGB 继续使用 `handle=1` 并成功。相隔 1.77 秒的同一视频画面显示实际像素、字幕及进度变化。结果覆盖本次视频流的解码输出到屏幕链路；在线流选用的解码器类别、音质、音画同步及其他格式待独立核验。[原始证据索引与镜像指纹](MARBLE_BATCH_PLAN.md#第43轮h20-修复快手黑视频真实-yuv-导入及画面通过)。

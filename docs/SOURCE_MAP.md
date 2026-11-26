@@ -13,18 +13,20 @@ One selected implementation is retained per component, together with the shared 
 | 显示、亮度、熄屏 / Display, brightness, screen power | `compat/display/composer_vdi.cpp`, `native_display_wake.cpp`, `native_refresh_rate.cpp` | 直扫/帧节奏/144Hz 模式切换与 OFF latch；唤醒 helper。 |
 | Buffer / 媒体元数据 | `compat/display/buffer_vdi.cpp` | v130，包含 crop/YUV/RGB 与全局 alpha 支持。 |
 | GPU / EGL / 同步 | `compat/graphics/`（`mesa-turnip.patch`、`mesa-gallium-egl.patch`、`dmabuf_sync/`） | 当前冻结 Turnip/Gallium-EGL 配置及 dma-buf 同步内核模块（旧补丁归档于 `archive/sheng/legacy-mesa/`）。 |
-| 触控 / Touch | `compat/touch/` | `sheng` service-v2 bridge、原坐标解析/过滤及 launcher（`marble` 计划走内核原生 evdev）。 |
-| 音频 / Audio | `compat/audio/`, `devices/sheng/runtime/audio/` | VDI（含实验采集）、PAL server/client/lifecycle、服务发布及 PD mapper。 |
-| Wi-Fi | `compat/wifi/`, `devices/sheng/runtime/wifi/` | 当前连接路径与 v134 真实协议代际适配。 |
-| 蓝牙 / Bluetooth | `compat/bluetooth/`, `devices/sheng/runtime/bluetooth/` | v139 当前检查接口、v136 Bionic 后端，以及 v141 能力纠正。 |
-| 电池与温控 / Battery and thermal | `compat/battery/`, `compat/power/`, `devices/sheng/runtime/power/` | 真电量/快充适配器 HDI、原厂充电与温控服务兼容。 |
-| 传感器 / Sensors | `compat/sensors/`, `devices/sheng/runtime/sensors/` | 高通 SSC（加速度/陀螺仪）后端与 HDI 服务。 |
-| 账户与数据 / Account and database | `compat/framework/account/`, `compat/framework/database/` | account HMAC 和 storage launcher、database v2。 |
-| UserIAM | `compat/useriam/` | 软件 4.0 backend + 4.1 ABI adapter；两层协同调用。 |
-| 服务等待与内存 / Service waits and memory | `compat/framework/memmgr/`, `devices/sheng/runtime/boot/apply-memmgr-v2.sh`, `apply-msdp-local-v1.sh` | 实际加载的修补脚本与汇编。 |
-| 启动、按键与桌面 / Startup and desktop | `compat/bootstrap/`, `compat/services/`, `devices/sheng/runtime/` | 最小入口、v121 USB probe、启动声音、锁屏 helper 与 PC 模式默认配置。 |
-| BootControl | `compat/bootcontrol/`, `devices/sheng/runtime/boot/mark-boot-success-v135.sh` | 原 HAL 与桌面验收门槛。 |
-| 宿主机调试与测试 / Host tools & tests | `host-tools/*.ps1`, `tools/`, `tests/` | 串口/传输/截图、分区备份恢复、编译打包脚本与离线契约测试。 |
+| 触控与双击亮屏 / Touch & DT2W | `compat/touch/`, `devices/marble/runtime/touch/` | `marble` 走内核原生 `goodix_ts` evdev + `marble_touch_wakeup`（`xiaomi_touch` `POLLPRI` → uinput `event10`）；`sheng` 保留 service-v2 bridge。 |
+| 音频与通话语音 / Audio & Voice | `compat/audio/`, `devices/marble/runtime/audio/` | VDI、PAL server/client/lifecycle（含 `PAL_STREAM_VOICE_CALL` 听筒/免提/BT SCO）、服务发布及 PD mapper。 |
+| Wi-Fi 与热点 / Wi-Fi & SoftAP | `compat/wifi/`, `devices/marble/runtime/wifi/` | QCA6490 STA 与 `hostapd_host` SoftAP 个人热点。 |
+| 蓝牙 / Bluetooth | `compat/bluetooth/`, `devices/marble/runtime/bluetooth/` | QCA6490 HCI/A2DP 桥接与检查接口。 |
+| 蜂窝、IMS 短信与 VoLTE/VoNR / Telephony | `compat/telephony/`, `devices/marble/runtime/telephony/` | `hmos_rmtfs`、`hmos_tqftpserv`、`libril_vendor_qmi.z.so`（5G/4G/IPA v5.0/QMAPv5/CS 通话去重）与 `hmos_ims_core_service`（`SA 4014` IMSA + IMS SMS `fmt=0x06` + `ImsCallInterface` `QMI_VOICE`）。 |
+| 相机与手电筒 / Camera & Torch | `compat/camera/`, `devices/marble/runtime/camera/` | SM7475 CamX/ISP 4 颗物理镜头（OV64B40 全视场 4624×3472 直转 NV21 + GT9764 CDAF）、`camera_host` V1_2 与手电筒。 |
+| 硬件视频编解码 / Codec | `compat/codec/` | 高通 Venus `libOMX_Core.z.so`（H.264/HEVC `DYNAMIC_HANDLE` 硬编解码）。 |
+| 定位与 NFC / GNSS & NFC | `compat/location/`, `compat/nfc/`, `devices/marble/runtime/{location,nfc}/` | `QMI_LOC` GNSS HDI 与 NXP SN110T NCI 2.0 NFC HDI/`SA 1140`。 |
+| 电池、电源与温控 / Battery, Power & Thermal | `compat/battery/`, `compat/power/`, `devices/marble/runtime/{power,thermal}/` | 快充适配器 HDI、Power/Thermal HDI 与小米 `mi_thermald` 运行时包装。 |
+| 传感器、抬起亮屏与震动 / Sensors, Motion & Vibrator | `compat/sensors/`, `compat/motion/`, `compat/vibrator/`, `devices/marble/runtime/{sensors,motion,vibrator}/` | SLPI/SSC 传感器与 `tcs3701` 自动亮度、Motion HDI v1.1 `tilt_to_wake` 抬起亮屏与 `qcom-hv-haptics` Vibrator HDI v2.0。 |
+| 账户、数据与 UserIAM/PIN / Account, Data & PinAuth | `compat/framework/`, `compat/useriam/`, `compat/pinauth/`, `devices/marble/runtime/pinauth/` | `libhmos_ram_no_tee.so`（EL2 未加密）、UserIAM 4.0/4.1 与纯用户态 64B/96B `pin_auth` v3.0。 |
+| AOD / 实况窗 / ANCO 运行时 | `devices/marble/runtime/{aod,anco,init}/` | `aod_service`（`SA 65840`）、`foundation` Reminder（`SA 3204`）与 ANCO 本地服务配置。 |
+| 启动、按键与桌面 / Startup and desktop | `compat/bootstrap/`, `compat/services/`, `devices/marble/runtime/` | 最小入口、`hmos-probe` USB ACM 串口、锁屏 helper 与开机动画。 |
+| 宿主机调试与测试 / Host tools & tests | `host-tools/*.ps1`, `tools/`, `tests/` | 串口/传输/截图、分区备份恢复、编译打包脚本与离线单元测试。 |
 
 `runtime/` 中脚本和配置从 v146 ramdisk 的最终内容提取，文件名保留被 init 和启动程序引用的名称。文件名中的 v116/v136 等不表示仓库同时维护多套旧实现。原厂库、固件、应用、编译产物和完整镜像不在仓库内。
 

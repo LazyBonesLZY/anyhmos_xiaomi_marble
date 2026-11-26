@@ -17,6 +17,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -285,10 +286,10 @@ static void fillRgbaFrame(uint8_t *dst, size_t dstSize, int width, int height,
     }
 }
 
-/* Fixed-point bilinear RGB24 resizer so concurrent preview + photo + video streams
- * at different (w, h) all receive live optical silicon frames without synthetic fallback. */
-static bool resizeRgb24Bilinear(const uint8_t *src, int srcW, int srcH,
-                                uint8_t *dst, int dstW, int dstH) {
+/* Fixed-point bilinear RGB24 resizer (retained for unit-test parity; live pipeline
+ * uses direct zero-malloc packed RAW10 -> NV21/NV12/RGBA/RGB24 conversion). */
+[[maybe_unused]] static bool resizeRgb24Bilinear(const uint8_t *src, int srcW, int srcH,
+                                                 uint8_t *dst, int dstW, int dstH) {
     if (!src || !dst || srcW <= 0 || srcH <= 0 || dstW <= 0 || dstH <= 0)
         return false;
     if (srcW == dstW && srcH == dstH) {
@@ -607,10 +608,13 @@ int main(void) {
     }
 
     /* 5. Hermetic sysfs unit test for MarbleTorchCtrl (dual warm/cold LED + switch_0 + off) */
-    char tmpl[] = "work/marble-m2-build/camera/.torch_test_XXXXXX";
+    char tmpl[] = "work/marble-m5-build/camera/.torch_test_XXXXXX";
+    char tmplAlt[] = "work/marble-m2-build/camera/.torch_test_XXXXXX";
     char *rootDir = ::mkdtemp(tmpl);
+    if (!rootDir)
+        rootDir = ::mkdtemp(tmplAlt);
     if (!rootDir) {
-        std::fprintf(stderr, "FAIL mkdtemp for torch test (ensure work/marble-m2-build/camera exists)\n");
+        std::fprintf(stderr, "FAIL mkdtemp for torch test (ensure work/marble-m5-build/camera exists)\n");
         return 12;
     }
     std::string base(rootDir);
@@ -842,7 +846,8 @@ struct ManagedStream {
 
     bool deliverFrame(uint32_t slot, uint32_t frameSeq, bool isJpegStream,
                       int32_t captureId, int32_t jpegRotation,
-                      const uint8_t *hwRgb = nullptr, int hwW = 0, int hwH = 0,
+                      const marble_raw_view_t *rawView = nullptr,
+                      std::vector<uint8_t> *scratchJpegRgb = nullptr,
                       size_t *outJpegBytes = nullptr) {
         if (nativeWin == nullptr)
             return false;
@@ -878,28 +883,22 @@ struct ManagedStream {
                 outW = bh->width > 0 ? bh->width : (info.width_ > 0 ? info.width_ : 640);
                 outH = bh->height > 0 ? bh->height : (info.height_ > 0 ? info.height_ : 480);
                 int st = bh->stride > 0 ? bh->stride : outW;
-
-                /* Support concurrent multi-stream resolutions via bilinear resize of live hwRgb. */
-                std::vector<uint8_t> resizedRgb;
-                const uint8_t *srcRgb = nullptr;
-                if (hwRgb != nullptr && hwW > 0 && hwH > 0) {
-                    if (hwW == outW && hwH == outH) {
-                        srcRgb = hwRgb;
-                    } else {
-                        resizedRgb.resize(static_cast<size_t>(outW) * static_cast<size_t>(outH) * 3u);
-                        if (marble_cam::resizeRgb24Bilinear(hwRgb, hwW, hwH,
-                                                            resizedRgb.data(), outW, outH)) {
-                            srcRgb = resizedRgb.data();
-                        }
-                    }
-                }
+                const bool haveRaw = (rawView != nullptr && rawView->raw != nullptr);
 
                 if (wantJpeg) {
                     size_t jsz = 0;
-                    if (srcRgb != nullptr) {
-                        jsz = marble_encode_baseline_jpeg_rgb24(
-                            srcRgb, static_cast<uint32_t>(outW), static_cast<uint32_t>(outH),
-                            82, ptr, static_cast<size_t>(bh->size));
+                    if (haveRaw && scratchJpegRgb != nullptr) {
+                        scratchJpegRgb->resize(static_cast<size_t>(outW) * static_cast<size_t>(outH) * 3u);
+                        int drc = marble_bayer_to_rgb24_resize_awb(
+                            rawView->raw, rawView->width, rawView->height, rawView->stride,
+                            rawView->is_raw8, rawView->is_optical, rawView->order,
+                            rawView->awb_gain_r, rawView->awb_gain_g, rawView->awb_gain_b,
+                            scratchJpegRgb->data(), static_cast<uint32_t>(outW), static_cast<uint32_t>(outH));
+                        if (drc == 0) {
+                            jsz = marble_encode_baseline_jpeg_rgb24(
+                                scratchJpegRgb->data(), static_cast<uint32_t>(outW),
+                                static_cast<uint32_t>(outH), 82, ptr, static_cast<size_t>(bh->size));
+                        }
                     }
                     if (jsz == 0) {
                         std::vector<uint8_t> jpeg;
@@ -914,10 +913,15 @@ struct ManagedStream {
                         *outJpegBytes = jsz;
                 } else if (info.format_ == OHOS_CAMERA_FORMAT_RGBA_8888 ||
                            info.format_ == 12 || bh->format == 12) {
-                    if (srcRgb != nullptr) {
-                        marble_rgb24_to_rgba(srcRgb, static_cast<uint32_t>(outW),
-                                             static_cast<uint32_t>(outH),
-                                             ptr, static_cast<uint32_t>(st));
+                    size_t rowBytes = (st >= outW * 4)
+                        ? static_cast<size_t>(st) : static_cast<size_t>(outW) * 4u;
+                    if (haveRaw && rowBytes * static_cast<size_t>(outH) <= static_cast<size_t>(bh->size)) {
+                        (void)marble_bayer_to_rgba_resize_awb(
+                            rawView->raw, rawView->width, rawView->height, rawView->stride,
+                            rawView->is_raw8, rawView->is_optical, rawView->order,
+                            rawView->awb_gain_r, rawView->awb_gain_g, rawView->awb_gain_b,
+                            ptr, static_cast<uint32_t>(outW), static_cast<uint32_t>(outH),
+                            static_cast<uint32_t>(rowBytes));
                     } else {
                         marble_cam::fillRgbaFrame(ptr, static_cast<size_t>(bh->size),
                                                   outW, outH, st, slot, frameSeq);
@@ -926,10 +930,19 @@ struct ManagedStream {
                     bool isNv12 = (info.format_ == OHOS_CAMERA_FORMAT_YCBCR_420_SP ||
                                    info.format_ == OHOS_CAMERA_FORMAT_YCBCR_420_888 ||
                                    info.format_ == 24 || bh->format == 24);
-                    if (srcRgb != nullptr) {
-                        marble_rgb24_to_nv21(srcRgb, static_cast<uint32_t>(outW),
-                                             static_cast<uint32_t>(outH),
-                                             isNv12 ? 1 : 0, ptr, static_cast<uint32_t>(st));
+                    size_t yStride = (st >= outW)
+                        ? static_cast<size_t>(st) : static_cast<size_t>(outW);
+                    size_t needBytes = yStride * static_cast<size_t>(outH) +
+                                       yStride * static_cast<size_t>(outH / 2);
+                    if (haveRaw && outW >= 2 && outH >= 2 &&
+                        needBytes <= static_cast<size_t>(bh->size)) {
+                        (void)marble_bayer_to_nv21_resize_awb(
+                            rawView->raw, rawView->width, rawView->height, rawView->stride,
+                            rawView->is_raw8, rawView->is_optical, rawView->order,
+                            isNv12 ? 1 : 0,
+                            rawView->awb_gain_r, rawView->awb_gain_g, rawView->awb_gain_b,
+                            ptr, static_cast<uint32_t>(outW), static_cast<uint32_t>(outH),
+                            static_cast<uint32_t>(yStride));
                     } else {
                         marble_cam::fillNv21OrNv12Frame(ptr, static_cast<size_t>(bh->size),
                                                         outW, outH, st, isNv12, slot, frameSeq);
@@ -1114,6 +1127,7 @@ public:
         }
         for (auto &cap : toStop) {
             cap->stop.store(true);
+            hwViewCv_.notify_all();
             if (cap->worker.joinable())
                 cap->worker.join();
         }
@@ -1223,6 +1237,7 @@ public:
             auto it = captures_.find(captureId);
             if (it != captures_.end()) {
                 it->second->stop.store(true);
+                hwViewCv_.notify_all();
                 if (it->second->worker.joinable())
                     it->second->worker.join();
                 captures_.erase(it);
@@ -1241,47 +1256,35 @@ public:
 
             uint32_t seq = 0;
             int failStreak = 0;
-            std::vector<uint8_t> hwRgb;
+            std::vector<uint8_t> jpegRgbScratch;
             do {
                 if (cap->stop.load())
                     break;
-                /* Choose the maximum (w, h) across all streams in this capture so every
-                 * stream gets crisp optical frames (bilinear-resized when dimensions differ). */
-                int targetW = 0, targetH = 0;
-                {
-                    std::lock_guard<std::mutex> lk(mu_);
-                    for (int32_t sid : cap->streamIds) {
-                        auto sit = streams_.find(sid);
-                        if (sit != streams_.end()) {
-                            if (sit->second.info.width_ > targetW)
-                                targetW = sit->second.info.width_;
-                            if (sit->second.info.height_ > targetH)
-                                targetH = sit->second.info.height_;
-                        }
-                    }
-                }
-                if (targetW <= 0) targetW = 640;
-                if (targetH <= 0) targetH = 480;
 
                 bool haveHwFrame = false;
                 marble_raw_frame_info_t rawInfo {};
+                marble_raw_view_t rawView {};
+                rawView.slot = -1;
                 std::string srcTag;
                 uint32_t hwCountSnapshot = 0;
                 {
-                    std::lock_guard<std::mutex> hlk(hwMu_);
+                    std::unique_lock<std::mutex> hlk(hwMu_);
+                    hwViewCv_.wait(hlk, [&]() {
+                        return hwViewsHeld_ < 2 || cap->stop.load();
+                    });
+                    if (cap->stop.load())
+                        break;
                     if (ensureHwSessionLocked()) {
-                        hwRgb.resize(static_cast<size_t>(targetW) * static_cast<size_t>(targetH) * 3u);
-                        int grc = marble_hw_session_grab_rgb24(
-                            hwSess_, hwRgb.data(),
-                            static_cast<uint32_t>(targetW), static_cast<uint32_t>(targetH),
-                            1500u, &rawInfo);
+                        int grc = marble_hw_session_acquire_raw_view(
+                            hwSess_, 1500u, &rawInfo, &rawView);
                         if (grc == 0) {
                             haveHwFrame = true;
+                            hwViewsHeld_++;
                             hwFramesOk_++;
                             hwCountSnapshot = hwFramesOk_;
                             srcTag = hwSrcName_;
                         } else {
-                            CAMERA_LOGW("HW grab_rgb24 failed slot=%u rc=%d, falling back", slot_, grc);
+                            CAMERA_LOGW("HW acquire_raw_view failed slot=%u rc=%d, falling back", slot_, grc);
                             srcTag = "synthetic_fallback";
                         }
                     } else {
@@ -1302,17 +1305,28 @@ public:
                         size_t jsz = 0;
                         if (sit->second.deliverFrame(slot_, seq, isJpeg,
                                                      cap->captureId, jpegRot,
-                                                     haveHwFrame ? hwRgb.data() : nullptr,
-                                                     haveHwFrame ? targetW : 0,
-                                                     haveHwFrame ? targetH : 0,
-                                                     &jsz)) {
+                                                     haveHwFrame ? &rawView : nullptr,
+                                                     &jpegRgbScratch, &jsz)) {
                             frameCounts[sid]++;
                             delivered++;
                             if (jsz > 0) lastJpegBytes = jsz;
                         }
                     }
                 }
-                if (delivered > 0) {
+
+                if (haveHwFrame) {
+                    std::lock_guard<std::mutex> hlk(hwMu_);
+                    if (hwSess_ != nullptr)
+                        marble_hw_session_release_raw_view(hwSess_, &rawView);
+                    if (hwViewsHeld_ > 0)
+                        hwViewsHeld_--;
+                    hwViewCv_.notify_all();
+                }
+
+                const bool shouldLogTelemetry = haveHwFrame
+                    ? (hwCountSnapshot == 1u || (hwCountSnapshot % 30u) == 0u || lastJpegBytes > 0u)
+                    : (seq == 0u || (seq % 30u) == 0u || lastJpegBytes > 0u);
+                if (delivered > 0 && shouldLogTelemetry) {
                     writeHwTelemetry(slot_, srcTag.c_str(), hwCountSnapshot,
                                      haveHwFrame ? &rawInfo : nullptr, lastJpegBytes);
                 }
@@ -1364,6 +1378,7 @@ public:
         }
         if (cap != nullptr) {
             cap->stop.store(true);
+            hwViewCv_.notify_all();
             if (cap->worker.joinable())
                 cap->worker.join();
         }
@@ -1406,12 +1421,16 @@ public:
             std::lock_guard<std::mutex> hlk(hwMu_);
             if (hwSess_ != nullptr) {
                 if (ps.hasFocusMode || ps.hasFocusDist) {
-                    uint16_t dac = 370u;
-                    if (ps.hasFocusDist &&
-                        (!ps.hasFocusMode || ps.focusMode == OHOS_CAMERA_FOCUS_MODE_MANUAL)) {
-                        dac = marble_cam::focusDistanceToDac(ps.focusDist);
+                    bool isManual = (ps.hasFocusMode && ps.focusMode == OHOS_CAMERA_FOCUS_MODE_MANUAL) ||
+                                    (ps.hasFocusDist && !ps.hasFocusMode);
+                    if (isManual) {
+                        uint16_t dac = ps.hasFocusDist
+                            ? marble_cam::focusDistanceToDac(ps.focusDist) : 370u;
+                        (void)marble_hw_session_set_focus(hwSess_, dac);
+                    } else if (ps.hasFocusMode) {
+                        int trigger = (ps.focusMode == OHOS_CAMERA_FOCUS_MODE_AUTO) ? 1 : 0;
+                        (void)marble_hw_session_set_af_mode(hwSess_, 1, trigger);
                     }
-                    (void)marble_hw_session_set_focus(hwSess_, dac);
                 }
                 if (ps.hasAeEv) {
                     uint32_t expLines = 2000u, gainQ8 = 256u;
@@ -1430,6 +1449,7 @@ public:
         }
         for (auto &kv : local) {
             kv.second->stop.store(true);
+            hwViewCv_.notify_all();
             if (kv.second->worker.joinable())
                 kv.second->worker.join();
         }
@@ -1449,8 +1469,8 @@ private:
         switch (slot_) {
             case 0u:
                 cfg.src = MARBLE_HW_SRC_OV64B40;
-                cfg.width = 1920u;
-                cfg.height = 1080u;
+                cfg.width = 4624u;
+                cfg.height = 3472u;
                 hwSrcName_ = "ov64b40_optical";
                 break;
             case 1u:
@@ -1516,6 +1536,7 @@ private:
         }
         hwOpenAttempted_ = false;
         hwFramesOk_ = 0;
+        hwViewsHeld_ = 0;
     }
 
     static void writeHwTelemetry(uint32_t slot, const char *src, uint32_t hwFrames,
@@ -1558,6 +1579,8 @@ private:
     std::mutex capMu_;
     std::map<int32_t, std::shared_ptr<ActiveCapture>> captures_;
     std::mutex hwMu_;
+    std::condition_variable hwViewCv_;
+    int hwViewsHeld_ = 0;
     marble_hw_session_t *hwSess_ = nullptr;
     bool hwOpenAttempted_ = false;
     std::string hwSrcName_ = "none";

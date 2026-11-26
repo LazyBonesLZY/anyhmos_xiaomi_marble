@@ -15,10 +15,14 @@
  */
 
 #include "pickup_detector.h"
+#include "ssc_motion_client.h"
 
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <fcntl.h>
+#include <string>
+#include <unistd.h>
 
 namespace {
 
@@ -240,6 +244,98 @@ static void testSmoothRampAndPocketAndDeltaGate() {
     std::printf("PASS testSmoothRampAndPocketAndDeltaGate\n");
 }
 
+static bool writeTempFile(const std::string &path, const char *content) {
+    int fd = ::open(path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0600);
+    if (fd < 0) {
+        return false;
+    }
+    const size_t len = std::strlen(content);
+    const ssize_t n = ::write(fd, content, len);
+    ::close(fd);
+    return n == static_cast<ssize_t>(len);
+}
+
+static void testDrmScreenOffParsersAndPriority() {
+    using marble_motion::parseDrmDpmsIsOff;
+    using marble_motion::parseDrmEnabledIsOff;
+    using marble_motion::queryScreenOffFromPaths;
+
+    /* 1) Pure DPMS parser tests */
+    CHECK(parseDrmDpmsIsOff("Off\n") == 1, "DPMS Off => screen off (1)");
+    CHECK(parseDrmDpmsIsOff("Suspend\n") == 1, "DPMS Suspend => screen off (1)");
+    CHECK(parseDrmDpmsIsOff("Standby\n") == 1, "DPMS Standby => screen off (1)");
+    CHECK(parseDrmDpmsIsOff("  off \r\n") == 1, "DPMS whitespace/lowercase off => screen off (1)");
+    CHECK(parseDrmDpmsIsOff("On\n") == 0, "DPMS On => screen on (0)");
+    CHECK(parseDrmDpmsIsOff(" ON ") == 0, "DPMS uppercase ON => screen on (0)");
+    CHECK(parseDrmDpmsIsOff("") == -1, "DPMS empty => unrecognized (-1)");
+    CHECK(parseDrmDpmsIsOff("Unknown\n") == -1, "DPMS Unknown => unrecognized (-1)");
+    CHECK(parseDrmDpmsIsOff("Online\n") == -1, "DPMS prefix mismatch => unrecognized (-1)");
+    CHECK(parseDrmDpmsIsOff(nullptr) == -1, "DPMS nullptr => unrecognized (-1)");
+
+    /* 2) Pure DRM enabled parser tests */
+    CHECK(parseDrmEnabledIsOff("disabled\n") == 1, "DRM disabled => screen off (1)");
+    CHECK(parseDrmEnabledIsOff("  Disabled \n") == 1, "DRM Disabled => screen off (1)");
+    CHECK(parseDrmEnabledIsOff("enabled\n") == 0, "DRM enabled => screen on (0)");
+    CHECK(parseDrmEnabledIsOff("ENABLED\r\n") == 0, "DRM ENABLED => screen on (0)");
+    CHECK(parseDrmEnabledIsOff("") == -1, "DRM enabled empty => unrecognized (-1)");
+    CHECK(parseDrmEnabledIsOff("enabled2\n") == -1, "DRM enabled trailing junk => unrecognized (-1)");
+    CHECK(parseDrmEnabledIsOff(nullptr) == -1, "DRM enabled nullptr => unrecognized (-1)");
+
+    /* 3) End-to-end priority tests against mock sysfs files */
+    char tmpl[] = "/tmp/marble_motion_drm_test_XXXXXX";
+    char *dir = ::mkdtemp(tmpl);
+    CHECK(dir != nullptr, "mkdtemp must succeed");
+    if (dir == nullptr) {
+        return;
+    }
+    const std::string dpms_p = std::string(dir) + "/dpms";
+    const std::string en_p = std::string(dir) + "/enabled";
+    const std::string bl_p = std::string(dir) + "/brightness";
+    const std::string missing_p = std::string(dir) + "/does_not_exist";
+
+    const char *dpms_list[] = {missing_p.c_str(), dpms_p.c_str()};
+    const char *en_list[] = {en_p.c_str()};
+    const char *missing_list[] = {missing_p.c_str()};
+
+    /* Live device regression case: BL=130 while DPMS=Off, EN=disabled => MUST report screen OFF (1)! */
+    CHECK(writeTempFile(dpms_p, "Off\n"), "write dpms Off");
+    CHECK(writeTempFile(en_p, "disabled\n"), "write enabled disabled");
+    CHECK(writeTempFile(bl_p, "130\n"), "write brightness 130");
+    CHECK(queryScreenOffFromPaths(dpms_list, 2, en_list, 1, bl_p.c_str()) == 1,
+          "DPMS=Off with BL=130 must report screen OFF (1)");
+
+    /* Screen ON case: DPMS=On even if brightness is 0 => screen ON (0) */
+    CHECK(writeTempFile(dpms_p, "On\n"), "write dpms On");
+    CHECK(writeTempFile(bl_p, "0\n"), "write brightness 0");
+    CHECK(queryScreenOffFromPaths(dpms_list, 2, en_list, 1, bl_p.c_str()) == 0,
+          "DPMS=On must override BL=0 and report screen ON (0)");
+
+    /* Fallback to DRM enabled when DPMS missing: enabled=disabled + BL=130 => screen OFF (1) */
+    CHECK(writeTempFile(en_p, "disabled\n"), "write enabled disabled");
+    CHECK(writeTempFile(bl_p, "130\n"), "write brightness 130");
+    CHECK(queryScreenOffFromPaths(missing_list, 1, en_list, 1, bl_p.c_str()) == 1,
+          "missing DPMS + enabled=disabled must report screen OFF (1)");
+    CHECK(writeTempFile(en_p, "enabled\n"), "write enabled enabled");
+    CHECK(queryScreenOffFromPaths(missing_list, 1, en_list, 1, bl_p.c_str()) == 0,
+          "missing DPMS + enabled=enabled must report screen ON (0)");
+
+    /* Fallback to backlight brightness ONLY when all DRM sysfs nodes are absent */
+    CHECK(writeTempFile(bl_p, "0\n"), "write brightness 0");
+    CHECK(queryScreenOffFromPaths(missing_list, 1, missing_list, 1, bl_p.c_str()) == 1,
+          "no DRM + BL=0 fallback must report screen OFF (1)");
+    CHECK(writeTempFile(bl_p, "130\n"), "write brightness 130");
+    CHECK(queryScreenOffFromPaths(missing_list, 1, missing_list, 1, bl_p.c_str()) == 0,
+          "no DRM + BL=130 fallback must report screen ON (0)");
+    CHECK(queryScreenOffFromPaths(missing_list, 1, missing_list, 1, missing_p.c_str()) == -1,
+          "all sysfs missing must report unavailable (-1)");
+
+    ::unlink(dpms_p.c_str());
+    ::unlink(en_p.c_str());
+    ::unlink(bl_p.c_str());
+    ::rmdir(dir);
+    std::printf("PASS testDrmScreenOffParsersAndPriority\n");
+}
+
 } // namespace
 
 int main(void) {
@@ -250,11 +346,12 @@ int main(void) {
     testBriefDropAndShakeSuppress();
     testFaceDownSuppresses();
     testSmoothRampAndPocketAndDeltaGate();
+    testDrmScreenOffParsersAndPriority();
 
     if (g_failures != 0) {
         std::fprintf(stderr, "HOST_PICKUP_DETECTOR_TEST_FAILED failures=%d\n", g_failures);
         return 1;
     }
-    std::printf("HOST_PICKUP_DETECTOR_TEST_PASSED tests=7 failures=0\n");
+    std::printf("HOST_PICKUP_DETECTOR_TEST_PASSED tests=8 failures=0\n");
     return 0;
 }

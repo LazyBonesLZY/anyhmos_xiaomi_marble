@@ -162,93 +162,93 @@ inline PresetResolution resolvePresetEffect(const std::string &effectType) {
         return res;
     }
 
-    /* Core crisp tactile presets (15-120ms) */
+    /* Core crisp tactile presets tuned for SM7475 qcom-hv-haptics LRA DIRECT_PLAY (~5-8ms spin-up) */
     if (effectType == "haptic.clock.timer")
-        return makeSinglePreset(true, 20, 60);
+        return makeSinglePreset(true, 25, 75);
     if (effectType == "haptic.effect.soft")
-        return makeSinglePreset(true, 20, 45);
+        return makeSinglePreset(true, 24, 70);
     if (effectType == "haptic.effect.hard")
         return makeSinglePreset(true, 50, 95);
     if (effectType == "haptic.effect.sharp")
-        return makeSinglePreset(true, 25, 85);
+        return makeSinglePreset(true, 26, 85);
 
     if (effectType == "haptic.common.click")
-        return makeSinglePreset(true, 15, 65);
+        return makeSinglePreset(true, 25, 82);
     if (effectType == "haptic.common.click_up")
-        return makeSinglePreset(true, 15, 50);
+        return makeSinglePreset(true, 22, 72);
     if (effectType == "haptic.common.tick")
-        return makeSinglePreset(true, 15, 55);
+        return makeSinglePreset(true, 22, 75);
     if (effectType == "haptic.common.double_click")
-        return makeMultiPreset(true, {{0, 20, 70}, {75, 20, 70}});
+        return makeMultiPreset(true, {{0, 24, 78}, {65, 24, 78}});
     if (effectType == "haptic.common.long_press" ||
         effectType == "haptic.common.long_press1" ||
         effectType == "haptic.common.long_press2")
-        return makeSinglePreset(true, 35, 80);
+        return makeSinglePreset(true, 38, 85);
 
     if (effectType == "haptic.long_press.light" || effectType == "haptic.long_press_light")
-        return makeSinglePreset(true, 25, 55);
+        return makeSinglePreset(true, 28, 72);
     if (effectType == "haptic.long_press.medium" || effectType == "haptic.long_press_medium")
-        return makeSinglePreset(true, 40, 75);
+        return makeSinglePreset(true, 40, 80);
     if (effectType == "haptic.long_press.heavy" || effectType == "haptic.long_press_heavy")
-        return makeSinglePreset(true, 55, 90);
+        return makeSinglePreset(true, 55, 92);
 
     if (effectType == "haptic.slide" || effectType == "haptic.slide.light" ||
         effectType == "haptic.upglide" || effectType == "haptic.drag")
-        return makeSinglePreset(true, 18, 50);
+        return makeSinglePreset(true, 24, 75);
 
     if (effectType == "haptic.volume.max" || effectType == "haptic.volume.min")
-        return makeSinglePreset(true, 25, 70);
+        return makeSinglePreset(true, 28, 80);
     if (effectType == "haptic.camera.click" || effectType == "haptic.camera.shutter.action_down")
-        return makeSinglePreset(true, 20, 75);
+        return makeSinglePreset(true, 26, 85);
     if (effectType == "haptic.camera.focus" || effectType == "haptic.camera.gear_slip")
-        return makeSinglePreset(true, 15, 55);
+        return makeSinglePreset(true, 22, 75);
     if (effectType == "haptic.dialler.click")
-        return makeSinglePreset(true, 18, 60);
+        return makeSinglePreset(true, 24, 80);
 
     if (effectType == "haptic.notice.success")
-        return makeMultiPreset(true, {{0, 25, 75}, {30, 25, 75}});
+        return makeMultiPreset(true, {{0, 25, 78}, {30, 25, 78}});
     if (effectType == "haptic.notice.warning")
         return makeMultiPreset(true, {{0, 35, 85}, {30, 35, 85}});
     if (effectType == "haptic.notice.fail" || effectType == "haptic.fail")
         return makeMultiPreset(true, {{0, 25, 90}, {22, 25, 90}, {23, 25, 90}});
 
     if (effectType == "haptic.charging")
-        return makeSinglePreset(true, 60, 70);
+        return makeSinglePreset(true, 60, 78);
     if (effectType == "haptic.threshold")
-        return makeSinglePreset(true, 30, 80);
+        return makeSinglePreset(true, 30, 82);
     if (effectType == "haptic.default.effect")
-        return makeSinglePreset(true, 40, 70);
+        return makeSinglePreset(true, 40, 75);
 
     if (effectType == "haptic.grade.strength1" || effectType == "haptic.grade.normal.strength1")
-        return makeSinglePreset(true, 15, 30);
+        return makeSinglePreset(true, 22, 45);
     if (effectType == "haptic.grade.strength2" || effectType == "haptic.grade.normal.strength2")
-        return makeSinglePreset(true, 20, 50);
+        return makeSinglePreset(true, 25, 60);
     if (effectType == "haptic.grade.strength3" || effectType == "haptic.grade.normal.strength3")
-        return makeSinglePreset(true, 25, 70);
+        return makeSinglePreset(true, 28, 75);
     if (effectType == "haptic.grade.strength4" || effectType == "haptic.grade.normal.strength4")
-        return makeSinglePreset(true, 35, 85);
+        return makeSinglePreset(true, 35, 88);
     if (effectType == "haptic.grade.strength5" || effectType == "haptic.grade.normal.strength5")
         return makeSinglePreset(true, 45, 100);
 
     /* Prefix families */
     if (startsWith(effectType, "haptic.notice."))
-        return makeMultiPreset(true, {{0, 30, 80}, {30, 30, 80}});
+        return makeMultiPreset(true, {{0, 30, 82}, {30, 30, 82}});
     if (startsWith(effectType, "haptic.slide."))
-        return makeSinglePreset(true, 18, 50);
+        return makeSinglePreset(true, 24, 75);
     if (startsWith(effectType, "haptic.long_press.") || startsWith(effectType, "haptic.long_press_"))
-        return makeSinglePreset(true, 35, 75);
+        return makeSinglePreset(true, 36, 80);
     if (startsWith(effectType, "haptic.clock."))
-        return makeSinglePreset(true, 20, 60);
+        return makeSinglePreset(true, 25, 75);
     if (startsWith(effectType, "haptic.effect."))
-        return makeSinglePreset(true, 30, 70);
+        return makeSinglePreset(true, 30, 75);
     if (startsWith(effectType, "haptic.common."))
-        return makeSinglePreset(true, 20, 65);
+        return makeSinglePreset(true, 24, 80);
     if (startsWith(effectType, "haptic.camera."))
-        return makeSinglePreset(true, 20, 65);
+        return makeSinglePreset(true, 24, 80);
     if (startsWith(effectType, "haptic.control.") || startsWith(effectType, "haptic.contacts."))
-        return makeSinglePreset(true, 18, 55);
+        return makeSinglePreset(true, 24, 75);
     if (startsWith(effectType, "haptic.dialler."))
-        return makeSinglePreset(true, 18, 60);
+        return makeSinglePreset(true, 24, 80);
     if (startsWith(effectType, "haptic.pattern."))
         return makeMultiPreset(true, {{0, 45, 85}, {30, 45, 85}});
     if (startsWith(effectType, "haptic."))

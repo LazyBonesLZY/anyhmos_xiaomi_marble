@@ -247,6 +247,20 @@ void testPresetMapping() {
     checkKnown("haptic.long_press.medium", 15, 120, 1);
     checkKnown("haptic.long_press.custom", 15, 120, 1);
 
+    /* Verify LRA-perceptible tactile tuning (22-28ms, 70-85%) for crisp short gestures */
+    auto checkTactile = [](const char *name) {
+        PresetResolution r = resolvePresetEffect(name);
+        assert(r.known && !r.isNull && r.segments.size() == 1);
+        assert(r.segments[0].durationMs >= 22 && r.segments[0].durationMs <= 28);
+        assert(r.segments[0].intensity >= 70 && r.segments[0].intensity <= 85);
+    };
+    checkTactile("haptic.slide");
+    checkTactile("haptic.common.click");
+    checkTactile("haptic.common.tick");
+    checkTactile("haptic.common.click_up");
+    checkTactile("haptic.dialler.click");
+    checkTactile("haptic.effect.soft");
+
     PresetResolution nullPreset = resolvePresetEffect("haptic.null");
     assert(nullPreset.known && nullPreset.isNull && nullPreset.totalDurationMs == 0);
 

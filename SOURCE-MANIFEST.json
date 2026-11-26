@@ -19,13 +19,13 @@
     },
     {
       "path": ".gitignore",
-      "bytes": 519,
-      "sha256": "7a3b3faf372c132561d42b710cb724097806019d91299f22fba584fbd3ea0ea2"
+      "bytes": 540,
+      "sha256": "e541210d028014b25f3574fe527324cc3da563b13798cbd3b48aa2d1713bb1fb"
     },
     {
       "path": "README.md",
-      "bytes": 5206,
-      "sha256": "58586378fd69aed0c635b4e59250bba6f6e22b679669ec8ccd7668fe2bebc593"
+      "bytes": 8850,
+      "sha256": "2a0bfae4c231a6cb960cd61c73c7dbc5c61ecbd3de9d4d68587ad60a3a79871d"
     },
     {
       "path": "archive/sheng/README.sheng.en.md",
@@ -224,8 +224,8 @@
     },
     {
       "path": "compat/audio/audio_capture_vdi.inc",
-      "bytes": 12025,
-      "sha256": "7a8aacf454333aa54b221718e2ab65cfa60b5fccca4fde3a842076908fbcd201"
+      "bytes": 13161,
+      "sha256": "8245492811b727426d22a5e90e2286eb6b3f1fa0295ef3f6eba3f1f45c8a073b"
     },
     {
       "path": "compat/audio/audio_manager_service.c",
@@ -234,8 +234,8 @@
     },
     {
       "path": "compat/audio/audio_vdi.c",
-      "bytes": 16392,
-      "sha256": "3c5d483ae97f66be817f22a71a4b1dce8e717360e6ffd096326b8453c3eeddb4"
+      "bytes": 29095,
+      "sha256": "fd512dbcb56c06fd83a3e7a5e02545b25c153c8bb092960471f23b2436e8a570"
     },
     {
       "path": "compat/audio/audio_vdi_loader.c",
@@ -333,6 +333,11 @@
       "sha256": "a7fed63ae7a52e0e516fa766e350567b74e3ee1d3a68f155dee6199cca517432"
     },
     {
+      "path": "compat/audio/native_voice_audio_probe.c",
+      "bytes": 10332,
+      "sha256": "dafdd36375fd91d02a85b3ad6632421c2d974536de3fe3830a36ebc1c89dffc3"
+    },
+    {
       "path": "compat/audio/pal-headers/PROVENANCE.md",
       "bytes": 2019,
       "sha256": "335eaf4ee451649368f87cb3c73da0a4cc2c67e46cc96ccee0b3347684c5e126"
@@ -349,13 +354,13 @@
     },
     {
       "path": "compat/audio/pal_capture_backend.inc",
-      "bytes": 5894,
-      "sha256": "ac45954a68066d7666f82047b5fbc413c7e8b03a9152c38e679b24dcabf2bf48"
+      "bytes": 6397,
+      "sha256": "cf2f943b2ed06278608640b3088de9437f7e2e35b58088b60782c685d94320bb"
     },
     {
       "path": "compat/audio/pal_capture_worker.inc",
-      "bytes": 5519,
-      "sha256": "baaea5a7dd49fc08d4a7d11ab8723f47161496e33f0fec72269f002b704fb963"
+      "bytes": 5568,
+      "sha256": "105bfb4c0a0a31fb2110e1dd1ad01ebfd4f7aa45ee4a0352ee9332961890c106"
     },
     {
       "path": "compat/audio/pal_client.c",
@@ -379,8 +384,8 @@
     },
     {
       "path": "compat/audio/pal_server.c",
-      "bytes": 13218,
-      "sha256": "a57e9331c47d5e2eff075221bb1980116a36237ada03726e3b1bf37680234995"
+      "bytes": 28643,
+      "sha256": "19a084be3feb038dae2d3243deca1fd0543f584236f38fe920a9130950737583"
     },
     {
       "path": "compat/audio/pcm_fe_probe.c",
@@ -459,8 +464,8 @@
     },
     {
       "path": "compat/audio/protocol.h",
-      "bytes": 1043,
-      "sha256": "77ac3aef844f3004f089c0bb5ee873563e7163f277138c6a62ab94d17f95603e"
+      "bytes": 2030,
+      "sha256": "be03781c8eefe6d489d85da1e2ac42c7af6013560909337ebb819b669eb4352a"
     },
     {
       "path": "compat/audio/runtime/.gitignore",
@@ -484,8 +489,8 @@
     },
     {
       "path": "compat/battery/battery_charge_adapter.cpp",
-      "bytes": 7462,
-      "sha256": "6044094e60156519eb9e30bdeff3c106b53fe83dfaf4eda6c7c3036d7c8b64ec"
+      "bytes": 15599,
+      "sha256": "7b141cf35e141d6ed509618933e3946be1c98455ac4565fbd6421718009c6dcf"
     },
     {
       "path": "compat/battery/battery_charge_adapter.h",
@@ -693,6 +698,176 @@
       "sha256": "3835dc47955a9024fccd64f38160e88d231eabaec02bac7ab42548ffe991b1d3"
     },
     {
+      "path": "compat/camera/build_camera_g3.sh",
+      "bytes": 4724,
+      "sha256": "217d767a6289db4a0afacb6bdf5a01b0be95854bfad07cfff505d5623123bc00"
+    },
+    {
+      "path": "compat/camera/build_camera_g4.sh",
+      "bytes": 5111,
+      "sha256": "4361654496a00395abdaf021fd52b4091c94ee85abe9ab0e48317cd823985c08"
+    },
+    {
+      "path": "compat/camera/build_camera_g5.sh",
+      "bytes": 531,
+      "sha256": "1d92c5ee7abb02cb3ca1f1a19a7849b540d768973d92e6d78de3a45d93870a76"
+    },
+    {
+      "path": "compat/camera/build_camera_m2.sh",
+      "bytes": 7815,
+      "sha256": "18b67364c235b8802cc488eac4aae9472a88752d882214dcc6587162cbe071c3"
+    },
+    {
+      "path": "compat/camera/include/camera.h",
+      "bytes": 540,
+      "sha256": "3872bd6adeea42bf7599ee8e5e7b130f79ae202822b5ad4af79156897b2155f5"
+    },
+    {
+      "path": "compat/camera/include/surface.h",
+      "bytes": 4373,
+      "sha256": "2cdf95cb6bf16320b198f9486d2f20c5b9433566164bc85c91f490861c88e09e"
+    },
+    {
+      "path": "compat/camera/include/v1_0/icamera_device.h",
+      "bytes": 1543,
+      "sha256": "101837eff944f8b3a0f6366ef6e7fc91b7a7aeeb64bb9792625484fc61de5f5d"
+    },
+    {
+      "path": "compat/camera/include/v1_0/icamera_device_callback.h",
+      "bytes": 1095,
+      "sha256": "ffc473d3507543daf7020e444229a7495cc6712ff7553a6909612f307f2a3670"
+    },
+    {
+      "path": "compat/camera/include/v1_0/icamera_host.h",
+      "bytes": 1746,
+      "sha256": "c16c2cbcc913fa3bd8a48d1cd6d57014cb87bf486109fc7b5422a7dcc65b8dcf"
+    },
+    {
+      "path": "compat/camera/include/v1_0/icamera_host_callback.h",
+      "bytes": 1201,
+      "sha256": "ad65ae89a80fe25450fe416e456cd8cfd4ce7b19dfcd2f4084e4915fee99e9d9"
+    },
+    {
+      "path": "compat/camera/include/v1_0/ioffline_stream_operator.h",
+      "bytes": 1116,
+      "sha256": "5c255bde9fe6d1006ba4257bc28d8baf342626972ad660da8e299c3b1c1ced76"
+    },
+    {
+      "path": "compat/camera/include/v1_0/istream_operator.h",
+      "bytes": 2227,
+      "sha256": "6dbc5499efa3a6d369114f8055b4e9e9fac3ce2f52149b1ab1c4976a768bd542"
+    },
+    {
+      "path": "compat/camera/include/v1_0/istream_operator_callback.h",
+      "bytes": 1410,
+      "sha256": "832f1697726b6fa9c4a5196135000f990b3af8b79d3671a3e83e8ab76346a754"
+    },
+    {
+      "path": "compat/camera/include/v1_0/types.h",
+      "bytes": 3527,
+      "sha256": "4ee6ff872ebdf158129c9df7594ffdc39ee0cf621172ccf5082d261c1b4bdb7a"
+    },
+    {
+      "path": "compat/camera/include/v1_1/icamera_device.h",
+      "bytes": 1196,
+      "sha256": "c505d351d6a241e9d7744eb91704d3c0e4be77e200f8f522a4bbf0799e525c28"
+    },
+    {
+      "path": "compat/camera/include/v1_1/icamera_host.h",
+      "bytes": 1350,
+      "sha256": "255f016514275c814b2faf347dd4d22250964913a83ee49e75aa29ea2fae6fea"
+    },
+    {
+      "path": "compat/camera/include/v1_1/istream_operator.h",
+      "bytes": 1473,
+      "sha256": "3336e5008ac131d501f3657287b5130c3af19d009d375536f383c4d03f4bfafb"
+    },
+    {
+      "path": "compat/camera/include/v1_1/types.h",
+      "bytes": 1878,
+      "sha256": "3606dea7e58ba801f722d8af7d4a9279d3446dfe0a8b0565ef5aee62c07b939f"
+    },
+    {
+      "path": "compat/camera/include/v1_2/icamera_device.h",
+      "bytes": 1330,
+      "sha256": "70da296064067690e1f85cee6b8dfbcebc1237c34deac10f9b205e87a166473d"
+    },
+    {
+      "path": "compat/camera/include/v1_2/icamera_host.h",
+      "bytes": 1788,
+      "sha256": "2657e22ead3d4dee28c9e21c6fe5297df0c3c5681b7286790d04b2d647ea972a"
+    },
+    {
+      "path": "compat/camera/include/v1_2/icamera_host_callback.h",
+      "bytes": 1003,
+      "sha256": "96c01a8e2680171f40aca8b2a5f7ce771648616e443163758c1efe7c54f6e05c"
+    },
+    {
+      "path": "compat/camera/include/v1_2/istream_operator.h",
+      "bytes": 1062,
+      "sha256": "559ece18d22fd5db3407609300b34978110fbadfff92b9af4fc89ad8da2d6eba"
+    },
+    {
+      "path": "compat/camera/include/v1_2/istream_operator_callback.h",
+      "bytes": 1127,
+      "sha256": "94a959e1d9b688f11dd6107bb27f849b4d32c97172bcc934715dbf852a83015e"
+    },
+    {
+      "path": "compat/camera/include/v1_2/types.h",
+      "bytes": 1315,
+      "sha256": "b7016fd5863bdbd9d995e07b3ff0959e21b54b5b01eb0ca278d80fc1da2bfa84"
+    },
+    {
+      "path": "compat/camera/marble_camera_host_service_1.2.cpp",
+      "bytes": 39903,
+      "sha256": "3aca5d7a478a0404cbe0dca9a5628d36fe4bfc37708a8d4ad701c2f9997f8225"
+    },
+    {
+      "path": "compat/camera/marble_camera_hw_capture.c",
+      "bytes": 24822,
+      "sha256": "35012529f25f6fd7fda970d63bb9a7bd0672e7fc32e5e0e8fdddd7425991004e"
+    },
+    {
+      "path": "compat/camera/marble_camera_probe.c",
+      "bytes": 24212,
+      "sha256": "fb9b69e030b201cb3de1f41a5a96045aa45ee358789ce4392829990ca86756ee"
+    },
+    {
+      "path": "compat/camera/marble_camera_vdi_impl.cpp",
+      "bytes": 82697,
+      "sha256": "8ee3bc91b0c09a9af014ad0d300634561ce10e27670e94bf77e991416d08240c"
+    },
+    {
+      "path": "compat/camera/marble_isp_capture.c",
+      "bytes": 164740,
+      "sha256": "35dd1e9e497faf4d7d6b62bfb8260649fe56207b8ef1814d2fb973970bc56111"
+    },
+    {
+      "path": "compat/camera/marble_isp_capture.h",
+      "bytes": 13124,
+      "sha256": "826c7ee37683c85d8b518f42d758b70a724e5e5f2eba5d251106d6cdae4b5383"
+    },
+    {
+      "path": "compat/camera/marble_sensor_tables.h",
+      "bytes": 60448,
+      "sha256": "0651869edd5025a559a2a7d960df8f63367a0258c1ea3ef168cfc1cceefc5393"
+    },
+    {
+      "path": "compat/camera/marble_torch_ctrl.h",
+      "bytes": 5706,
+      "sha256": "cad834d9d0d1ad79054adb9c4eaf9e21262a11d660c0463428a49ea0a2659bde"
+    },
+    {
+      "path": "compat/camera/native_camera_hdi_probe.cpp",
+      "bytes": 31911,
+      "sha256": "93f7e1e58452ba977a0207f69c57de7acdc9bf8b49d84cc3bf4daa59ebe3071d"
+    },
+    {
+      "path": "compat/camera/ohcamera_fwk_probe.cpp",
+      "bytes": 6952,
+      "sha256": "2a4ed38648f1d2430e86395a0757c5d2ca1203814e4f3c10e5db3a59426b2c58"
+    },
+    {
       "path": "compat/codec/build-native-avplayer-probe.sh",
       "bytes": 1301,
       "sha256": "f09000db3d9959413fa01a4de5ea72cbc38de5ca37cb902fe16e83e82928613b"
@@ -701,6 +876,16 @@
       "path": "compat/codec/build-native-codec-probe.sh",
       "bytes": 1181,
       "sha256": "149be5d2a78cec93c726c35a75a8c6c44fc1abc1ad0baa7e06b11548aa2378f6"
+    },
+    {
+      "path": "compat/codec/build_venc_h4.sh",
+      "bytes": 847,
+      "sha256": "b72739f457685d6e56017ff4ec0809fe49b161ad7f43930090d4bcd8f281924b"
+    },
+    {
+      "path": "compat/codec/build_venc_h6.sh",
+      "bytes": 1922,
+      "sha256": "9160bff77b70b19e8e2ba3c9fee2e15da43709e7ff1b825fac01a369941c9c31"
     },
     {
       "path": "compat/codec/codec_inventory_marble.json",
@@ -743,6 +928,11 @@
       "sha256": "827fdf2a0b747fac57f32bbf3bc9212dedebf03f241d6ca99bb34666a3a59a0b"
     },
     {
+      "path": "compat/codec/native_venc_probe.c",
+      "bytes": 28189,
+      "sha256": "5a7225d9f404bfb0ce7d8e159c23eba5cea305b9a6670f74e0f25751cba7c206"
+    },
+    {
       "path": "compat/codec/native_venus_decode_test.c",
       "bytes": 14279,
       "sha256": "c9e99a7bcdb34599b24e67ff0c2b90144ddd4434d354ea959216e4441079eb00"
@@ -754,13 +944,13 @@
     },
     {
       "path": "compat/codec/omx_core_venus.c",
-      "bytes": 107093,
-      "sha256": "83f2651af2599ef32df3a3e10eeae60567a34a465d32d10f0d113ad655d49f83"
+      "bytes": 128538,
+      "sha256": "1d8c6bfce893d4367b3881dc22318a3ff0c02821a270e94a805032598751d7c3"
     },
     {
       "path": "compat/codec/omx_il_minimal.h",
       "bytes": 26495,
-      "sha256": "f4dea10af16c940c9d9780a443995af880d4537c787b07568f617c625b91feb0"
+      "sha256": "f0be196ac5de447d0fc25271cf4e345425e6f49a7b60ac3e3c595b5680ddef41"
     },
     {
       "path": "compat/codec/venus_v4l2.c",
@@ -799,8 +989,8 @@
     },
     {
       "path": "compat/dcm/hmos_dcm_token_probe.cpp",
-      "bytes": 11542,
-      "sha256": "3e5a3255676bf74689344f4d1b50494d4ba74e7e53e2c6debb2fe26124d7cbd8"
+      "bytes": 19310,
+      "sha256": "4fb9cd02736a2d60f2ebe7d2c1e39ff7e0211364c977c74fd8f285e07450253b"
     },
     {
       "path": "compat/display/buffer_vdi.cpp",
@@ -814,8 +1004,8 @@
     },
     {
       "path": "compat/display/composer_vdi.cpp",
-      "bytes": 77383,
-      "sha256": "72e94ee13e311abf3da19fe70fcdf54973a830dce4b64e24d177aa4727753bb7"
+      "bytes": 93672,
+      "sha256": "453dc1bad27c6ca58a79f6a3bb06adf4c778f765b79cb812684476be5edac48b"
     },
     {
       "path": "compat/display/direct_scanout_state.h",
@@ -824,8 +1014,8 @@
     },
     {
       "path": "compat/display/displayengine_module.cpp",
-      "bytes": 4099,
-      "sha256": "9e0510a3790b25cd62c0f38cca6099e20f56b93526784ec7045b2b98b12494de"
+      "bytes": 11523,
+      "sha256": "5028129f03849fa0759313db9dbf92551ef6b83ca1497f87e7e166c5158a3614"
     },
     {
       "path": "compat/display/include/display/buffer/v1_0/display_buffer_type.h",
@@ -994,8 +1184,8 @@
     },
     {
       "path": "compat/graphics/mesa-turnip.patch",
-      "bytes": 59034,
-      "sha256": "6c9bfe86fcbdc5242ae4d5f6ad2d9c50bdbf8f7e0ac4ac8cf4407c39897a0977"
+      "bytes": 63850,
+      "sha256": "7511dd5dd6ebfb89e4fc9fe9df80dc2496b774ff9488271937bcc5dee6e2ccd0"
     },
     {
       "path": "compat/graphics/mesa-zink-msaa-guard.patch",
@@ -1024,8 +1214,8 @@
     },
     {
       "path": "compat/huks/soft_huks_hdi.c",
-      "bytes": 15624,
-      "sha256": "a7f7802204c3f458f82a4cca588fa3c02dda3af71f4b38433d4802576dafc3c0"
+      "bytes": 15947,
+      "sha256": "5371e726be9e3278a6f768e03725087d4fe1661f93f3344c0b00e1f98806bdb3"
     },
     {
       "path": "compat/huks/soft_huks_store.c",
@@ -1039,8 +1229,8 @@
     },
     {
       "path": "compat/huks/tests/soft_huks_selftest.c",
-      "bytes": 47406,
-      "sha256": "115ae67682cf24c96b27d0e94fdd43673a2bb9648ca923d12e2e2e15b742ee58"
+      "bytes": 47644,
+      "sha256": "9452d6dbf61657979a1ee2a7da8d2556ac6843a2e2bd31604ce61119cd1ea972"
     },
     {
       "path": "compat/ipc/Makefile",
@@ -1119,8 +1309,158 @@
     },
     {
       "path": "compat/location/native_gnss_hdi_publisher.c",
-      "bytes": 60289,
-      "sha256": "f38d305f0eabce24174a6b7f269967a7e54a06712426dea1964c1c350ca74044"
+      "bytes": 63625,
+      "sha256": "916857bd72a1f4bcf600dbea7fc53b55968a6e3bab66892ac7f4741b7cc84584"
+    },
+    {
+      "path": "compat/memorytracker/build_memorytracker_h5.sh",
+      "bytes": 3482,
+      "sha256": "e84ec51f83f1b8b7583d5c0a0d45b3cc1b6069531103865facc022ea836e053a"
+    },
+    {
+      "path": "compat/memorytracker/include/v1_0/imemory_tracker_interface.h",
+      "bytes": 1301,
+      "sha256": "7d04bced339ee22ece625acc13102b3c3333a5994cb14087ddee385585ad00e7"
+    },
+    {
+      "path": "compat/memorytracker/include/v1_0/memory_tracker_types.h",
+      "bytes": 1374,
+      "sha256": "aa376a902daef37831ae15ba44e2c056b8a93fa0bf994b568bc2140b8e5af9b9"
+    },
+    {
+      "path": "compat/memorytracker/marble_memorytracker_hdi_impl.cpp",
+      "bytes": 10844,
+      "sha256": "d45233e7dadaa0b2f5227e13307ad5563da8f9a515e0cdd053dee6b7e8399a15"
+    },
+    {
+      "path": "compat/memorytracker/native_memorytracker_hdi_probe.cpp",
+      "bytes": 5542,
+      "sha256": "f422f7ddc2249ff36d8441f0fdc4c7f2a747251304b724432977cd994246d947"
+    },
+    {
+      "path": "compat/motion/build_motion_m4.sh",
+      "bytes": 5656,
+      "sha256": "105e450c040bb7b28daf333dc9d4e4ce695fca00f756641252e5efc1a8b16836"
+    },
+    {
+      "path": "compat/motion/include/v1_0/imotion_callback.h",
+      "bytes": 1094,
+      "sha256": "9a9aba1e62e08a4ffb7880cf9de0650c447f70542b87a02146c00d405240c6fd"
+    },
+    {
+      "path": "compat/motion/include/v1_0/imotion_interface.h",
+      "bytes": 1563,
+      "sha256": "8f9003dd437ac73af97f33bcd5c6077e0bdd2b8251ce7d596ff2ab6060c11356"
+    },
+    {
+      "path": "compat/motion/include/v1_0/motion_types.h",
+      "bytes": 1435,
+      "sha256": "462fc7a447a9fe4dfdbb06d30fce151693d87fe082849501a36e4ee5d1a98513"
+    },
+    {
+      "path": "compat/motion/include/v1_1/imotion_interface.h",
+      "bytes": 1649,
+      "sha256": "51126b43ff8917ac66b09ca93521deae5805c6c8a0412163282ffa37c13e9f2c"
+    },
+    {
+      "path": "compat/motion/include/v1_1/motion_types.h",
+      "bytes": 1040,
+      "sha256": "c9a3abf2b82ecc8f7e362b420af31c499af414daf6ffed69ff3c16ca6861d148"
+    },
+    {
+      "path": "compat/motion/marble_motion_interface_service_1.1.cpp",
+      "bytes": 9820,
+      "sha256": "9dad69b879bbf5edd42c0fca3185f36fe23db1c3c860c565ab903c50d2d2e92f"
+    },
+    {
+      "path": "compat/motion/native_motion_hdi_probe.cpp",
+      "bytes": 4172,
+      "sha256": "254fdf40bef9337abcab84d85dc80a0af0ccfef1825a3acd0702fc5de38e51fe"
+    },
+    {
+      "path": "compat/motion/pickup_detector.h",
+      "bytes": 11114,
+      "sha256": "574edd03408b306252e4d80e5613e9738e5367381061de324e7b3f24bfb28164"
+    },
+    {
+      "path": "compat/motion/ssc_motion_client.h",
+      "bytes": 18281,
+      "sha256": "96f2dcc58ab9442c9cbf64f8ac8ed305d809bfd2295b9fb24e6939511917d3b0"
+    },
+    {
+      "path": "compat/motion/ssc_motion_wire.c",
+      "bytes": 19154,
+      "sha256": "123a6eed41545b4c4cccaad89746fe461cb4fa3ae717e1a9dd736cdc7fd385d4"
+    },
+    {
+      "path": "compat/motion/ssc_motion_wire.h",
+      "bytes": 2087,
+      "sha256": "077bfbd3c8e906bb3de618f80573ff652b7c76575b394c76a03ac9d475e24693"
+    },
+    {
+      "path": "compat/motion/test_pickup_detector_host.cpp",
+      "bytes": 17319,
+      "sha256": "a0e6db03cdc4bfb5e0a4cf5529a18c55af24d11371b9f56dac874690af0ad08e"
+    },
+    {
+      "path": "compat/nfc/build_nfc_h1.sh",
+      "bytes": 3612,
+      "sha256": "388cec1633fd0f216b41bb648696c0e308559ecb6927b307dc31f267db0e335c"
+    },
+    {
+      "path": "compat/nfc/build_nfc_h7.sh",
+      "bytes": 2904,
+      "sha256": "c599fce66db9a4632166de3005e522f9943cf3f436262d9f640089d93326f079"
+    },
+    {
+      "path": "compat/nfc/include/v1_0/infc_callback.h",
+      "bytes": 1089,
+      "sha256": "f0315796426815eeb6f793fcc49e23b4ca080c54f646b0683472f797eaa84bfb"
+    },
+    {
+      "path": "compat/nfc/include/v1_0/infc_interface.h",
+      "bytes": 2064,
+      "sha256": "87a8e6fb7766608fb9ef59a735b496393416b165ff05bbe641b3cb80f7406796"
+    },
+    {
+      "path": "compat/nfc/include/v1_0/nfc_types.h",
+      "bytes": 704,
+      "sha256": "502d415f086a5c24eb84331561537ccddfc96c3c2b2547ec5edfbc25044515d7"
+    },
+    {
+      "path": "compat/nfc/include/v1_1/infc_interface.h",
+      "bytes": 1726,
+      "sha256": "8ac56a7dbef9e55ce4722fc0ffba05faae24ac56f9eee3e088477605d0570f92"
+    },
+    {
+      "path": "compat/nfc/include/v1_1/nfc_types.h",
+      "bytes": 2386,
+      "sha256": "3ef1aedf09dfc1164afc97114ab74d69fb4b8490828d3613c25f6d518923a01c"
+    },
+    {
+      "path": "compat/nfc/marble_nci_native_vendor.cpp",
+      "bytes": 10377,
+      "sha256": "66fd1ba19383b4120afcf0f9ac575c38d5b943735c2ff3fa33bfd2655170a183"
+    },
+    {
+      "path": "compat/nfc/marble_nfc_hdi_impl.cpp",
+      "bytes": 13591,
+      "sha256": "2227724b083140f4707e0e13c243ca334c10b523c91358e0da9bd15e7be20f6c"
+    },
+    {
+      "path": "compat/nfc/marble_nfc_hw_probe.c",
+      "bytes": 5865,
+      "sha256": "a9b49afe2553341346b61dff7e7e6ebd13e196d37c46a15e40c824b564579872"
+    },
+    {
+      "path": "compat/nfc/native_nfc_fwk_probe.cpp",
+      "bytes": 9333,
+      "sha256": "007cf9ee016ee6d45ce296114fa26eb8b838f46e6abeb4cd76e37f4618d3fe98"
+    },
+    {
+      "path": "compat/nfc/native_nfc_hdi_probe.cpp",
+      "bytes": 9777,
+      "sha256": "d08b80fb46da8158d067fc9c44253a47feab747f4310d12c992cb5b5fdcc3fee"
     },
     {
       "path": "compat/notify/ans-foundation-sa.json",
@@ -1133,6 +1473,36 @@
       "sha256": "811e217a8f7be4103780a9a29c6d505cf1e513ea1d8780d5ee83398ae251fa17"
     },
     {
+      "path": "compat/pinauth/all_in_one_impl.cpp",
+      "bytes": 20067,
+      "sha256": "3d37b601550654746e31938f48c32b4fc9739beba2992a745ff0885ffa127a26"
+    },
+    {
+      "path": "compat/pinauth/build_pinauth.sh",
+      "bytes": 10470,
+      "sha256": "193d2053e3a2d373d5e465773ed21792684800148f247814b24becd54a123481"
+    },
+    {
+      "path": "compat/pinauth/host_test_all_in_one.cpp",
+      "bytes": 15414,
+      "sha256": "901173d8e8e98c4596fd2b7de5a65c63135afba223645aba2a5a207057bba32c"
+    },
+    {
+      "path": "compat/pinauth/host_test_pinauth.c",
+      "bytes": 8198,
+      "sha256": "e8bff9e653576974745837e7b9967ffe9252f4785c1f0f91f0899b622c6057ec"
+    },
+    {
+      "path": "compat/pinauth/include/parameter.h",
+      "bytes": 287,
+      "sha256": "66350071cd01093854a801c371c1168f08f4af8d75e9f41a57f71a3db692bcef"
+    },
+    {
+      "path": "compat/pinauth/include/sysparam_errno.h",
+      "bytes": 250,
+      "sha256": "81ab0f62939447b62f093ce759874b84c6a6ec918d5589fda0ce6a4b4ef9c199"
+    },
+    {
       "path": "compat/platform/platform_cpp_config.h",
       "bytes": 452,
       "sha256": "e98ca53719580fd9c471aba14de3ab8886964afbc3b8651bdfadcd1df4bcc686"
@@ -1141,6 +1511,56 @@
       "path": "compat/power/batterysecret_process_compat.c",
       "bytes": 1032,
       "sha256": "3cb2c269b4db0777e9049c2ae17ee4b675b92d9a740be3e5b73d17922e422a92"
+    },
+    {
+      "path": "compat/power/build_power_h3.sh",
+      "bytes": 3375,
+      "sha256": "8b02414e4e9cc3d3d3fb3c7ce66ec6fbdaeee31dd33f36f40383e19939a3204e"
+    },
+    {
+      "path": "compat/power/include/v1_2/ipower_hdi_callback.h",
+      "bytes": 953,
+      "sha256": "c12023c37c3993617aaa24059b6f3f46fcb4d5f9791677fc80045afc66362f7a"
+    },
+    {
+      "path": "compat/power/include/v1_2/ipower_interface.h",
+      "bytes": 2733,
+      "sha256": "c4d8ed16658c8ec9599f8466236b1e80222162bab7194176d2a8ea67129d32ff"
+    },
+    {
+      "path": "compat/power/include/v1_2/ipower_running_lock_callback.h",
+      "bytes": 1005,
+      "sha256": "e6e8cbaea77c991d390a7c80d51a231c0764b50100ff68f447a978c603fb26a5"
+    },
+    {
+      "path": "compat/power/include/v1_2/running_lock_types.h",
+      "bytes": 1564,
+      "sha256": "1b6187c43baf8521fa69a854b4cd72d0cf855c5cb37a9d6509c16450b75d495b"
+    },
+    {
+      "path": "compat/power/include/v1_3/ipower_hdi_callback_ext.h",
+      "bytes": 1029,
+      "sha256": "af9c7c1cd5b8ae51998b83fdbcbb5c2edbf603fd3ba4cff8f7f62ca37a93d2e5"
+    },
+    {
+      "path": "compat/power/include/v1_3/ipower_interface.h",
+      "bytes": 1372,
+      "sha256": "a37f4ff9a21d15d5d81bf7b075677c7fd3ea0feeb63e93fcc8d8558d1a06a90a"
+    },
+    {
+      "path": "compat/power/marble_power_hdi_impl.cpp",
+      "bytes": 11624,
+      "sha256": "f95e6dae76aca310e10a2ebccfc1956a16f54a4392a34ad2787f9a87379f3b8a"
+    },
+    {
+      "path": "compat/power/native_power_hdi_probe.cpp",
+      "bytes": 7656,
+      "sha256": "81319a661b5ee1559090e2f7c5093597eea9b3ef8dbe61f2003ed990808de0bb"
+    },
+    {
+      "path": "compat/power/thermal/build_mi_thermal_marble.sh",
+      "bytes": 6120,
+      "sha256": "b66ffecaab04d0d0531475563261df464fd3af4f09cfbd7a9da66f5053e72df8"
     },
     {
       "path": "compat/power/thermal/init-fusion-services-r2.cfg",
@@ -1158,9 +1578,19 @@
       "sha256": "cdf5bcee8fa18848c509ec9b14fd8dcf28f09a87a2386ab1eb667237b25e9259"
     },
     {
+      "path": "compat/power/thermal/native_thermal_launcher_marble.c",
+      "bytes": 5514,
+      "sha256": "3cd218e8ed7cad7b0087a0e68d8c7c42b4951ed849ee1548f2dbf6c6f85308e9"
+    },
+    {
       "path": "compat/power/thermal/stage-xiaomi-thermal.sh",
       "bytes": 1049,
       "sha256": "9bf727c2aa157729c4a247949de10afb65c5b8e8492226c7d9f71dc1640963df"
+    },
+    {
+      "path": "compat/power/thermal/test_native_thermal_launcher_marble.c",
+      "bytes": 5281,
+      "sha256": "670ce2fd739269b31cefa0837e78421aba8154bb22a952b13e48958203ba5828"
     },
     {
       "path": "compat/privacy/init-privacy-marble.cfg",
@@ -1209,8 +1639,8 @@
     },
     {
       "path": "compat/sensors/sensor_interface_service.cpp",
-      "bytes": 20618,
-      "sha256": "df34b5fc2847b995c53bd5aa10497dd40791decde5112c249822c692c9031675"
+      "bytes": 26818,
+      "sha256": "f8215c1ba97644bcc98ef5aa55a75eabda5ca8609a0bb9d750dbe3111fc8f156"
     },
     {
       "path": "compat/sensors/sensor_interface_service.h",
@@ -1219,13 +1649,13 @@
     },
     {
       "path": "compat/sensors/ssc_backend.c",
-      "bytes": 26496,
-      "sha256": "be99d58beb23dc287f25f2e4a974cd07186a77ec68a27a3a2d54097485229080"
+      "bytes": 26585,
+      "sha256": "d8ffcede84734ef1b888bacbee8b32bd7a9bf69c9a9694ee5e877e8a9f020889"
     },
     {
       "path": "compat/sensors/ssc_backend.h",
-      "bytes": 4038,
-      "sha256": "13a62a720d36b1dda20f7bb80978932b2715435363a1e8bfa2255844be7a0e60"
+      "bytes": 4066,
+      "sha256": "3064ef0387fbee62be2fedafa135abc0ab7b627f23be99cef9b73aa80ed5754b"
     },
     {
       "path": "compat/sensors/ssc_time.c",
@@ -1378,6 +1808,11 @@
       "sha256": "e255ad4578aa51da5a8f5acfe93f72bceb9e44aa2518484222f2ea68e8d5f084"
     },
     {
+      "path": "compat/telephony/hmos_ims_core_service.cpp",
+      "bytes": 68692,
+      "sha256": "7b21ec852954f22cc24ea766ab08aa7b567de14bf18b7b2322adc3248583a18e"
+    },
+    {
       "path": "compat/telephony/hmos_rmtfs.c",
       "bytes": 26479,
       "sha256": "882730e16fe0495bbb2aa49e371bd41ebe59e9cb5d2a7d4ab7d0d71f3ebd0c6a"
@@ -1389,18 +1824,23 @@
     },
     {
       "path": "compat/telephony/hril_vendor_abi.h",
-      "bytes": 14196,
-      "sha256": "739c2370c59c348e97ec10ff92deb4331daf5707d5a17e224b80a61b44b4aee0"
+      "bytes": 28157,
+      "sha256": "0958247c8391052e30e4d15a9d26b0bb078a35d57cf53dbe6c35d9c4b8e87c9d"
+    },
+    {
+      "path": "compat/telephony/ims_core_wire.h",
+      "bytes": 34234,
+      "sha256": "072d2aaff6f1780e7f234b94924afbdc1bb3e40d1b9b2ddbd99f11c1e8fd8236"
     },
     {
       "path": "compat/telephony/libril_vendor_qmi.c",
-      "bytes": 78520,
-      "sha256": "65b11a2dc169e44b9539f6b754999ad7106e5cfa33d84a07db582dcd9721cc91"
+      "bytes": 214176,
+      "sha256": "a32143b92de60d63576b2d8b7196ffbd6bbf234417fabf4af99000d62c4d8b3a"
     },
     {
       "path": "compat/telephony/marble_modem_probe.c",
-      "bytes": 104571,
-      "sha256": "1ca13036d485a7c01753e6f98e92d91e1ce34ff4ac48fe88f143e386d52f6767"
+      "bytes": 130130,
+      "sha256": "31bc30ae7f11d35633e30a2195a8947dc7627c7414e5f971712f77270760f5f1"
     },
     {
       "path": "compat/telephony/native_ril_hdi_loader.c",
@@ -1416,6 +1856,41 @@
       "path": "compat/telephony/qmi_rmtfs.h",
       "bytes": 2217,
       "sha256": "a9f939a38bdb4eaf2feb2bddc84ac7602c99653fa7688649ea6c3fd2e64b7566"
+    },
+    {
+      "path": "compat/thermal/build_thermal_h2.sh",
+      "bytes": 3364,
+      "sha256": "63e33ac2b513320cb80a4eb439776e5ab5b610236c5b3bc4990f52d513316867"
+    },
+    {
+      "path": "compat/thermal/include/v1_1/ifan_callback.h",
+      "bytes": 996,
+      "sha256": "1c95de60454de77b08a42a6db8cf5b0280d7beb69f1b1a99384377934f490dcc"
+    },
+    {
+      "path": "compat/thermal/include/v1_1/ithermal_callback.h",
+      "bytes": 1024,
+      "sha256": "f0c3587c83ab68fb4d2b39a797af3edc50504f76653d7000fd0af3bda23c614d"
+    },
+    {
+      "path": "compat/thermal/include/v1_1/ithermal_interface.h",
+      "bytes": 1816,
+      "sha256": "e58518437b6df9e4d3d3846321597555b3c7dcbb29cafcc41b0711fbe264e7b1"
+    },
+    {
+      "path": "compat/thermal/include/v1_1/thermal_types.h",
+      "bytes": 950,
+      "sha256": "2ed2b4bb49c0ee26593a5986439170450ab08ab6b61aaf375bbfacc7e6c91270"
+    },
+    {
+      "path": "compat/thermal/marble_thermal_hdi_impl.cpp",
+      "bytes": 10669,
+      "sha256": "83cba2ef247ee88676525f706614732db3fdd1c3052095161049d9ada977e2fc"
+    },
+    {
+      "path": "compat/thermal/native_thermal_hdi_probe.cpp",
+      "bytes": 6347,
+      "sha256": "4c61cfc9c26c344b0fe6e5ec9efbe41c54b81efce730e4a4a6a8b24b3abb93e7"
     },
     {
       "path": "compat/touch/LICENSE",
@@ -1438,6 +1913,11 @@
       "sha256": "68c608cb3b05bd473a8736ad99db77a63e531b1059f41f4328e248ee9942a738"
     },
     {
+      "path": "compat/touch/marble_touch_wakeup.c",
+      "bytes": 34400,
+      "sha256": "da1a70648866b9e222fb03e7ddf45ee7750e64571cf96cb1705cdc95689b7170"
+    },
+    {
       "path": "compat/touch/nvt_finger_filter.cpp",
       "bytes": 26644,
       "sha256": "e3c910c6d3e561d4ecafeab6b1b5d6259a21820e8c84c263d40cd73e511d75c1"
@@ -1458,9 +1938,39 @@
       "sha256": "42515bb7b4c138cf1148ff2d23f5fbf2838a98bf870500aa89b6b783e53a0c83"
     },
     {
+      "path": "compat/usb/build_usb_h4.sh",
+      "bytes": 3454,
+      "sha256": "56e1ef1a551a0e885cb2cc1a68a576b49a63e84ae0a212c7d681b9098cc77bb1"
+    },
+    {
+      "path": "compat/usb/include/v2_0/iusb_port_interface.h",
+      "bytes": 1557,
+      "sha256": "cd222cf3ddc316b567f8da2abb0b68f44975a019bd2d7a447435937e48b5de7c"
+    },
+    {
+      "path": "compat/usb/include/v2_0/iusbd_subscriber.h",
+      "bytes": 1015,
+      "sha256": "125bb530020f5a25ade3b9521b271f6d79b35106be3b60df58e308db395ed687"
+    },
+    {
+      "path": "compat/usb/include/v2_0/usb_types.h",
+      "bytes": 3128,
+      "sha256": "4389a732db651cf1d22ba14f92b52f4d5746115747156be9ff0d5b12d65753c4"
+    },
+    {
+      "path": "compat/usb/marble_usb_port_hdi_impl.cpp",
+      "bytes": 12230,
+      "sha256": "1830d765a8007de1c8e7e6d914eb2303731ce5f6119201fec2ba1911a7449d09"
+    },
+    {
+      "path": "compat/usb/native_usb_port_hdi_probe.cpp",
+      "bytes": 5970,
+      "sha256": "c99e3f524943dae11045bfb72834d68e0a2dfe0b96d0d8483b4b8ca278332814"
+    },
+    {
       "path": "compat/useriam/adapter41.cpp",
-      "bytes": 8260,
-      "sha256": "6024b58c3f350c44bbc65e571114a450b85ad142fb7181184a4b331d37d846b4"
+      "bytes": 8960,
+      "sha256": "bdf34d694b3931386531601052bca0a078d22a900c6148e3140fc065abd3e1a1"
     },
     {
       "path": "compat/useriam/build_backend.py",
@@ -1618,6 +2128,51 @@
       "sha256": "452329f088c0e8ff090770ca1e54e746513781354a6e03a96d74244c66a00090"
     },
     {
+      "path": "compat/vibrator/build_vibrator_m1.sh",
+      "bytes": 4733,
+      "sha256": "38f493485a3efd96b9ea079ba4a93e0ba87e1d6e711fac99d921c46ce479c831"
+    },
+    {
+      "path": "compat/vibrator/include/v2_0/ivibrator_interface.h",
+      "bytes": 4225,
+      "sha256": "4722b5414b099f63afa5c3bccec7df106e458dd31b9dc1b38c09262c4ad793a7"
+    },
+    {
+      "path": "compat/vibrator/include/v2_0/ivibrator_plug_callback.h",
+      "bytes": 1050,
+      "sha256": "29fe969b30f69ba874a99b365d40007307500e0a3a8265f1c6d59bd14c69c863"
+    },
+    {
+      "path": "compat/vibrator/include/v2_0/vibrator_types.h",
+      "bytes": 11656,
+      "sha256": "48f2b16ecebdee99209da20aa3c850a8fa0c1679793d5a577ebc95819468082a"
+    },
+    {
+      "path": "compat/vibrator/marble_vibrator_backend.h",
+      "bytes": 25946,
+      "sha256": "eb7d01120d47a5c2323d3a458ee44bf7c0365f915e2fbe2e585c8755da44a9f4"
+    },
+    {
+      "path": "compat/vibrator/marble_vibrator_hdi_impl.cpp",
+      "bytes": 12589,
+      "sha256": "a2a28230be439615436f8b5471b11d4dc7e200932e3321079c10281c9760d921"
+    },
+    {
+      "path": "compat/vibrator/native_vibrator_hdi_probe.cpp",
+      "bytes": 7900,
+      "sha256": "3ce0a378bbe8534d0054da29e4f69a4947cd113ab0fec180aa7454dd064e37f6"
+    },
+    {
+      "path": "compat/vibrator/test_vibrator_host.cpp",
+      "bytes": 15379,
+      "sha256": "5b2c5ff307004774388d87aea769dd2dd060af7e3bce443228deedcd69298998"
+    },
+    {
+      "path": "compat/wifi/build_wifi_softap.sh",
+      "bytes": 16297,
+      "sha256": "4c2c77a5e2983265b7a84c8e9b272a5b5325e43ced9f43318b87c9799fe15430"
+    },
+    {
       "path": "compat/wifi/include/linux/nl80211.h",
       "bytes": 335664,
       "sha256": "9cd87441340c00ce11d04b6009d504ba83764f6e5a170de013420dcef566fa40"
@@ -1663,6 +2218,16 @@
       "sha256": "6d7c48f26275ebea761d747fa70969380c5d734de21b2b06170f631e19e6570d"
     },
     {
+      "path": "compat/wifi/test_wifi_softap_shim.c",
+      "bytes": 4305,
+      "sha256": "268d661a569cca96de1df522989a54fef2c00ed11a6281f7f290e9e52e37dda8"
+    },
+    {
+      "path": "compat/wifi/test_wifi_softap_stack.py",
+      "bytes": 15614,
+      "sha256": "d4210ecd28e19b92b07e012e7e64b256ae972e02c0f9d6ffdac3288c62f266db"
+    },
+    {
       "path": "compat/wifi/wifi_caps_v134.c",
       "bytes": 7879,
       "sha256": "8e3f08a593ad84f5062b3690a3e4b6eddbd2fc611ff7522e1b54594a58f8c073"
@@ -1683,9 +2248,19 @@
       "sha256": "94ad5816afbb738c90b496b2e0796f3cf5bf2d7f331639acc7bab55c89a993cc"
     },
     {
+      "path": "compat/wifi/wpa_softap_hdi_shim.c",
+      "bytes": 3742,
+      "sha256": "baea211ce7ae84117b64974d37c517825137f5b235ebd10aea0cb12500171ed8"
+    },
+    {
+      "path": "compat/wifi/wpa_softap_hdi_shim.h",
+      "bytes": 1872,
+      "sha256": "8cefd1e1eadc4c4d893e51d29f6fce27d87ec79cc191381b4f36d95fd55038b7"
+    },
+    {
       "path": "devices/marble/README.md",
-      "bytes": 4023,
-      "sha256": "d0c4c76255bd81d7aba9e0204bb837ffa2c90dad77658b83419db6d9ca0d20b1"
+      "bytes": 4839,
+      "sha256": "afd41beb974135bba88df15ff83daa744d1f90093d46df54ebd626907fde262d"
     },
     {
       "path": "devices/marble/boot/marble_init_entry.c",
@@ -1711,6 +2286,26 @@
       "path": "devices/marble/kernel/marble-exports.patch",
       "bytes": 462,
       "sha256": "19d8efe2d0bb9116a9d66708ab58c24c234d23b91ef54eb1610c758d24ea38b6"
+    },
+    {
+      "path": "devices/marble/runtime/anco/init-m4-anco-marble.cfg",
+      "bytes": 27556,
+      "sha256": "ce39870812b5be91ac5c856700f0256eadb5139a8e78c5e41a727cb36cdacacb"
+    },
+    {
+      "path": "devices/marble/runtime/anco/start-anco-m4-marble.sh",
+      "bytes": 14433,
+      "sha256": "a6bbd971054c48722b734b190d3414c066b817783dad7b50906f116beaa78339"
+    },
+    {
+      "path": "devices/marble/runtime/aod/aod-marble.json",
+      "bytes": 272,
+      "sha256": "79be76875511c6a3e709e89bc1af986b1bcbff4a4485c4de10a123136b9c3eb5"
+    },
+    {
+      "path": "devices/marble/runtime/aod/init-m5-aod-marble.cfg",
+      "bytes": 873,
+      "sha256": "9638e3741aaade26be4ae7c59fd02310c7580848c4f21d9905662486d5b6539e"
     },
     {
       "path": "devices/marble/runtime/bluetooth/bluetooth-service-eager.json",
@@ -1764,8 +2359,23 @@
     },
     {
       "path": "devices/marble/runtime/boot/start-phase4-marble.sh",
-      "bytes": 16159,
-      "sha256": "45f0c123bad77180aad9d84420586a9e12e8c968c3e1a43459c50bc76036f018"
+      "bytes": 16496,
+      "sha256": "5f97fc5b7d3066c05d4dd14ef203d47f33e2b2aa954efdc5473a6b9d8d3af56b"
+    },
+    {
+      "path": "devices/marble/runtime/camera/init-g2-camera-marble.cfg",
+      "bytes": 3125,
+      "sha256": "e57a1d9e8b982e88034aa6f5d690a91178129ebe0db2cfdea028fe19ae258d28"
+    },
+    {
+      "path": "devices/marble/runtime/camera/start-camera-g1-marble.sh",
+      "bytes": 4075,
+      "sha256": "47aeba395fe94726056eec8c5503345a8e3fe1505fadb94a8eab9a6661a147b5"
+    },
+    {
+      "path": "devices/marble/runtime/camera/start-camera-g2-marble.sh",
+      "bytes": 2688,
+      "sha256": "00a339505bd9b573b1c765faeef7ca9355cc751ad9cb6f5f9e0efa907ae7401b"
     },
     {
       "path": "devices/marble/runtime/codec/init-u3-codec-display-marble.cfg",
@@ -1800,7 +2410,7 @@
     {
       "path": "devices/marble/runtime/init/display_manager_config.xml",
       "bytes": 533,
-      "sha256": "7927ccfdb559dd0bb678ed083a1e7c543ef018d0a5a22420a4f28314b0627e9c"
+      "sha256": "91427c212b5f32cd6ee1243b397b61219fc06d3710be18dcac5857763b099c47"
     },
     {
       "path": "devices/marble/runtime/init/foundation-marble.json",
@@ -1878,6 +2488,81 @@
       "sha256": "ad8d98f9ddd813624eb34623b6deffeb7c8f5e9121fc916b2f4c6fa90e9de8e8"
     },
     {
+      "path": "devices/marble/runtime/memorytracker/init-h5-memorytracker-marble.cfg",
+      "bytes": 679,
+      "sha256": "196bfa74d3fd759f2b3177b985352c94eb50a3c22b5bd7443e8f632d92a6449c"
+    },
+    {
+      "path": "devices/marble/runtime/memorytracker/start-memorytracker-h5-marble.sh",
+      "bytes": 1483,
+      "sha256": "71d02c1770130440861cb75ac6231a53169363906574ac2b3b03277256c547e6"
+    },
+    {
+      "path": "devices/marble/runtime/motion/init-m4-motion-marble.cfg",
+      "bytes": 731,
+      "sha256": "d38ad691e1a5f59406e6303c76f99a925806811d275d7cc9241316ee2589cf70"
+    },
+    {
+      "path": "devices/marble/runtime/motion/msdp-marble.json",
+      "bytes": 708,
+      "sha256": "93836b5c8d90e9778adabab62b9e723d7e7314e87f4e9e46403f4b3027d0ee73"
+    },
+    {
+      "path": "devices/marble/runtime/motion/start-motion-m4-marble.sh",
+      "bytes": 1832,
+      "sha256": "dcd3f7f5e83646cab164f3799de2776220bc65da4ebb80cb2bbd740b004a22a6"
+    },
+    {
+      "path": "devices/marble/runtime/nfc/init-h1-nfc-marble.cfg",
+      "bytes": 843,
+      "sha256": "6d117510400a57541919e2cf57eec766f11c42d94675d294169ce68a8378624d"
+    },
+    {
+      "path": "devices/marble/runtime/nfc/init-h7-nfc-service-marble.cfg",
+      "bytes": 2225,
+      "sha256": "a1dcc7ef4b88f54f74dd0dc644752af036173b734939f6c96b424ee40aad0899"
+    },
+    {
+      "path": "devices/marble/runtime/nfc/start-nfc-h1-marble.sh",
+      "bytes": 2185,
+      "sha256": "c11973d20a5aec670425ce8b459e166285fff76b402cfe76697783911388ebdb"
+    },
+    {
+      "path": "devices/marble/runtime/nfc/start-nfc-service-h7-marble.sh",
+      "bytes": 2214,
+      "sha256": "9d034b5eae829401e9472ea78fdc92bc0a86dd8e468405c3636064a23074a017"
+    },
+    {
+      "path": "devices/marble/runtime/pinauth/init-m3-pinauth-marble.cfg",
+      "bytes": 732,
+      "sha256": "cfbda17c4548a6e814a1df2bfb267655c046070b49a3df44bb6ce22343b1984e"
+    },
+    {
+      "path": "devices/marble/runtime/pinauth/useriam-core-marble.json",
+      "bytes": 990,
+      "sha256": "267dca920be27c587d371c142361589f09266681279af99a1be099e9d1823c05"
+    },
+    {
+      "path": "devices/marble/runtime/power/init-h3-power-marble.cfg",
+      "bytes": 667,
+      "sha256": "989b01ddcc29ec33db8b82aca3f3b99eadde7bdda561726113f5b84ed9d34982"
+    },
+    {
+      "path": "devices/marble/runtime/power/start-power-h3-marble.sh",
+      "bytes": 1354,
+      "sha256": "daf63da9051aa826669294d5cd5dcd392bda32c14d7ce27941688515295707e6"
+    },
+    {
+      "path": "devices/marble/runtime/power/thermal/init-m4-mi-thermal-marble.cfg",
+      "bytes": 806,
+      "sha256": "85de30e0d7dc18108cb0ea52d9a7bdf7fc575873d5a17bb9f35e69c8254c6272"
+    },
+    {
+      "path": "devices/marble/runtime/power/thermal/start-mi-thermal-marble.sh",
+      "bytes": 6263,
+      "sha256": "0d5cbfd9b9b0050caa950868c41e747101325e1ccaa03c5106fda1e9949f601f"
+    },
+    {
       "path": "devices/marble/runtime/sensors/brightness_multiple_sensor_config-marble.json",
       "bytes": 295,
       "sha256": "21ca808bca0077415975b7aae51e600847b298033082931bd8a7b28cb9076d79"
@@ -1889,8 +2574,8 @@
     },
     {
       "path": "devices/marble/runtime/sensors/sensors-marble.json",
-      "bytes": 348,
-      "sha256": "0b45a2e813b4f8901e07fede95b1fa94bc20c9dac21576daeb4e829b04717318"
+      "bytes": 644,
+      "sha256": "34daa67abfdeebc416443444cf61b39f720353403e881637cd8954a4667400fc"
     },
     {
       "path": "devices/marble/runtime/sensors/stage-fastrpc-nodes.sh",
@@ -1901,6 +2586,11 @@
       "path": "devices/marble/runtime/sensors/start-sensors-marble.sh",
       "bytes": 4704,
       "sha256": "db33e52b982a7d3ee9f199d13dace150aed44cef25675d10a0bce0e1d3d850da"
+    },
+    {
+      "path": "devices/marble/runtime/telephony/init-modem-f12-marble.cfg",
+      "bytes": 1375,
+      "sha256": "5f70211e361b30760877f76f8c3768e784922295f238b25101dd22542ea5cd5d"
     },
     {
       "path": "devices/marble/runtime/telephony/init-modem-f2-marble.cfg",
@@ -1949,8 +2639,13 @@
     },
     {
       "path": "devices/marble/runtime/telephony/start-modem-f6-marble.sh",
-      "bytes": 5978,
-      "sha256": "6f1273a5461f5b4487d466b578c7b602e9dffc5a6bc43282c0d5f9977573c4ab"
+      "bytes": 5980,
+      "sha256": "1c70d32cf5d4c1b4ca7e626ce3ea922e5b156dd3bb5275e61b3e1afd07be60fc"
+    },
+    {
+      "path": "devices/marble/runtime/telephony/start-modem-f7-marble.sh",
+      "bytes": 6362,
+      "sha256": "0e5f438e38d4b7a548dac8c2d3beae1016f3813b398b6518a88a38e9f467180f"
     },
     {
       "path": "devices/marble/runtime/telephony/start-modem-marble.sh",
@@ -1959,8 +2654,13 @@
     },
     {
       "path": "devices/marble/runtime/telephony/start-u2-postboot-marble.sh",
-      "bytes": 2795,
-      "sha256": "38a093bbb556f0a3ff497e9b232b417d5cf904fd42d417fa7ec42cc6dc059157"
+      "bytes": 2944,
+      "sha256": "50897cd3434f86a581c6c61f3f60b74438d7793e6c4c1c6d58f8ccece5298a27"
+    },
+    {
+      "path": "devices/marble/runtime/telephony/telephony-f10-marble.json",
+      "bytes": 1290,
+      "sha256": "8a5a427e5d4ef5108e351afedf09c9ab609a7392ca629897eca9c8b99dcc3ebc"
     },
     {
       "path": "devices/marble/runtime/telephony/telephony-f3-marble.json",
@@ -1988,9 +2688,29 @@
       "sha256": "609601e19cee63df7a9b072d404ff7fdfda5aa25fb36673a86accd5569867e9d"
     },
     {
+      "path": "devices/marble/runtime/thermal/init-h2-thermal-marble.cfg",
+      "bytes": 653,
+      "sha256": "64fc1f263615694a6fe91f4282af4c561a3836b7251d9976d55094f8a55e7a58"
+    },
+    {
+      "path": "devices/marble/runtime/thermal/start-thermal-h2-marble.sh",
+      "bytes": 1661,
+      "sha256": "e9125c30f9f0645950e11c7e9528cf7cad23b769fd0d50fb6654026d219f2833"
+    },
+    {
+      "path": "devices/marble/runtime/touch/init-m1-touch-wakeup-marble.cfg",
+      "bytes": 1014,
+      "sha256": "f747d3266c8d783190ce07713149378781a6530eddce300ce7298d5e885581dc"
+    },
+    {
       "path": "devices/marble/runtime/usb/hdc-usb-permit.sh",
       "bytes": 4319,
       "sha256": "80d0c5da2272575b2343d5a28836b7b97e7744ce2f14a427b1c29b669e4d44f9"
+    },
+    {
+      "path": "devices/marble/runtime/usb/init-h4-usb-port-marble.cfg",
+      "bytes": 640,
+      "sha256": "9d375be7062ea7be472ab4a27d05170871bbb7549d0ab144d6619794c51552d9"
     },
     {
       "path": "devices/marble/runtime/usb/init-usb-marble.cfg",
@@ -2008,9 +2728,39 @@
       "sha256": "5aea38213a836d3564d4aefb0ab6f259bfbb645680236365174cb0aae067f9b3"
     },
     {
+      "path": "devices/marble/runtime/usb/start-usb-port-h4-marble.sh",
+      "bytes": 1569,
+      "sha256": "c7c3b00db517c265bb5c5950dd80a961889b922dcc44777d12b8e9413c5876d9"
+    },
+    {
       "path": "devices/marble/runtime/usb/stop-usb-marble.sh",
       "bytes": 4124,
       "sha256": "569685ff6cd74da1089662333f374ee8f37866f612c12e93a46ab8eccc652ffa"
+    },
+    {
+      "path": "devices/marble/runtime/vibrator/init-m1-vibrator-marble.cfg",
+      "bytes": 731,
+      "sha256": "2b8330dfc81e38da2ae9779cb9c9d847133f709787bb5e4baf5877d342116717"
+    },
+    {
+      "path": "devices/marble/runtime/vibrator/start-vibrator-m1-marble.sh",
+      "bytes": 3153,
+      "sha256": "d77c156ee5aacfb485e2920202752b6a8f85487618e649f205e9b3567fc62fa8"
+    },
+    {
+      "path": "devices/marble/runtime/wifi/hostapd-marble.conf",
+      "bytes": 504,
+      "sha256": "8fe629821f370f4e9ae345b9f8061e54f83f09ac37cd4f28be754c16db3f93a5"
+    },
+    {
+      "path": "devices/marble/runtime/wifi/init-m4-softap-marble.cfg",
+      "bytes": 1209,
+      "sha256": "7f34cdc1366592209585271e6e698350dcfc021289261fb959e80e95d5e009c0"
+    },
+    {
+      "path": "devices/marble/runtime/wifi/start-softap-m4-marble.sh",
+      "bytes": 3888,
+      "sha256": "ebe6c3d5d15f9c9b102f1cdb1a10aa939fafdc598dabf0dab660ff2e32e42ca7"
     },
     {
       "path": "devices/marble/runtime/wifi/start-wifi-marble.sh",
@@ -2493,9 +3243,19 @@
       "sha256": "2aec5130f654a01da19cc4a4182fa0a755f0385f77928ef00654a2bbce85cb5d"
     },
     {
+      "path": "docs/APPGALLERY_HAP_CAPTURE_GUIDE.md",
+      "bytes": 4088,
+      "sha256": "69884c9a97ea394044d76c209743cf70c3a5555f6cefa0c4d8fafb8725b05f6f"
+    },
+    {
+      "path": "docs/APPGALLERY_OFFLINE_DOWNLOAD.md",
+      "bytes": 48161,
+      "sha256": "f1e5a317fa6df84cb8240f3e3dbbf5eec99877e1b0d244feb860c164886e7ad1"
+    },
+    {
       "path": "docs/ARCHITECTURE.md",
-      "bytes": 2358,
-      "sha256": "ac7c8ed12d149084d24fd7a2816c9841534f676313ee807d198773a87bb1a197"
+      "bytes": 2637,
+      "sha256": "7a8e2bbf7f694b9dd3a2b7a78e72982b7108057fdf16138a994a84045cc000f3"
     },
     {
       "path": "docs/BUILDING.md",
@@ -2504,18 +3264,18 @@
     },
     {
       "path": "docs/MARBLE_BATCH_PLAN.md",
-      "bytes": 144613,
-      "sha256": "40e87b172785233c6e86bf31bd0a107e042d572654b8e12970ab505c1b7c60f9"
+      "bytes": 269679,
+      "sha256": "83ad883b544cd7415e4c12adf0691a73cbbe4800bbe034955570dd344eafad29"
     },
     {
       "path": "docs/MARBLE_DCM_SOFT_TEE.md",
-      "bytes": 16228,
-      "sha256": "6b7f2759cc8cc5c5e5c608075132d19b48f2ddb7aa9b5b2b29894ad1deb0dec3"
+      "bytes": 29251,
+      "sha256": "61c626db56ac4c58f424667ff0145db21ea767e6aa1e2a7d9e9dffcb40597c0c"
     },
     {
       "path": "docs/MARBLE_EXPECTED_AFTER_FLASH.md",
-      "bytes": 8434,
-      "sha256": "0fe0f7ab754ebae343b682d95d7213038b31f4b4b5f29dcd374ebac11ef963c6"
+      "bytes": 10407,
+      "sha256": "877c424f7b764f0d8b07f12100a768b53efc4aa38c1bb6fe3de1867942b4628b"
     },
     {
       "path": "docs/MARBLE_FIX_MATRIX.md",
@@ -2524,8 +3284,8 @@
     },
     {
       "path": "docs/MARBLE_HANDOFF.md",
-      "bytes": 31189,
-      "sha256": "f2f79a31cc94f127b2ecf970ba940bce14413037cb8982d20692d96652512589"
+      "bytes": 30641,
+      "sha256": "ab3f212e142c6ab854db5374ae36c9f998cbf8e65dd118e8b28c541f4f9735df"
     },
     {
       "path": "docs/MARBLE_IDENTITY.md",
@@ -2539,8 +3299,8 @@
     },
     {
       "path": "docs/MARBLE_PORTING_PLAN.md",
-      "bytes": 4499,
-      "sha256": "776c33e44f1b29c0139bb0b77b6f3bad916f43de5e50d3b646c983bd2abb6ebe"
+      "bytes": 5384,
+      "sha256": "6f6fe14393496a76bc5dbc1dbf0396d4decf0023358961b8b244f11abd7e87ea"
     },
     {
       "path": "docs/PACKAGING.md",
@@ -2554,8 +3314,8 @@
     },
     {
       "path": "docs/SOURCE_MAP.md",
-      "bytes": 4198,
-      "sha256": "cad16555480060713f6a023ec38590d19887ca32204f068ec4f0fc0a22035e18"
+      "bytes": 5270,
+      "sha256": "af5c952a8a90e61e9365663a11aca88f1ce2f380413de0d45b8175359a452049"
     },
     {
       "path": "docs/USERDATA.md",
@@ -2564,8 +3324,8 @@
     },
     {
       "path": "docs/VERIFICATION.md",
-      "bytes": 53246,
-      "sha256": "cb75bfb1d8038ad707fc5bff946e153263f420745a6ac182f68271af97e47e44"
+      "bytes": 55463,
+      "sha256": "d0c88f8177b1345742e3d30cf57186d02d310e5290d325bbe2f09a8fcd0c87a4"
     },
     {
       "path": "external/dependency-records/build-report.json",
@@ -3233,6 +3993,11 @@
       "sha256": "6f53943df365a777955025652005f8b2b2ce381f4a52d9970ea2bd70cb9c8983"
     },
     {
+      "path": "tests/test_marble_audio_f11.py",
+      "bytes": 19209,
+      "sha256": "395994c24beb75968c3e49a89015f264341538984ddc92ad2a75e6b322991028"
+    },
+    {
       "path": "tests/test_marble_audio_runtime.py",
       "bytes": 14636,
       "sha256": "85b1baa752a7ebea1ef8919afa9342357b65e1598b867654b8941ab47b314874"
@@ -3278,14 +4043,39 @@
       "sha256": "0d2090abdde56e60f8c0b085b7dd84068e75f3d24cba46a5c3ae683179773602"
     },
     {
+      "path": "tests/test_marble_camera_g1.py",
+      "bytes": 4709,
+      "sha256": "6e773680e9857bf1cb538b450be4409090ec72b0839ee67e31854039c2ad2f48"
+    },
+    {
+      "path": "tests/test_marble_camera_g2.py",
+      "bytes": 7080,
+      "sha256": "e12c5b53dd19db57179aae7b45b70f1c294d09a2c1f7e8b0abaf0b1962fea909"
+    },
+    {
+      "path": "tests/test_marble_camera_g3.py",
+      "bytes": 5835,
+      "sha256": "c0100123afd4afa5ab4d92574acadd83d3c65f0726627d49e8e827f9d7ff688e"
+    },
+    {
+      "path": "tests/test_marble_camera_g4.py",
+      "bytes": 5948,
+      "sha256": "3a97ad49163fbc680571efad309043c7b656fb56de7908180d08a1118bd61362"
+    },
+    {
+      "path": "tests/test_marble_camera_g5.py",
+      "bytes": 5846,
+      "sha256": "cca72375486f2dfb61b89b931222949cfe6389012bd6d3a68cb4857d0f2d0e8a"
+    },
+    {
       "path": "tests/test_marble_codec.py",
       "bytes": 16372,
       "sha256": "ff26c4be05411b565304b1a92fab0b9ddb65f7bba6c304103b51b39a6301c776"
     },
     {
       "path": "tests/test_marble_dcm_soft_tee.py",
-      "bytes": 16358,
-      "sha256": "56b79bb66e270538a4506b6bcb72cb1968aa401159fa20259719ba4d149b8278"
+      "bytes": 17379,
+      "sha256": "7e2f16ffc4dc1584335d60e1641f7bd13f8edb1c423bde3cc415e7f997dadc2c"
     },
     {
       "path": "tests/test_marble_diagnostics.py",
@@ -3314,8 +4104,8 @@
     },
     {
       "path": "tests/test_marble_huks_soft.py",
-      "bytes": 12345,
-      "sha256": "49e2bfd22aa2c943723483c5162ad4ce3bc146f7850119694471267d98de57ab"
+      "bytes": 12359,
+      "sha256": "5d671fb783c7a331b9af812356754064a3f827f6cecbb3612ec25fd773f6202c"
     },
     {
       "path": "tests/test_marble_late_resource.py",
@@ -3338,9 +4128,39 @@
       "sha256": "9b37c91ec9b509097600086e258d0aeab9d6fda8cd42fa5331ffa6237ba79d3b"
     },
     {
+      "path": "tests/test_marble_m1.py",
+      "bytes": 3964,
+      "sha256": "289f4b57c008b2f65b0b02becd0a1540427f204fb73c6cb2b58c490c695a42a3"
+    },
+    {
+      "path": "tests/test_marble_m2.py",
+      "bytes": 3979,
+      "sha256": "220655329534bb1fe112324c4f55c0eaa177fb75cbc8f7169683b7a704cc5ead"
+    },
+    {
+      "path": "tests/test_marble_m3.py",
+      "bytes": 4044,
+      "sha256": "ca388912fe343ec2429eb26e5ed534cbfccec7a484d847118eb366275f4eef98"
+    },
+    {
+      "path": "tests/test_marble_m4.py",
+      "bytes": 4761,
+      "sha256": "ceb6f6af24423bca41f7bc85d5f58eef209313b86c0b182227e6b0ccab2f85c2"
+    },
+    {
+      "path": "tests/test_marble_m5.py",
+      "bytes": 4694,
+      "sha256": "dce3feff072033f2c563a2d7daafedd672e2a16422647d5c5b5eaad355dd0e99"
+    },
+    {
       "path": "tests/test_marble_media_fixture.py",
       "bytes": 5162,
       "sha256": "067587b15e4305081a78dd80da0781518eeb8a5fddb3895fb83d48782bd2448a"
+    },
+    {
+      "path": "tests/test_marble_memorytracker_h5.py",
+      "bytes": 5501,
+      "sha256": "ca0868f8f52cc7104f3dfa5bdf080d366b8e200a4ec8fde1972229e6d750827e"
     },
     {
       "path": "tests/test_marble_mic_route_merge.py",
@@ -3351,6 +4171,21 @@
       "path": "tests/test_marble_modem_f1.py",
       "bytes": 6387,
       "sha256": "8107716ab23100f58fc47ac61218750d42af548e12c3e148324e13081167a67f"
+    },
+    {
+      "path": "tests/test_marble_modem_f10.py",
+      "bytes": 7342,
+      "sha256": "cc3f2e268629203c94d6c0bafe57e860d5ab95975be135849484458a898642a7"
+    },
+    {
+      "path": "tests/test_marble_modem_f12.py",
+      "bytes": 8590,
+      "sha256": "5ceb38ce111e7a42cc34f0f4de200eb1b8fdc6614243a87936ac827bac1009c4"
+    },
+    {
+      "path": "tests/test_marble_modem_f13.py",
+      "bytes": 3114,
+      "sha256": "e4cd1a8d3dc45882a04e6ea6abd8065158f4f96ffea4f6e6a7becf0e6b41524b"
     },
     {
       "path": "tests/test_marble_modem_f2.py",
@@ -3374,8 +4209,33 @@
     },
     {
       "path": "tests/test_marble_modem_f6.py",
-      "bytes": 5887,
-      "sha256": "0a9a904cc28b8a043de72520c51863ee5e3a70f24aa36b92fe9f7d17cc97482e"
+      "bytes": 8596,
+      "sha256": "66bcf33666f17baf2826b12638ec0cf6b6a87c6bded75eacf2bec6eeeeca857e"
+    },
+    {
+      "path": "tests/test_marble_modem_f7.py",
+      "bytes": 7595,
+      "sha256": "1a9c53c6d7ba4a3f2ec7741adb9021d6ff1b8e138f64782cf2aad1fa2e863e60"
+    },
+    {
+      "path": "tests/test_marble_modem_f8.py",
+      "bytes": 5657,
+      "sha256": "eb0f6d105b01411008035ebc615a88117991f0dc0ed942ef602213406882bbbf"
+    },
+    {
+      "path": "tests/test_marble_modem_f9.py",
+      "bytes": 4253,
+      "sha256": "2598824d9ab20f0fd4fabca16e7490b8905d20c916d5b82efe51cd1e2bc1ef67"
+    },
+    {
+      "path": "tests/test_marble_nfc_h1.py",
+      "bytes": 5638,
+      "sha256": "f47aa468ebaa51196878ad699ab2b5b87be8bcae49466c61dd3739328f986f7b"
+    },
+    {
+      "path": "tests/test_marble_nfc_h7.py",
+      "bytes": 6216,
+      "sha256": "f929e9ae41c98eda8b8d8b0f6b5a7d51610d2064e4c51d6d932073ba16ab4cb2"
     },
     {
       "path": "tests/test_marble_notify_privacy.py",
@@ -3401,6 +4261,11 @@
       "path": "tests/test_marble_phase4.py",
       "bytes": 20978,
       "sha256": "9ea94cc1145b464e5396649c779c6a25e54d5c9f900e2174ba013aed89ced520"
+    },
+    {
+      "path": "tests/test_marble_power_h3.py",
+      "bytes": 5463,
+      "sha256": "48223091959f925e953570ec98886fb7932e00e19084db3d548bb527fe90780c"
     },
     {
       "path": "tests/test_marble_qrtr_probe.py",
@@ -3448,6 +4313,11 @@
       "sha256": "31848e37f3f1451d7e0277f4bfd88e084799945f2f5aa1e7208803c669c0918f"
     },
     {
+      "path": "tests/test_marble_thermal_h2.py",
+      "bytes": 5362,
+      "sha256": "9af0f6a85b743072f1702183737966d33ea17fee75bdf725a0093f822b109800"
+    },
+    {
       "path": "tests/test_marble_u1_ux_security.py",
       "bytes": 15523,
       "sha256": "c58e11381b80c22e56ba32a0d71f16a5b67e7eab7bc15604e008b519f835bbfb"
@@ -3476,6 +4346,16 @@
       "path": "tests/test_marble_usb.py",
       "bytes": 58195,
       "sha256": "6381e70ef82cd0449d0a61b456738a883779b3b469b3b18d76b1675357c4e8f1"
+    },
+    {
+      "path": "tests/test_marble_usb_port_h4.py",
+      "bytes": 5654,
+      "sha256": "de999f41d2e215442c4bc7d82ae4d0d2b48ee626f1ccd5144b0e505f92e26ccc"
+    },
+    {
+      "path": "tests/test_marble_venc_h6.py",
+      "bytes": 3676,
+      "sha256": "6e49dfe312ee5da97b8f2095247cd23bd763120fe376a938ca0c59e483201567"
     },
     {
       "path": "tests/test_marble_verify_all.py",
@@ -3586,6 +4466,31 @@
       "path": "tests/useriam/empty_contract.cpp",
       "bytes": 2071,
       "sha256": "29ef143926a06f37dbe1ec2b6759a60509f6d45475938c907bb7aa17f1afdefa"
+    },
+    {
+      "path": "tools/appgallery/ag_web.py",
+      "bytes": 12155,
+      "sha256": "61aa0609218e1be3a4f2acb3a006b2029bf51fe1de7a7265ef72d4b31a632de4"
+    },
+    {
+      "path": "tools/appgallery/attest_roots.py",
+      "bytes": 4398,
+      "sha256": "0c2dc405a309c7db67c0a4b4b346d87d59337c80c60565d6ea1a178a0db8b91a"
+    },
+    {
+      "path": "tools/appgallery/dl.py",
+      "bytes": 11022,
+      "sha256": "ec1499088b8640fbff152679f473aef7eff0e372d76a67206202d1759b09dfc9"
+    },
+    {
+      "path": "tools/appgallery/hap_pull.py",
+      "bytes": 6872,
+      "sha256": "af098ed7b9686b783cea04fc5ad849d55283083e52ea11300a0025709eb2eca3"
+    },
+    {
+      "path": "tools/appgallery/tsms_probe.py",
+      "bytes": 7196,
+      "sha256": "56b0a6756a90fc20aa173ea3789df6b5399b66a318047af99ace930274e761b7"
     },
     {
       "path": "tools/build/build_current.py",
@@ -3733,6 +4638,26 @@
       "sha256": "0429d94cd9f74c37360a2d06681c298e4560b1147f9a07eaa902e0f629001e7e"
     },
     {
+      "path": "tools/packaging/build_marble_h20_f10_5g_ims_call_sms.py",
+      "bytes": 18974,
+      "sha256": "d6de867a40d61a7327aee0e209be1926d67fd5e3dc3af2bfd31b938b31d1bf2d"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_f11_voice_audio.py",
+      "bytes": 17245,
+      "sha256": "d401c99ce4f41ffabb609036009909de44b22ea86dfe43ad99cbd335abe72b6d"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_f12_tel_fixes.py",
+      "bytes": 22092,
+      "sha256": "7b170d41142d00528e1ab722dcaada94866dbb2e5488719b182c3900e0c350f3"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_f13_tel_loc_cutout.py",
+      "bytes": 15934,
+      "sha256": "0e22e9bf063aa05eabef2c2e0178d45b6fcda011f8e00a69224adfb96d8da855"
+    },
+    {
       "path": "tools/packaging/build_marble_h20_f1_modem.py",
       "bytes": 9310,
       "sha256": "6546158a065e307f403ec267c3175a53036480a01cf85ca5f521579945a7d98a"
@@ -3759,8 +4684,108 @@
     },
     {
       "path": "tools/packaging/build_marble_h20_f6_cellular_nas.py",
-      "bytes": 13328,
-      "sha256": "7ef38f02f09383031be5c485f3cebfc6b996d8419065665ca10eb9a48cdabed1"
+      "bytes": 16733,
+      "sha256": "2b292c6f4a6a2eaa7a61dbbe48260990030d96ccc7f9d12b27b67034e2c4a428"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_f7_cellular_data.py",
+      "bytes": 13642,
+      "sha256": "d7554c5117929d6f157040c19873a419dd429fcb70fbf6a41b3a9293c177d7cc"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_f8_ohos_cellular.py",
+      "bytes": 16593,
+      "sha256": "051888338782c40f33ce5ba1af911f3b49b9f9081d7a45e138a37546c3f30f00"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_f9_sim_cell.py",
+      "bytes": 10503,
+      "sha256": "e90df4b6d3dea294e1d896d75268ccf1cb535257813edab3254f67e524d0f32f"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_g1_camera_hw.py",
+      "bytes": 17182,
+      "sha256": "982347eb1fe854d99ac62ae08947a7153f005c796f2d2bd1d8388a4f5c1422fa"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_g2_camera_hdi.py",
+      "bytes": 21083,
+      "sha256": "c8aaa4cc29afb183a0fb8af9f982d259d837e0f346fcd0769e70254b31cf1e20"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_g3_camera_capture.py",
+      "bytes": 15421,
+      "sha256": "1c7491ebf4ea2259227d503534cee67c5b96b8fa64244963423a280558431109"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_g4_all_cameras.py",
+      "bytes": 15849,
+      "sha256": "71526970b079e3accdeeacfd0d1ba5fda7e19351394d3f1bcae49bb20adbb600"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_g5_camera_3a.py",
+      "bytes": 14046,
+      "sha256": "5a0fc93fef5b8817e0872dd8a060a2a26921264b4d5e140c8df544ab752148ce"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_h1_nfc.py",
+      "bytes": 21410,
+      "sha256": "92714caaed2d8a455349effe2a7093f2cfb49809f15b65e06186626e9932ea11"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_h2_thermal.py",
+      "bytes": 21165,
+      "sha256": "0a1d7520930a20980b1ff13ab5190f4be87bf8a1d94d8e703192cbe8bce6721a"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_h3_power.py",
+      "bytes": 21005,
+      "sha256": "4b24afcb5a568f7d93e41ecef4918421a6723b16298560950aac09ac6ce9b841"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_h4_usb_port.py",
+      "bytes": 21493,
+      "sha256": "80da6f63fb37e64c316846ec7e1b184a9157a392dc3394400e99dd73f525b41b"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_h5_memorytracker.py",
+      "bytes": 22076,
+      "sha256": "d0fa8692596d1ef41adc81fe062a6863f52f30955d37103e9a0223b7e797354c"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_h6_venc_eos.py",
+      "bytes": 15879,
+      "sha256": "1df1c8aace67d2772a5c64e4388890752fb252413290984ebd2beaec95f44ad4"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_h7_nfc_service.py",
+      "bytes": 21698,
+      "sha256": "59688583eac576d1c0122a70fc2dfa8293f86992776c492b31329f1d711c5db6"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_m1_tel_vib_disp.py",
+      "bytes": 24946,
+      "sha256": "253490ed01096721dc1972281d80c7234a39c859b4e436c8cc71e345ea9135fa"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_m2_cam_ims_softap_chg.py",
+      "bytes": 25257,
+      "sha256": "1f496fccc7a4c78b8382510aafe1746536a4823ea8c62303bfeef9df0eb9c11d"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_m3_codec_pin_anco.py",
+      "bytes": 22891,
+      "sha256": "e9708169afc37c4b571255e92ba54621576cdfa6d05e7b21308f981555bc96ad"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_m4_bright_motion_anco.py",
+      "bytes": 25202,
+      "sha256": "1bcd006973d8a77c6ef5417e97d7d6a6dc7cd8f95b71c32994d272b7a8fdaddc"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_m5_fixes.py",
+      "bytes": 25382,
+      "sha256": "da15c2a94c83e887d9f077e0a87270917912968492b26ddfefa2abece0a47dea"
     },
     {
       "path": "tools/packaging/build_marble_h20_u1_ux_security.py",
@@ -3804,8 +4829,8 @@
     },
     {
       "path": "tools/packaging/build_marble_phase4_images.py",
-      "bytes": 60590,
-      "sha256": "5c7525b62b9d295e51bd2b1b5d84accfd2fbc25d9a750d836fbf0889bb371e9e"
+      "bytes": 74976,
+      "sha256": "06151bbaeef15308dbfe474202bbc7188cca474436804c2ffe83aaecb32ec5a6"
     },
     {
       "path": "tools/packaging/build_promax_images.py",

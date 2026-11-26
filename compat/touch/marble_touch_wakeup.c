@@ -13,9 +13,11 @@
 #define _GNU_SOURCE
 #endif
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <linux/input.h>
 #include <linux/uinput.h>
 #include <poll.h>
@@ -38,6 +40,12 @@
 #define MARBLE_UINPUT_MAJOR 10u
 #define MARBLE_UINPUT_MINOR 223u
 #define MARBLE_UINPUT_DEV_NAME "marble-touch-wakeup"
+#define MARBLE_SYS_INPUT_DIR_DEFAULT "/sys/class/input"
+#define MARBLE_DEV_INPUT_DIR_DEFAULT "/dev/input"
+#define MARBLE_INPUT_UID 6696u
+#define MARBLE_INPUT_GID 6696u
+#define MARBLE_EVENT_NODE_RETRIES 10
+#define MARBLE_EVENT_NODE_RETRY_MS 50
 #define MARBLE_KEYCODE_AOD_SINGLE_CLICK 765u
 #define MARBLE_DEBOUNCE_MS_DEFAULT 250u
 #define MARBLE_RECHECK_INTERVAL_MS 10000
@@ -346,6 +354,181 @@ static int create_uinput_device(const char *uinput_path)
 }
 #endif
 
+static bool is_input_event_dir_name(const char *name)
+{
+    if (!name || strncmp(name, "event", 5) != 0 || name[5] == '\0') {
+        return false;
+    }
+    for (const char *p = name + 5; *p != '\0'; ++p) {
+        if (*p < '0' || *p > '9') {
+            return false;
+        }
+    }
+    return true;
+}
+
+static int parse_sysfs_dev_major_minor(const char *buf, ssize_t len,
+                                       unsigned int *maj_out, unsigned int *min_out)
+{
+    if (!buf || len <= 0 || !maj_out || !min_out) {
+        return -1;
+    }
+    ssize_t i = 0;
+    while (i < len && (buf[i] == ' ' || buf[i] == '\t' || buf[i] == '\r' || buf[i] == '\n')) {
+        ++i;
+    }
+    if (i >= len || buf[i] < '0' || buf[i] > '9') {
+        return -1;
+    }
+    unsigned long maj = 0;
+    while (i < len && buf[i] >= '0' && buf[i] <= '9') {
+        if (maj > (UINT_MAX - 9u) / 10u) {
+            return -1;
+        }
+        maj = maj * 10u + (unsigned long)(buf[i] - '0');
+        ++i;
+    }
+    if (i >= len || buf[i] != ':') {
+        return -1;
+    }
+    ++i;
+    if (i >= len || buf[i] < '0' || buf[i] > '9') {
+        return -1;
+    }
+    unsigned long min = 0;
+    while (i < len && buf[i] >= '0' && buf[i] <= '9') {
+        if (min > (UINT_MAX - 9u) / 10u) {
+            return -1;
+        }
+        min = min * 10u + (unsigned long)(buf[i] - '0');
+        ++i;
+    }
+    while (i < len && (buf[i] == ' ' || buf[i] == '\t' || buf[i] == '\r' || buf[i] == '\n' || buf[i] == '\0')) {
+        ++i;
+    }
+    if (i != len) {
+        return -1;
+    }
+    *maj_out = (unsigned int)maj;
+    *min_out = (unsigned int)min;
+    return 0;
+}
+
+static int find_input_event_in_sysfs(const char *sys_input_dir, const char *dev_name,
+                                     char *event_name_out, size_t event_name_cap,
+                                     unsigned int *maj_out, unsigned int *min_out)
+{
+    if (!sys_input_dir || !dev_name || !event_name_out || event_name_cap < 8 ||
+        !maj_out || !min_out) {
+        return -1;
+    }
+    DIR *dir = opendir(sys_input_dir);
+    if (!dir) {
+        return -1;
+    }
+    struct dirent *ent;
+    int found = -1;
+    while ((ent = readdir(dir)) != NULL) {
+        if (!is_input_event_dir_name(ent->d_name)) {
+            continue;
+        }
+        char path[512];
+        int plen = snprintf(path, sizeof(path), "%s/%s/device/name", sys_input_dir, ent->d_name);
+        if (plen <= 0 || (size_t)plen >= sizeof(path)) {
+            continue;
+        }
+        char name_buf[128];
+        ssize_t n = read_small_file(path, name_buf, sizeof(name_buf));
+        if (n <= 0) {
+            continue;
+        }
+        while (n > 0 && (name_buf[n - 1] == '\n' || name_buf[n - 1] == '\r')) {
+            name_buf[--n] = '\0';
+        }
+        if (strcmp(name_buf, dev_name) != 0) {
+            continue;
+        }
+        plen = snprintf(path, sizeof(path), "%s/%s/dev", sys_input_dir, ent->d_name);
+        if (plen <= 0 || (size_t)plen >= sizeof(path)) {
+            continue;
+        }
+        char dev_buf[64];
+        ssize_t dn = read_small_file(path, dev_buf, sizeof(dev_buf));
+        if (dn <= 0) {
+            continue;
+        }
+        unsigned int maj = 0, min = 0;
+        if (parse_sysfs_dev_major_minor(dev_buf, dn, &maj, &min) != 0) {
+            continue;
+        }
+        int elen = snprintf(event_name_out, event_name_cap, "%s", ent->d_name);
+        if (elen <= 0 || (size_t)elen >= event_name_cap) {
+            continue;
+        }
+        *maj_out = maj;
+        *min_out = min;
+        found = 0;
+        break;
+    }
+    closedir(dir);
+    return found;
+}
+
+#ifndef MARBLE_TOUCH_WAKEUP_HOST_TEST
+static int ensure_uinput_event_node(const char *dev_name)
+{
+    char event_name[64];
+    unsigned int maj = 0;
+    unsigned int min = 0;
+    bool found = false;
+
+    for (int attempt = 0; attempt < MARBLE_EVENT_NODE_RETRIES; ++attempt) {
+        if (find_input_event_in_sysfs(MARBLE_SYS_INPUT_DIR_DEFAULT, dev_name,
+                                      event_name, sizeof(event_name), &maj, &min) == 0) {
+            found = true;
+            break;
+        }
+        struct timespec req = {0, (long)MARBLE_EVENT_NODE_RETRY_MS * 1000000L};
+        nanosleep(&req, NULL);
+    }
+    if (!found) {
+        fprintf(stderr, "marble_touch_wakeup: sysfs event node for '%s' not found after %d retries\n",
+                dev_name ? dev_name : "", MARBLE_EVENT_NODE_RETRIES);
+        return -1;
+    }
+
+    if (mkdir(MARBLE_DEV_INPUT_DIR_DEFAULT, 0755) < 0 && errno != EEXIST) {
+        fprintf(stderr, "marble_touch_wakeup: mkdir(%s) failed errno=%d\n",
+                MARBLE_DEV_INPUT_DIR_DEFAULT, errno);
+        return -1;
+    }
+
+    char node_path[128];
+    int nlen = snprintf(node_path, sizeof(node_path), "%s/%s",
+                        MARBLE_DEV_INPUT_DIR_DEFAULT, event_name);
+    if (nlen <= 0 || (size_t)nlen >= sizeof(node_path)) {
+        return -1;
+    }
+
+    if (mknod(node_path, S_IFCHR | 0660, makedev(maj, min)) < 0 && errno != EEXIST) {
+        fprintf(stderr, "marble_touch_wakeup: mknod(%s, %u:%u) failed errno=%d\n",
+                node_path, maj, min, errno);
+        return -1;
+    }
+    if (chown(node_path, (uid_t)MARBLE_INPUT_UID, (gid_t)MARBLE_INPUT_GID) < 0) {
+        fprintf(stderr, "marble_touch_wakeup: chown(%s, %u:%u) failed errno=%d\n",
+                node_path, MARBLE_INPUT_UID, MARBLE_INPUT_GID, errno);
+    }
+    if (chmod(node_path, 0660) < 0) {
+        fprintf(stderr, "marble_touch_wakeup: chmod(%s, 0660) failed errno=%d\n",
+                node_path, errno);
+    }
+    fprintf(stderr, "marble_touch_wakeup: ensured %s (dev=%s char %u:%u owner=%u:%u mode=0660)\n",
+            node_path, dev_name, maj, min, MARBLE_INPUT_UID, MARBLE_INPUT_GID);
+    return 0;
+}
+#endif
+
 static int write_input_event(int uinput_fd, uint16_t type, uint16_t code, int32_t value)
 {
     struct input_event ev;
@@ -410,6 +593,23 @@ static int run_self_test(void)
     }
     if (MARBLE_KEYCODE_AOD_SINGLE_CLICK > KEY_MAX) {
         fprintf(stderr, "MARBLE_TOUCH_WAKEUP_SELF_TEST_FAIL key_max\n");
+        return 1;
+    }
+    unsigned int maj = 0, min = 0;
+    if (parse_sysfs_dev_major_minor("13:74\n", 6, &maj, &min) != 0 || maj != 13u || min != 74u ||
+        parse_sysfs_dev_major_minor(" 13:64 \r\n", 9, &maj, &min) != 0 || maj != 13u || min != 64u ||
+        parse_sysfs_dev_major_minor("", 0, &maj, &min) == 0 ||
+        parse_sysfs_dev_major_minor("13\n", 3, &maj, &min) == 0 ||
+        parse_sysfs_dev_major_minor("13:\n", 4, &maj, &min) == 0 ||
+        parse_sysfs_dev_major_minor(":74\n", 4, &maj, &min) == 0 ||
+        parse_sysfs_dev_major_minor("13:74:1\n", 8, &maj, &min) == 0 ||
+        parse_sysfs_dev_major_minor("abc:1\n", 6, &maj, &min) == 0 ||
+        !is_input_event_dir_name("event0") ||
+        !is_input_event_dir_name("event10") ||
+        is_input_event_dir_name("event") ||
+        is_input_event_dir_name("event10a") ||
+        is_input_event_dir_name("mice")) {
+        fprintf(stderr, "MARBLE_TOUCH_WAKEUP_SELF_TEST_FAIL dev_parser\n");
         return 1;
     }
     printf("MARBLE_TOUCH_WAKEUP_SELF_TEST_OK key_wakeup=%u key_power=%u key_aod=%u key_max=%u\n",
@@ -540,7 +740,63 @@ int main(void)
         return 1;
     }
 
-    puts("MARBLE_TOUCH_WAKEUP_HOST_TEST_OK parser debounce drm sysfs_enable reenable pread evdev_stream");
+    // Verify sysfs input event discovery for uinput device auto-mknod.
+    char sys_tmpl[] = "/tmp/marble_sys_input_test_XXXXXX";
+    char *sys_dir = mkdtemp(sys_tmpl);
+    if (!sys_dir) {
+        perror("mkdtemp");
+        return 1;
+    }
+    char p1[320], p2[320], p3[320], p4[320], p5[320], p6[320];
+    snprintf(p1, sizeof(p1), "%s/event0", sys_dir);
+    snprintf(p2, sizeof(p2), "%s/event0/device", sys_dir);
+    snprintf(p3, sizeof(p3), "%s/event10", sys_dir);
+    snprintf(p4, sizeof(p4), "%s/event10/device", sys_dir);
+    if (mkdir(p1, 0700) != 0 || mkdir(p2, 0700) != 0 ||
+        mkdir(p3, 0700) != 0 || mkdir(p4, 0700) != 0) {
+        fprintf(stderr, "MARBLE_TOUCH_WAKEUP_HOST_TEST_FAIL sysfs_mkdir\n");
+        return 1;
+    }
+    snprintf(p5, sizeof(p5), "%s/event0/device/name", sys_dir);
+    snprintf(p6, sizeof(p6), "%s/event0/dev", sys_dir);
+    fd = open(p5, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+    if (fd < 0 || write(fd, "goodix_ts\n", 10) != 10) { if (fd >= 0) close(fd); return 1; }
+    close(fd);
+    fd = open(p6, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+    if (fd < 0 || write(fd, "13:64\n", 6) != 6) { if (fd >= 0) close(fd); return 1; }
+    close(fd);
+
+    char p7[320], p8[320];
+    snprintf(p7, sizeof(p7), "%s/event10/device/name", sys_dir);
+    snprintf(p8, sizeof(p8), "%s/event10/dev", sys_dir);
+    fd = open(p7, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+    if (fd < 0 || write(fd, MARBLE_UINPUT_DEV_NAME "\n", strlen(MARBLE_UINPUT_DEV_NAME) + 1) !=
+                  (ssize_t)(strlen(MARBLE_UINPUT_DEV_NAME) + 1)) {
+        if (fd >= 0) close(fd);
+        return 1;
+    }
+    close(fd);
+    fd = open(p8, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+    if (fd < 0 || write(fd, "13:74\n", 6) != 6) { if (fd >= 0) close(fd); return 1; }
+    close(fd);
+
+    char found_ev[64];
+    unsigned int found_maj = 0, found_min = 0;
+    if (find_input_event_in_sysfs(sys_dir, MARBLE_UINPUT_DEV_NAME,
+                                  found_ev, sizeof(found_ev), &found_maj, &found_min) != 0 ||
+        strcmp(found_ev, "event10") != 0 || found_maj != 13u || found_min != 74u) {
+        fprintf(stderr, "MARBLE_TOUCH_WAKEUP_HOST_TEST_FAIL find_uinput_event\n");
+        return 1;
+    }
+    if (find_input_event_in_sysfs(sys_dir, "nonexistent-device",
+                                  found_ev, sizeof(found_ev), &found_maj, &found_min) == 0) {
+        fprintf(stderr, "MARBLE_TOUCH_WAKEUP_HOST_TEST_FAIL find_nonexistent\n");
+        return 1;
+    }
+    unlink(p5); unlink(p6); unlink(p7); unlink(p8);
+    rmdir(p2); rmdir(p1); rmdir(p4); rmdir(p3); rmdir(sys_dir);
+
+    puts("MARBLE_TOUCH_WAKEUP_HOST_TEST_OK parser debounce drm sysfs_enable reenable pread evdev_stream sysfs_uinput_event");
     return 0;
 }
 #else
@@ -598,6 +854,7 @@ int main(int argc, char **argv)
     if (uinput_fd < 0) {
         return 1;
     }
+    (void)ensure_uinput_event_node(MARBLE_UINPUT_DEV_NAME);
 
     int dt_en_rc = ensure_gesture_enabled(touch_dir, "gesture_double_tap_enabled", true);
     int st_en_rc = ensure_gesture_enabled(touch_dir, "gesture_single_tap_enabled", true);
@@ -605,9 +862,10 @@ int main(int argc, char **argv)
     int st_fd = open_and_clear_state_node(touch_dir, "gesture_single_tap_state");
 
     fprintf(stderr,
-            "marble_touch_wakeup: started dir=%s uinput=%s dt_en=%d st_en=%d dt_fd=%d st_fd=%d dt_key=%u\n",
+            "marble_touch_wakeup: started dir=%s uinput=%s dt_en=%d st_en=%d dt_fd=%d st_fd=%d dt_key=%u only_when_off=%d\n",
             touch_dir, uinput_path, dt_en_rc, st_en_rc, dt_fd, st_fd,
-            use_power_key ? (unsigned)KEY_POWER : (unsigned)KEY_WAKEUP);
+            use_power_key ? (unsigned)KEY_POWER : (unsigned)KEY_WAKEUP,
+            only_when_off ? 1 : 0);
 
     const uint64_t debounce_ns = (uint64_t)debounce_ms * 1000000ULL;
     uint64_t last_dt_ns = 0;

@@ -26,19 +26,176 @@ namespace marble_motion {
  *
  * Lifecycle & power guarantees:
  *   - 0 background threads / 0 QRTR sockets when pickup motion is disabled.
- *   - When enabled and screen is ON (/sys/class/backlight/panel0-backlight/brightness > 0):
+ *   - Screen power state is determined from DRM DPMS (/sys/class/drm/card0-DSI-{1,0}/dpms),
+ *     falling back to DRM enabled (/sys/class/drm/card0-DSI-{1,0}/enabled), and finally
+ *     backlight brightness == 0 only when DRM sysfs nodes are absent.
+ *   - When enabled and screen is ON:
  *       closes any active SSC stream and idles via interruptible 500 ms poll (0 SLPI draw).
- *   - When enabled and screen is OFF (brightness == 0):
+ *   - When enabled and screen is OFF:
  *       1) First attempts SLPI SUID "tilt_to_wake" (on_change=true, MSGID 514).
  *       2) If unavailable on SLPI, falls back to "accel" at 25 Hz (MSGID 513) feeding PickupDetector.
- *   - Re-checks backlight every 500 ms during active streaming so waking the screen
+ *   - Re-checks screen state every 500 ms during active streaming so waking the screen
  *     immediately pauses SSC streaming.
  */
+inline bool matchSysfsTokenIgnoreCase(const char *text, const char *lit) {
+    if (text == nullptr || lit == nullptr) {
+        return false;
+    }
+    size_t i = 0;
+    while (lit[i] != '\0') {
+        unsigned char a = static_cast<unsigned char>(text[i]);
+        unsigned char b = static_cast<unsigned char>(lit[i]);
+        if (a >= 'A' && a <= 'Z') {
+            a = static_cast<unsigned char>(a - 'A' + 'a');
+        }
+        if (b >= 'A' && b <= 'Z') {
+            b = static_cast<unsigned char>(b - 'A' + 'a');
+        }
+        if (a != b) {
+            return false;
+        }
+        ++i;
+    }
+    const char tail = text[i];
+    return tail == '\0' || tail == '\n' || tail == '\r' || tail == ' ' || tail == '\t';
+}
+
+/*
+ * Parse DRM connector dpms sysfs text:
+ *   "Off", "Suspend", "Standby" -> 1 (screen is OFF)
+ *   "On"                        -> 0 (screen is ON)
+ *   anything else / null        -> -1 (unrecognized)
+ */
+inline int parseDrmDpmsIsOff(const char *text) {
+    if (text == nullptr) {
+        return -1;
+    }
+    while (*text == ' ' || *text == '\t' || *text == '\r' || *text == '\n') {
+        ++text;
+    }
+    if (*text == '\0') {
+        return -1;
+    }
+    if (matchSysfsTokenIgnoreCase(text, "Off") ||
+        matchSysfsTokenIgnoreCase(text, "Suspend") ||
+        matchSysfsTokenIgnoreCase(text, "Standby")) {
+        return 1;
+    }
+    if (matchSysfsTokenIgnoreCase(text, "On")) {
+        return 0;
+    }
+    return -1;
+}
+
+/*
+ * Parse DRM connector enabled sysfs text:
+ *   "disabled"           -> 1 (screen is OFF)
+ *   "enabled"            -> 0 (screen is ON)
+ *   anything else / null -> -1 (unrecognized)
+ */
+inline int parseDrmEnabledIsOff(const char *text) {
+    if (text == nullptr) {
+        return -1;
+    }
+    while (*text == ' ' || *text == '\t' || *text == '\r' || *text == '\n') {
+        ++text;
+    }
+    if (*text == '\0') {
+        return -1;
+    }
+    if (matchSysfsTokenIgnoreCase(text, "disabled")) {
+        return 1;
+    }
+    if (matchSysfsTokenIgnoreCase(text, "enabled")) {
+        return 0;
+    }
+    return -1;
+}
+
+inline ssize_t readSmallSysfsFile(const char *path, char *buf, size_t cap) {
+    if (path == nullptr || buf == nullptr || cap < 2) {
+        return -1;
+    }
+    int fd = ::open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+        return -1;
+    }
+    ssize_t n;
+    do {
+        n = ::read(fd, buf, cap - 1);
+    } while (n < 0 && errno == EINTR);
+    ::close(fd);
+    if (n <= 0) {
+        return -1;
+    }
+    buf[n] = '\0';
+    return n;
+}
+
+inline int readBacklightBrightnessFromPath(const char *path) {
+    char buf[32];
+    if (readSmallSysfsFile(path, buf, sizeof(buf)) <= 0) {
+        return -1;
+    }
+    char *end = nullptr;
+    long val = std::strtol(buf, &end, 10);
+    if (end == buf) {
+        return -1;
+    }
+    return static_cast<int>(val);
+}
+
+/*
+ * Query screen-off state with strict DRM priority:
+ *   1) DRM DPMS paths ("Off"/"Suspend"/"Standby" => 1, "On" => 0)
+ *   2) DRM enabled paths ("disabled" => 1, "enabled" => 0)
+ *   3) Backlight brightness fallback ONLY when DRM sysfs nodes do not exist/parse (0 => 1, >0 => 0)
+ * Returns: 1 (screen OFF), 0 (screen ON), -1 (all sysfs unreadable).
+ */
+inline int queryScreenOffFromPaths(const char *const *dpms_paths, size_t dpms_count,
+                                   const char *const *enabled_paths, size_t enabled_count,
+                                   const char *backlight_path) {
+    char buf[64];
+    for (size_t i = 0; i < dpms_count; ++i) {
+        if (dpms_paths != nullptr && dpms_paths[i] != nullptr &&
+            readSmallSysfsFile(dpms_paths[i], buf, sizeof(buf)) > 0) {
+            const int state = parseDrmDpmsIsOff(buf);
+            if (state >= 0) {
+                return state;
+            }
+        }
+    }
+    for (size_t i = 0; i < enabled_count; ++i) {
+        if (enabled_paths != nullptr && enabled_paths[i] != nullptr &&
+            readSmallSysfsFile(enabled_paths[i], buf, sizeof(buf)) > 0) {
+            const int state = parseDrmEnabledIsOff(buf);
+            if (state >= 0) {
+                return state;
+            }
+        }
+    }
+    if (backlight_path != nullptr) {
+        const int br = readBacklightBrightnessFromPath(backlight_path);
+        if (br >= 0) {
+            return (br == 0) ? 1 : 0;
+        }
+    }
+    return -1;
+}
+
 class SscMotionClient {
 public:
     using PickupCallback = std::function<void(const char *source, float pitch_deg, float roll_deg)>;
     using LogCallback = std::function<void(const char *msg)>;
 
+    static constexpr const char *kDrmDpmsPathPrimary =
+        "/sys/class/drm/card0-DSI-1/dpms";
+    static constexpr const char *kDrmDpmsPathSecondary =
+        "/sys/class/drm/card0-DSI-0/dpms";
+    static constexpr const char *kDrmEnabledPathPrimary =
+        "/sys/class/drm/card0-DSI-1/enabled";
+    static constexpr const char *kDrmEnabledPathSecondary =
+        "/sys/class/drm/card0-DSI-0/enabled";
     static constexpr const char *kBacklightPath =
         "/sys/class/backlight/panel0-backlight/brightness";
     static constexpr float kAccelFallbackRateHz = 25.0f;
@@ -64,28 +221,42 @@ public:
     SscMotionClient &operator=(const SscMotionClient &) = delete;
 
     static int readBacklightBrightness(const char *path = kBacklightPath) {
-        int fd = ::open(path, O_RDONLY | O_CLOEXEC);
-        if (fd < 0) {
-            return -1;
-        }
-        char buf[32];
-        ssize_t n = ::read(fd, buf, sizeof(buf) - 1);
-        ::close(fd);
-        if (n <= 0) {
-            return -1;
-        }
-        buf[n] = '\0';
-        char *end = nullptr;
-        long val = std::strtol(buf, &end, 10);
-        if (end == buf) {
-            return -1;
-        }
-        return static_cast<int>(val);
+        return readBacklightBrightnessFromPath(path);
+    }
+
+    static int queryScreenOffSysfs() {
+        static constexpr const char *kDpmsPaths[] = {
+            kDrmDpmsPathPrimary,
+            kDrmDpmsPathSecondary,
+        };
+        static constexpr const char *kEnabledPaths[] = {
+            kDrmEnabledPathPrimary,
+            kDrmEnabledPathSecondary,
+        };
+        return queryScreenOffFromPaths(kDpmsPaths, sizeof(kDpmsPaths) / sizeof(kDpmsPaths[0]),
+                                       kEnabledPaths, sizeof(kEnabledPaths) / sizeof(kEnabledPaths[0]),
+                                       kBacklightPath);
     }
 
     static bool isScreenOffSysfs() {
-        const int br = readBacklightBrightness();
-        return br == 0;
+        return queryScreenOffSysfs() == 1;
+    }
+
+    bool sleepInterruptibleMs(int ms) {
+        if (stop_requested_.load(std::memory_order_acquire)) {
+            return false;
+        }
+        if (wake_pipe_[0] < 0) {
+            return false;
+        }
+        struct pollfd pfd {};
+        pfd.fd = wake_pipe_[0];
+        pfd.events = POLLIN;
+        int rc = ::poll(&pfd, 1, ms);
+        if (rc > 0) {
+            drainWakePipe();
+        }
+        return !stop_requested_.load(std::memory_order_acquire);
     }
 
     bool start() {
@@ -165,23 +336,6 @@ private:
             ::close(wake_pipe_[1]);
             wake_pipe_[1] = -1;
         }
-    }
-
-    bool sleepInterruptibleMs(int ms) {
-        if (stop_requested_.load(std::memory_order_acquire)) {
-            return false;
-        }
-        if (wake_pipe_[0] < 0) {
-            return false;
-        }
-        struct pollfd pfd {};
-        pfd.fd = wake_pipe_[0];
-        pfd.events = POLLIN;
-        int rc = ::poll(&pfd, 1, ms);
-        if (rc > 0) {
-            drainWakePipe();
-        }
-        return !stop_requested_.load(std::memory_order_acquire);
     }
 
     void closeSession(SscMotionSession &sess) {
@@ -272,8 +426,8 @@ private:
         logLine("WORKER_START pickup=enabled");
 
         while (!stop_requested_.load(std::memory_order_acquire)) {
-            const int br = readBacklightBrightness();
-            if (br > 0) {
+            const int screen_off = queryScreenOffSysfs();
+            if (screen_off == 0) {
                 /* Screen is ON: pause SSC stream completely for zero SLPI power draw. */
                 if (sess.fd >= 0) {
                     closeSession(sess);
@@ -286,8 +440,8 @@ private:
                 sleepInterruptibleMs(kScreenPollMs);
                 continue;
             }
-            if (br < 0) {
-                /* Backlight sysfs temporarily unavailable: do not spin aggressively. */
+            if (screen_off < 0) {
+                /* Display/backlight sysfs temporarily unavailable: do not spin aggressively. */
                 if (sess.fd >= 0) {
                     closeSession(sess);
                 }
@@ -296,7 +450,7 @@ private:
             }
             was_screen_on_logged = false;
 
-            /* Screen is OFF (brightness == 0): ensure SLPI stream is open. */
+            /* Screen is OFF (DRM DPMS Off/Suspend/Standby, disabled, or fallback brightness == 0): ensure SLPI stream is open. */
             if (sess.fd < 0) {
                 if (!openPreferredStream(sess)) {
                     sleepInterruptibleMs(kRetryBackoffMs);
@@ -305,18 +459,17 @@ private:
             }
 
             /* Active streaming loop while screen stays OFF. */
-            int64_t next_bl_check_ms = monotonicMs() + kScreenPollMs;
+            int64_t next_screen_check_ms = monotonicMs() + kScreenPollMs;
             while (!stop_requested_.load(std::memory_order_acquire)) {
                 const int64_t now_before = monotonicMs();
-                if (now_before >= next_bl_check_ms) {
-                    const int cur_br = readBacklightBrightness();
-                    if (cur_br != 0) {
+                if (now_before >= next_screen_check_ms) {
+                    if (queryScreenOffSysfs() != 1) {
                         closeSession(sess);
                         detector_.resetGesture();
                         logLine("STREAM_PAUSE reason=screen_on");
                         break;
                     }
-                    next_bl_check_ms = now_before + kScreenPollMs;
+                    next_screen_check_ms = now_before + kScreenPollMs;
                 }
 
                 SscMotionEventBatch batch {};

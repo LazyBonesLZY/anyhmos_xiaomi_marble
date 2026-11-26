@@ -99,7 +99,6 @@ SERVICE_SOURCES=(
   "main/src/executor_func_common.c"
   "main/src/pin_auth.cpp"
   "main/src/verifier_func.c"
-  "service/src/all_in_one_impl.cpp"
   "service/src/collector_impl.cpp"
   "service/src/executor_impl_common.cpp"
   "service/src/pin_auth_interface_service.cpp"
@@ -117,6 +116,12 @@ for rel in "${SERVICE_SOURCES[@]}"; do
     "$CLANG" "${COMMON_FLAGS[@]}" -std=gnu11 -c "$src" -o "$obj"
   fi
 done
+
+# Compile marble compat all_in_one_impl.cpp (64B + 96B Scrypt||SHA256 unlock support)
+ALL_IN_ONE_OBJ="$OUT/obj/marble_all_in_one_impl.o"
+"$CLANGPP" "${COMMON_FLAGS[@]}" "${CPP_FLAGS[@]}" \
+  -c "$ROOT/compat/pinauth/all_in_one_impl.cpp" -o "$ALL_IN_ONE_OBJ"
+OBJS+=("$ALL_IN_ONE_OBJ")
 
 # 2. Link libpin_auth_interface_service_3.0.z.so
 SERVICE_SO="$OUT/libpin_auth_interface_service_3.0.z.so"
@@ -223,4 +228,60 @@ cc -std=gnu11 -O2 -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-declaratio
   -o "$OUT/pin_auth_host_test"
 
 "$OUT/pin_auth_host_test"
+
+# 5. Build & run C++ offline host unit test exercising compat/pinauth/all_in_one_impl.cpp
+#    (64-byte + 96-byte Scrypt||SHA256 enroll & lockscreen unlock flows end-to-end)
+HOST_CPP_OBJ_DIR="$OUT/host_cpp_obj"
+mkdir -p "$HOST_CPP_OBJ_DIR"
+
+HOST_COMMON_INCS=(
+  -I"$ROOT/compat/pinauth/include"
+  -I"$OUT/generated"
+  -I"$OUT/generated/pin_auth"
+  -I"$PA_SRC/service/inc"
+  -I"$PA_SRC/adaptor/inc"
+  -I"$PA_SRC/common/inc"
+  -I"$PA_SRC/database/inc"
+  -I"$PA_SRC/main/inc"
+  -I"$UPSTREAM/drivers_peripheral/pin_auth/common/logs"
+  -I"$UPSTREAM/drivers_peripheral/pin_auth/common/utils"
+  -I"$UPSTREAM/bounds_checking_function/include"
+  -isystem "$UPSTREAM/hiviewdfx_hilog/interfaces/native/innerkits/include"
+  -isystem "$UPSTREAM/commonlibrary_c_utils/base/include"
+  -isystem "$UPSTREAM/communication_ipc/interfaces/innerkits/ipc_core/include"
+  -isystem "$HDF/interfaces/inner_api/utils"
+  -isystem "$HDF/interfaces/inner_api/hdi"
+  -isystem "$HDF/interfaces/inner_api/hdi/base"
+  -isystem "$HDF/interfaces/inner_api/osal/uhdf"
+  -isystem "$HDF/interfaces/inner_api/osal/shared"
+)
+
+HOST_CPP_OBJS=()
+for csrc in "${HOST_C_SOURCES[@]}"; do
+  if [[ "$csrc" == *"host_test_pinauth.c" ]]; then
+    continue
+  fi
+  base="$(basename "$csrc" .c)"
+  obj="$HOST_CPP_OBJ_DIR/${base}.o"
+  cc -std=gnu11 -O2 -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-declarations -Wno-format \
+    "${HOST_COMMON_INCS[@]}" -c "$csrc" -o "$obj"
+  HOST_CPP_OBJS+=("$obj")
+done
+
+for cppsrc in \
+  "$ROOT/compat/pinauth/all_in_one_impl.cpp" \
+  "$PA_SRC/main/src/pin_auth.cpp" \
+  "$PA_SRC/service/src/executor_impl_common.cpp" \
+  "$UPSTREAM/commonlibrary_c_utils/base/src/refbase.cpp" \
+  "$ROOT/compat/pinauth/host_test_all_in_one.cpp"; do
+  base="$(basename "$cppsrc" .cpp)"
+  obj="$HOST_CPP_OBJ_DIR/${base}.o"
+  c++ -std=c++17 -O2 -pthread -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-declarations -Wno-format -Wno-narrowing -Wno-cpp \
+    "${HOST_COMMON_INCS[@]}" -c "$cppsrc" -o "$obj"
+  HOST_CPP_OBJS+=("$obj")
+done
+
+c++ -std=c++17 -O2 -pthread "${HOST_CPP_OBJS[@]}" -lcrypto -o "$OUT/pin_auth_all_in_one_cpp_test"
+"$OUT/pin_auth_all_in_one_cpp_test"
+
 echo "PINAUTH_BUILD_OK out=$OUT"

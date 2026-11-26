@@ -21,22 +21,40 @@
 | `external/` | 上游源码版本记录（`upstream-sources.json`）、依赖构建记录及完整上游许可证（`licenses/`）。 |
 | `archive/sheng/` | 原 `sheng` 历史归档（旧版 README、v146 `RELEASE.json`/`SOURCE-SELECTION.json`、历史验收报告 `analysis/`/`evidence/`、被替代的旧版 donor/Mesa 补丁）。 |
 
-## `marble` 移植状态
+## `marble` 移植状态（2026-11-26 · Batch M5 实机基线）
 
-当前已完成 **Phase 0 实机采集** 与 **Phase 1 5.10 内核/IPC 编译审计**，共享兼容层 `compat/` 已去机型化统一为 `hmos_*` 命名：
+当前已完成 **Phase 0 ~ Phase 6** 主线移植与 **Batch A ~ M5** 分批功能适配，真机 A 槽当前装机基线为 **Batch M5**（`vendor_boot_a = c4b6a64f…`、`boot_a = c83a8468…`，保留 `userdata` 及原厂底层分区，`libhmos_ram_no_tee.so` 保持 EL2 用户数据不加密，19 个 HDF 宿主常驻）：
 
-- [x] 导入 `sheng` 完整参考基线并完成多机型分层重构
+- [x] 导入 `sheng` 参考基线并完成多机型分层重构（`compat/` 与 `devices/marble/` 解耦）
 - [x] Phase 0：在真机运行 [collect-marble-baseline.sh](devices/marble/scripts/collect-marble-baseline.sh) 并回填 [devices/marble/device.json](devices/marble/device.json)
-- [x] Phase 1：完成 Linux 5.10.274 内核导出补丁（`marble_hmos_exports.c` / `hmos_ipc_api_v1`）、`hmos_ipc.ko`、`hmos_dmabuf_sync.ko`、配套模块与静态 IPC 契约测试编译及 CFI/CRC 审计
-- [ ] Phase 2：`boot.img` ramdisk + `vendor_boot.img` 引导与 USB ACM 串口闭环（含实机备份与 IPC 契约验收）
-- [ ] Phase 3：9 GiB `super` 打包、ext4 `userdata` 挂载与鸿蒙核心服务拉起
-- [ ] Phase 4：单 DSI 1080×2400 桌面和触控已上机；设置、时钟从桌面进入前台已实测，仍有独立子系统待验收。
-- [ ] Phase 5：Wi-Fi（QCA6490）、PAL 音频、蓝牙与电池充电连通
-- [ ] Phase 6：SSC 传感器、温控、120Hz 刷新率优化与手机 Donor 迁移
+- [x] Phase 1：完成 Linux 5.10.274 内核导出补丁（`marble_hmos_exports.c` / `hmos_ipc_api_v1`）、`hmos_ipc.ko`、`hmos_dmabuf_sync.ko` 与 CFI/CRC 审计
+- [x] Phase 2：`boot.img` 最小入口 + `vendor_boot.img` `/compat` 载荷与 USB ACM（COM9）串口闭环
+- [x] Phase 3：9 GiB `super`（手机 Donor `ADY-AL10 207.0.0.111(SP10)`）+ ext4 `userdata` + OHOS 核心服务拉起
+- [x] Phase 4：单 DSI 1080×2400 OLED（`120Hz` + 挖孔/色彩/护眼）+ Adreno 725 Turnip + Goodix 原生触控 + 桌面与开机动画
+- [x] Phase 5：QCA6490 Wi-Fi/SoftAP、蓝牙（HCI/A2DP）、ADSP PAL 音频与通话语音、67W 快充信息与 `mi_thermald` 温控
+- [x] Phase 6：SLPI/SSC 传感器（含自动亮度与抬起亮屏）、5G/4G 蜂窝数据/VoLTE/VoNR/IMS 短信、4 颗物理相机与手电筒、Venus 硬编解码、NFC、线性马达震动、双击亮屏、纯用户态锁屏密码（64B/96B）与 AOD/实况窗服务
 
-**最新真机进度（2026-11-23）：** M15 G 已恢复应用启动，Wi‑Fi 已通过网关与公网 IP 收发实测。存储容量汇总、实况窗到期、HAP 安装、录音及 HDC 传输仍待验收。见[进度与回退](docs/MARBLE_HANDOFF.md#0-当前实机状态)及[真机证据](docs/VERIFICATION.md#m15-g真机应用启动与-wlan-联网)。完整路线见[移植规划](docs/MARBLE_PORTING_PLAN.md)。
+### 功能实机状态一览（如实区分已实测、需交互确认与硬件/安全边界）
 
-**刷写与工件规则（2026-11-24 更新）**：用户允许按适配需要刷写 boot_a 和 vendor_boot_a，保留 userdata 及其它原厂底层分区；不逐轮堆积整镜备份。功能批次、最少恢复基线和依赖清理见[分批计划](docs/MARBLE_BATCH_PLAN.md)。
+| 子系统 | 当前状态（Batch M5 · `c4b6a64f`） | 说明与边界 |
+| --- | --- | --- |
+| 显示 / GPU / 桌面 | **已实机验证** | 1080×2400 单 DSI 120Hz、Adreno 725 Turnip、挖孔居中对齐、`SDE_DSPP_PCC_V4` 色温/护眼、无卡顿异步提交。 |
+| 蜂窝网络 / 5G / 流量 | **已实机验证** | MPSS + IPA v5.0 / QMAPv5（`rmnet0` 锁定 `llp=2, ul=5, dl=9`），5G NR SA / 4G LTE 注网、上网与状态栏信号/网速正常。 |
+| 短信（IMS SMS） | **已实机验证** | `hmos_ims_core_service` 修正 `QMI_WMS_BIND_SUBSCRIPTION (0x004c)` 及 3GPP `SMS-SUBMIT` (`tech=1`) 路由，实机首包 `fmt=0x06 ims=1 rc=0 qerr=0x0 ok=1 ref=193` 经运营商网络受理。 |
+| 语音与 HD 通话（VoLTE/VoNR） | **链路已验证 / 待实测外呼** | 已实现 `ImsCallInterface` (`QMI_VOICE` `CALL_TYPE_VOICE_IP=0x08`) 与 `libril_vendor_qmi` CS/IMS 去重，`CellularCall` 实机回执 `GetImsCallProxy success`、`active 1, isVolteSupport 1`，PAL 语音通路就绪；真实双端语音清晰度待用户实拨确认。 |
+| 相机与手电筒 | **已实机验证** | 4 颗物理光学镜头（OV64B40 / S5K3P9 / IMX355 / GC02M1）+ 手电筒 `V1_2` 全通；主摄 OV64B40 默认 4:3 全视场 `4624x3472`，零拷贝 4 线程直转 NV21（SM7475 实测 `6.5ms/帧`）+ GT9764 CDAF 自动对焦（清晰度 `81→1092`）。 |
+| 震动与手势触感 | **已实机验证** | `vibrator_host` 提前于 `SA 3602` 启动并保护 `event6`（`qcom-hv-haptics` `3034:3034`），`SceneBoard` 手势 `IsSupportEffect` 返回 `state:1`，短脉宽 LRA 预设调优至 22–28ms / 70–85%。 |
+| 双击亮屏 / 抬起亮屏 / 自动亮度 | **链路已验证 / 待手势体验** | `marble_touch_wakeup` 自动建立 `event10` 且 `multimodalinput` 启动即持有 fd；`motion_host` 通过 DRM `DPMS=Off` 实测触发 SLPI `tilt_to_wake` 并带 `PICKUP_RESET` 去重重置；ALS `tcs3701` 暗/亮室自动调光已通过。 |
+| 锁屏密码（PIN） | **已修复并解救旧密码** | 兼容供体 64B 与 96B（64B Scrypt + 32B SHA256）`pinData`，不再报 `bad pinData len!`；保持 EL2 `userdata` 不加密。 |
+| 实况窗刷新（AOD / Reminder） | **已实机验证** | 新增 `aod_service`（`SA 65840`）并在 `foundation` 启用 `SA 3204`（`libreminder.z.so`），`SceneBoard` 加载 `SA 65840` 耗时 `0ms`，消除 120s 通知订阅超时。 |
+| Wi-Fi / 热点 / 蓝牙 / 音频 / GNSS / NFC / 硬编解码 | **已实机验证** | QCA6490 Wi-Fi 与 SoftAP `hostapd_host`、蓝牙、ADSP PAL 放音、GNSS 定位、NXP SN110T NFC `SA 1140`、Venus H.264/HEVC 环回与小米 `mi_thermald` 均已合入并通过回归。 |
+| USB 调试（HDC） | **默认保持 COM9 救援口** | 当前物理 USB 固定为 COM9 ACM 串口救援通道，未自动切换 HDC 组合口，以免丢失串口访问。 |
+| 指纹识别 | **已知硬件边界** | `fpc1540`/`goodix_3626` SPI 归属 QSEE TrustZone 且无小米签名 TA，暂不可用。 |
+| 卓易通（ANCO）/ 华为商店设备证明 | **已知安全边界（不绕过）** | 本地 ANCO 服务（`SA 3006/65601/66816/66818/66854`）稳定在线不再引发死机；因无华为原厂设备证书及预置 `agi.img`/`anco_hmos.img` 容器镜像，云端设备证明与容器下载校验无法通过且本项目不作绕过。 |
+
+详见[当前现场与回退](docs/MARBLE_HANDOFF.md)、[分批里程碑记录](docs/MARBLE_BATCH_PLAN.md)、[刷机后期望值](docs/MARBLE_EXPECTED_AFTER_FLASH.md)与[验证范围](docs/VERIFICATION.md)。
+
+**刷写与工件规则**：按适配需要仅刷写 `boot_a` / `vendor_boot_a`（刷完立刻 `set_active a`），严格保留 `userdata` 与全部原厂底层分区（`super`/`abl`/`xbl`/`vbmeta*`/`modem*`/`dsp*`/`bluetooth*`/`persist`/`recovery*`）。
 
 ## 常用维护命令
 

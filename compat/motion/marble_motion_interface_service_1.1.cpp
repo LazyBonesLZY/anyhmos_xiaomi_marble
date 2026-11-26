@@ -192,22 +192,42 @@ public:
     }
 
 private:
+    static constexpr int kPickupResetDelayMs = 150;
+
     struct CallbackEntry {
         const void *key = nullptr;
         sptr<V1_0::IMotionCallback> cb;
     };
 
-    void onPickupDetected(const char *src, float pitch_deg, float roll_deg) {
+    std::vector<sptr<V1_0::IMotionCallback>> snapshotCallbacks() {
         std::vector<sptr<V1_0::IMotionCallback>> snapshot;
-        {
-            std::lock_guard<std::mutex> lk(cb_mu_);
-            snapshot.reserve(callbacks_.size());
-            for (const auto &entry : callbacks_) {
-                if (entry.cb != nullptr) {
-                    snapshot.push_back(entry.cb);
-                }
+        std::lock_guard<std::mutex> lk(cb_mu_);
+        snapshot.reserve(callbacks_.size());
+        for (const auto &entry : callbacks_) {
+            if (entry.cb != nullptr) {
+                snapshot.push_back(entry.cb);
             }
         }
+        return snapshot;
+    }
+
+    static void deliverEvent(const std::vector<sptr<V1_0::IMotionCallback>> &snapshot,
+                             const V1_0::HdfMotionEvent &ev,
+                             size_t &delivered,
+                             int32_t &last_rc) {
+        delivered = 0;
+        last_rc = 0;
+        for (const auto &cb : snapshot) {
+            const int32_t rc = cb->OnDataEvent(ev);
+            last_rc = rc;
+            if (rc == HDF_SUCCESS) {
+                ++delivered;
+            }
+        }
+    }
+
+    void onPickupDetected(const char *src, float pitch_deg, float roll_deg) {
+        std::vector<sptr<V1_0::IMotionCallback>> snapshot = snapshotCallbacks();
 
         V1_0::HdfMotionEvent ev{};
         ev.motion = V1_0::HDF_MOTION_TYPE_PICKUP;
@@ -218,13 +238,7 @@ private:
 
         size_t delivered = 0;
         int32_t last_rc = 0;
-        for (const auto &cb : snapshot) {
-            const int32_t rc = cb->OnDataEvent(ev);
-            last_rc = rc;
-            if (rc == HDF_SUCCESS) {
-                ++delivered;
-            }
-        }
+        deliverEvent(snapshot, ev, delivered, last_rc);
 
         char msg[160];
         std::snprintf(msg, sizeof(msg),
@@ -234,6 +248,31 @@ private:
                       static_cast<double>(roll_deg),
                       snapshot.size(), delivered, last_rc);
         appendMotionLog(msg);
+
+        /*
+         * Deliver a follow-up reset event (result=1) after 150 ms so donor
+         * libmotion_service.z.so (MotionDataManager) updates its last_result
+         * deduplication cache from 0 -> 1 ("repeat status not report"), while
+         * PickupMotionSubscriber ignores result != 0 (cbz w21).
+         */
+        if (!snapshot.empty() && ssc_client_.sleepInterruptibleMs(kPickupResetDelayMs)) {
+            std::vector<sptr<V1_0::IMotionCallback>> reset_snapshot = snapshotCallbacks();
+            V1_0::HdfMotionEvent ev_reset{};
+            ev_reset.motion = V1_0::HDF_MOTION_TYPE_PICKUP;
+            ev_reset.result = 1;
+            ev_reset.status = 0;
+            ev_reset.datalen = 0;
+            ev_reset.data.clear();
+
+            size_t reset_delivered = 0;
+            int32_t reset_rc = 0;
+            deliverEvent(reset_snapshot, ev_reset, reset_delivered, reset_rc);
+
+            std::snprintf(msg, sizeof(msg),
+                          "PICKUP_RESET cbs=%zu ok=%zu last_rc=%d",
+                          reset_snapshot.size(), reset_delivered, reset_rc);
+            appendMotionLog(msg);
+        }
     }
 
     std::mutex state_mu_;
