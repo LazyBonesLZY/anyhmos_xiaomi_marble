@@ -1,6 +1,6 @@
 # 小米 marble（Redmi Note 12 Turbo / POCO F5）· HarmonyOS NEXT 移植仓库
 
-[目录架构](docs/ARCHITECTURE.md) · [marble 移植规划](docs/MARBLE_PORTING_PLAN.md) · [构建说明](docs/BUILDING.md) · [源码索引](docs/SOURCE_MAP.md) · [来源与许可](docs/PROVENANCE.md)
+[目录架构](docs/ARCHITECTURE.md) · [marble 移植规划](docs/MARBLE_PORTING_PLAN.md) · [构建说明](docs/BUILDING.md) · [打包与一键刷机](docs/PACKAGING.md) · [源码索引](docs/SOURCE_MAP.md) · [来源与许可](docs/PROVENANCE.md)
 
 本项目旨在基于 [AnyHarmonyOSNext/anyhmos_xiaomi_sheng](https://github.com/AnyHarmonyOSNext/anyhmos_xiaomi_sheng) 已验证的 **“只读 `super` + 内存 `/compat` 叠加”** 架构，将 HarmonyOS NEXT 移植到 **小米 `marble`（Redmi Note 12 Turbo / POCO F5，SM7475 / Snapdragon 7+ Gen 2）**。
 
@@ -11,7 +11,7 @@
 | 目录 | 定位与内容 |
 | --- | --- |
 | `compat/` | 鸿蒙兼容层核心源码（IPC 内核模块、DRM Display VDI、Mesa/dmabuf_sync、Audio VDI/PAL、BT/Wi-Fi 桥接、SSC 传感器、UserIAM、无 TEE Framework、Bootstrap 等）。 |
-| `devices/marble/` | **目标机型（`marble`）**：硬件参数定义、Phase 0 实机信息采集脚本、后续 5.10 内核导出与运行时脚本存放区。 |
+| `devices/marble/` | **目标机型（`marble`）**：硬件参数定义、Phase 0/2 采集与备份脚本、Linux 5.10.274 内核符号导出与 Batch M6 `code_sign`/`fs-verity` 补丁，以及 18 个子系统的运行时脚本与配置。 |
 | `devices/sheng/` | **参考机型（`sheng`）**：原小米平板 6S Pro 12.4 的 5.15 内核配置/导出补丁，以及按子系统归类后的运行时脚本与配置（`init/`、`profiles/`、`boot/`、`graphics/`、`audio/`、`wifi/`、`bluetooth/`、`sensors/`、`power/`）。 |
 | `patches/` | 带 SHA-256 与指令上下文守卫的 ELF 二进制补丁配方（`donor/gem-w00-111-sp12/`、`display/`、`init/`）。 |
 | `tools/` | 宿主机工程脚本，按职责拆分为 `build/`（组件编译）、`packaging/`（Donor 提取与镜像/Ramdisk 组装）、`maint/`（清单刷新与源码校验）。 |
@@ -38,7 +38,7 @@
 
 | 子系统 | 当前状态（Batch M6 · `f80fe1b1` / `577e5a5e`） | 说明与边界 |
 | --- | --- | --- |
-| 内核代码签名 / HAP 安装 | **已实机验证（无绕过）** | 移植 OpenHarmony 内核 `fs/code_sign/`（`/dev/code_sign` 5 项 ioctl）、`FS_IOC_ENABLE_CODE_SIGN`（ext4 + f2fs）、ECDSA NIST P-256/P-384 与 PKCS#7 `OID_ownerid`；657 个厂商模块 KABI CRC/vermagic 0 冲突；移除旧 Phase 3 `libcode_sign_utils.z.so` 旁路并无损启用 `userdata` ext4 `RO_COMPAT_VERITY`（`0x807b`）。AGC 调试签名 HAP 真机 `bm install` 通过，主包与全部 9 个 `.so` 均带 `lsattr` `V`（`FS_VERITY_FL`）且只读不可篡改；未签名与 1 字节篡改负控均被严格拒绝。 |
+| 内核代码签名 / HAP 安装 | **已实机验证（无绕过）** | 移植 OpenHarmony 内核 `fs/code_sign/`（`/dev/code_sign` 5 项 ioctl）、`FS_IOC_ENABLE_CODE_SIGN`（ext4 + f2fs）、ECDSA NIST P-256/P-384 与 PKCS#7 `OID_ownerid`；657 个厂商模块 KABI CRC/vermagic 0 冲突；移除旧 Phase 3 `libcode_sign_utils.z.so` 旁路并无损启用 `userdata` ext4 `RO_COMPAT_VERITY`（`0x807b`）。AGC 调试签名 HAP（DeviceInfoX 10/10 文件、CoolApk 7.1.5 11/11 文件）真机 `bm install` 均通过，全部 `.hap` 与 `.so` 均带 `lsattr` `V`（`FS_VERITY_FL`）且只读不可篡改；未签名与 1 字节篡改负控均被严格拒绝。 |
 | 显示 / GPU / 桌面 | **已实机验证** | 1080×2400 单 DSI 120Hz、Adreno 725 Turnip、挖孔居中对齐、`SDE_DSPP_PCC_V4` 色温/护眼、无卡顿异步提交。 |
 | 蜂窝网络 / 5G / 流量 | **已实机验证** | MPSS + IPA v5.0 / QMAPv5（`rmnet0` 锁定 `llp=2, ul=5, dl=9`），5G NR SA / 4G LTE 注网、上网与状态栏信号/网速正常。 |
 | 短信（IMS SMS） | **已实机验证** | `hmos_ims_core_service` 修正 `QMI_WMS_BIND_SUBSCRIPTION (0x004c)` 及 3GPP `SMS-SUBMIT` (`tech=1`) 路由，实机首包 `fmt=0x06 ims=1 rc=0 qerr=0x0 ok=1 ref=193` 经运营商网络受理。 |
@@ -55,7 +55,29 @@
 
 详见[当前现场与回退](docs/MARBLE_HANDOFF.md)、[分批里程碑记录](docs/MARBLE_BATCH_PLAN.md)、[刷机后期望值](docs/MARBLE_EXPECTED_AFTER_FLASH.md)与[验证范围](docs/VERIFICATION.md)。
 
-**刷写与工件规则**：按适配需要仅刷写 `boot_a` / `vendor_boot_a`（刷完立刻 `set_active a`），严格保留 `userdata` 与全部原厂底层分区（`super`/`abl`/`xbl`/`vbmeta*`/`modem*`/`dsp*`/`bluetooth*`/`persist`/`recovery*`）。
+**刷写与工件规则**：按适配需要仅刷写 `boot_a` / `vendor_boot_a`（刷完立刻 `set_active a`），严格保留 `userdata` 与全部原厂底层分区（`abl`/`xbl`/`modem*`/`dsp*`/`bluetooth*`/`persist`/`recovery*`/`dtbo*`）。
+
+## Fastboot 一键刷机包组装与使用
+
+本仓库不直接托管闭源 `.img` 大镜像，而是提供跨平台自校验打包器 [assemble_marble_fastboot_package.py](tools/packaging/assemble_marble_fastboot_package.py) 与刷机脚本（Windows [Flash-Marble.ps1](tools/packaging/Flash-Marble.ps1) + 双击 `.bat` 封装、Linux/macOS [flash-marble.sh](tools/packaging/flash-marble.sh)），支持两种形态：
+
+- **增量升级包（Upgrade，推荐给已有 AnyHMOS 用户）**：仅含 `boot.img` + `vendor_boot.img`，刷入 `boot_a`/`vendor_boot_a` + `set_active a`，**完全保留 `super` 与 `userdata`**。
+- **完整一键刷机包（FullInstall，首次从原厂 MIUI/HyperOS 迁入）**：包含 `boot.img` + `vendor_boot.img` + `vbmeta.img` + `vbmeta_system.img` + 9 GiB 稀疏 `super.img`，刷写前强校验 `product == marble`、`unlocked == yes`、`is-userspace == no` 与每个文件 SHA-256；默认不触碰 `userdata`（需首次从加密 Android 迁移时才显式启用 `-FormatUserdataExt4` / `--format-userdata-ext4` 并二次键入确认）。
+
+```sh
+# 组装完整 Fastboot 一键刷机包（省略 --super/--vbmeta* 则生成轻量增量升级包）
+python3 tools/packaging/assemble_marble_fastboot_package.py \
+  --out /path/to/anyhmos-marble-m6-fastboot-full \
+  --boot /path/to/boot_m6.img \
+  --vendor-boot /path/to/vendor_boot_m6.img \
+  --super /path/to/super_marble.img \
+  --vbmeta /path/to/vbmeta_a.img \
+  --vbmeta-system /path/to/vbmeta_system_a.img \
+  --platform-tools /path/to/platform-tools \
+  --device-boot-tested --boot-id 52d5c34b-ba82-46a6-8679-2b1099e2e688
+```
+
+详见 [打包与一键刷机说明](docs/PACKAGING.md)。
 
 ## 常用维护命令
 

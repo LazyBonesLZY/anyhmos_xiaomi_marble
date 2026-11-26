@@ -99,7 +99,7 @@ After compilation, 34 runtime files were packaged as v146. The device boot trio 
 
 当前装机和实测结论见 [M15 G：真机应用启动与 WLAN 联网](#m15-g真机应用启动与-wlan-联网)。下面按轮次保留历史对照；旧版未通过的项目只代表当时的状态。
 
-本节只记 `marble`（Redmi Note 12 Turbo / POCO F5，序列号 `5030e45e`）实测。donor 为 ADY-AL10 `207.0.0.111(SP10)`；活动槽 `a`，仅写 `vendor_boot_a`。记录本地镜像 SHA-256、设备分区读回 SHA-256、对应 `boot_id`，以及与实验相关的有效配置或映射库哈希：
+本节只记 `marble`（Redmi Note 12 Turbo / POCO F5）实测。donor 为 ADY-AL10 `207.0.0.111(SP10)`；活动槽 `a`，仅写 `vendor_boot_a`。记录本地镜像 SHA-256、设备分区读回 SHA-256、对应 `boot_id`，以及与实验相关的有效配置或映射库哈希：
 
 | 候选 / Candidate | vendor_boot SHA-256 | 结论 / Result |
 | --- | --- | --- |

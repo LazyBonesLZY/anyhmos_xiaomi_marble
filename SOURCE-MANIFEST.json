@@ -19,13 +19,13 @@
     },
     {
       "path": ".gitignore",
-      "bytes": 540,
-      "sha256": "e541210d028014b25f3574fe527324cc3da563b13798cbd3b48aa2d1713bb1fb"
+      "bytes": 570,
+      "sha256": "08cbab0685d6622e5c5f478d030b8661fba2411c77dc73a5ad4542e470424bb0"
     },
     {
       "path": "README.md",
-      "bytes": 9627,
-      "sha256": "5da3aafb1eb948665bf729f4bdf8f1ec1e999d7c55615cdf39e586d832f1c2c5"
+      "bytes": 11476,
+      "sha256": "e329ae90d8c10c1b2b07c6822411aa4c1bb504d39efc32ae430e7d194303276e"
     },
     {
       "path": "archive/sheng/README.sheng.en.md",
@@ -2264,8 +2264,8 @@
     },
     {
       "path": "devices/marble/README.md",
-      "bytes": 5254,
-      "sha256": "0ccd5db12663402154fe468ab55e15517a0edf4fec6fd3db0fe0aa34bc113c0f"
+      "bytes": 5773,
+      "sha256": "3953eaee98385bbbcfc7ba36e8ddfe353221baf10c6aa13a9615c8045aa3baec"
     },
     {
       "path": "devices/marble/boot/marble_init_entry.c",
@@ -3344,13 +3344,13 @@
     },
     {
       "path": "docs/BUILDING.md",
-      "bytes": 5949,
-      "sha256": "c6ca3d93232594c92fd9378dcb0a03794ec8f71deef7694e15db0b839f8921a1"
+      "bytes": 6877,
+      "sha256": "d7cb07b0bac8d894b50826dc641bcd6cf8615305281344869329382a4ad4de88"
     },
     {
       "path": "docs/MARBLE_BATCH_PLAN.md",
-      "bytes": 273971,
-      "sha256": "540be2e6489dc8e13f33de7e7f8039961010cf15a70b493df8baf220df29afb7"
+      "bytes": 274699,
+      "sha256": "c9a779cb4ba4b6f372ace66504530ba51ddd2dc25621ab5ad73c4c12fda6f666"
     },
     {
       "path": "docs/MARBLE_DCM_SOFT_TEE.md",
@@ -3369,8 +3369,8 @@
     },
     {
       "path": "docs/MARBLE_HANDOFF.md",
-      "bytes": 34360,
-      "sha256": "e90e76b32234656204ad93b28f0b260a3aae5272902363081ce53a802f25cbca"
+      "bytes": 34649,
+      "sha256": "e4739c72c4a0a39c4c5c7d807366dcf7e5d13dde5a842c615f974f6c1a4a5995"
     },
     {
       "path": "docs/MARBLE_IDENTITY.md",
@@ -3389,8 +3389,8 @@
     },
     {
       "path": "docs/PACKAGING.md",
-      "bytes": 1213,
-      "sha256": "6eabb8096f733404119d56dbaaa7c6695ba50cffd7ae05f7a93341b28ef39dda"
+      "bytes": 5162,
+      "sha256": "4aa72bb34730dbc9b047310bcd2a4cab4ab189c0a8bd4a6cbb3bc2cd7f0aed1d"
     },
     {
       "path": "docs/PROVENANCE.md",
@@ -3399,8 +3399,8 @@
     },
     {
       "path": "docs/SOURCE_MAP.md",
-      "bytes": 5270,
-      "sha256": "af5c952a8a90e61e9365663a11aca88f1ce2f380413de0d45b8175359a452049"
+      "bytes": 5647,
+      "sha256": "2ed22758009278de2a8c9bf8af5f556a06ec4089599a1031bef32abcb6cec9a9"
     },
     {
       "path": "docs/USERDATA.md",
@@ -3409,8 +3409,8 @@
     },
     {
       "path": "docs/VERIFICATION.md",
-      "bytes": 57474,
-      "sha256": "9e4addb4367bb2f5f05a6600c633d9e0fd5130ba844485ba6d9393cd2f9e2e03"
+      "bytes": 57451,
+      "sha256": "b60182c319146a0b61cd9f61c2031ba5852a6e993687f3aeb0b3e9e3c5c25d4c"
     },
     {
       "path": "external/dependency-records/build-report.json",
@@ -4178,6 +4178,11 @@
       "sha256": "5364d709a27ef17cadc5197de8eee4c123bb06fbe2b8c205483ba189811cff20"
     },
     {
+      "path": "tests/test_marble_fastboot_package.py",
+      "bytes": 10792,
+      "sha256": "ddb66983754d1cc03aed3810074d4c4dcdd2d2c960de89c1105aff78c387e630"
+    },
+    {
       "path": "tests/test_marble_gpu_stability.py",
       "bytes": 13840,
       "sha256": "74f1005d374beba071a25e6d3cbe21cbc7bbbc7037ed4fdd61d1f86614bfce40"
@@ -4668,6 +4673,11 @@
       "sha256": "1800788f86f8ab076887c8f3f1134afd65d1def43bf5169a69715d3c063ee09b"
     },
     {
+      "path": "tools/packaging/Flash-Marble.ps1",
+      "bytes": 13060,
+      "sha256": "ca66fc9888f7d35919424dc720f0360e5759e12024ba20de5ddd2c04c0d453c5"
+    },
+    {
       "path": "tools/packaging/Flash-ProMax.ps1",
       "bytes": 7285,
       "sha256": "be456a7ac9aa4e7d21ffd689bd362951e98db3236a25786a1710976a93e193ab"
@@ -4681,6 +4691,11 @@
       "path": "tools/packaging/apply_guarded_elf_patch.py",
       "bytes": 2220,
       "sha256": "7a2854190dfbe0d8718c38bd8713876ba161f6a20083cd559a759febbce5741f"
+    },
+    {
+      "path": "tools/packaging/assemble_marble_fastboot_package.py",
+      "bytes": 20768,
+      "sha256": "6d6d81953e74789195cda1325eaa337266ea6f4057dd00a075cbeab28e85d96b"
     },
     {
       "path": "tools/packaging/assemble_promax_package.py",
@@ -4946,6 +4961,11 @@
       "path": "tools/packaging/extract_huawei_full_ota.py",
       "bytes": 7031,
       "sha256": "e799ccacb6e9146cf4051c2840cffc43b2ea536d1b760e9aeca149dcef5a682c"
+    },
+    {
+      "path": "tools/packaging/flash-marble.sh",
+      "bytes": 14250,
+      "sha256": "5704f26e2df10b5971db9e151e408c5fc46c51a464a6b7bede63f983b3a63706"
     },
     {
       "path": "tools/packaging/hiview_event_service.py",

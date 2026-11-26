@@ -13,9 +13,10 @@
 >     1. **原版未改 `libcode_sign_utils.z.so`**：移除 `apply-donor-patches-phase4.sh` 中旧 Phase 3 旁路补丁，实机 `/system/lib64/libcode_sign_utils.z.so` 校验为原厂供体原文 `2dd39556056de2d5eb2d8d2696316c616a8645c71c3a26702b0c0b351dd86158`，无 bind-mount 覆盖。
 >     2. **无损启用 `userdata` ext4 `RO_COMPAT_VERITY`**：[marble_ext4_verity_enable.c](../compat/services/marble_ext4_verity_enable.c) 检测到 `INCOMPAT_RECOVER` 时安全返回 `rc=20`，由 `init-userdata-ext4.sh` 先触发内核 `jbd2` 回放日志并干净卸载后再原子置位 `0x8000`；真机读回 `userdata` 偏移 `1124` 为 **`0x0000807b`**，用户数据零丢失。
 >     3. **内核信任根与证书路径链**：`/dev/code_sign` (`10:127`, `0:3060 0660`)、`/proc/sys/fs/verity/{require_signatures,developer_mode}` 均为 `1`；供体 `key_enable` 载入 `.fs-verity` 密钥环（`fs_verity_key0: X509.ecdsa-nist-p384`，`Huawei CBG Root CA G2`）、激活信任库并注入 9 条供体证书路径；`local_code_sign`（`SA 3507`）按需启动与闲置卸载正常。
->     4. **真实签名 HAP `bm install` 与 10/10 文件内核 `fs-verity` 生效**：使用华为 AGC 调试凭证与官方 `hap-sign-tool.jar` 签名的 `deviceinfox`（`com.lazzyy.test`，仅移除 AGC 调试 profile 未授 ACL 的 `ohos.permission.FLOAT_VIEW`）经 `bm install` 实机返回 **`install bundle successfully.`** 并上线桌面（`usual.event.PACKAGE_ADDED`）；内核 `dmesg` 记录主包 `entry.hap` 与全部 9 个 `libs/arm64/*.so` 均通过 `sha256-ce` + `code_sign_verify_certchain` 验签；`lsattr` 实测 **10/10 文件均带 `V`（`FS_VERITY_FL`）**，全页读回 `sha256sum` 零错误，写入尝试被内核以 `Operation not permitted` 拒绝。
+>     4. **真实签名 HAP `bm install` 与原生内核 `fs-verity` 全量生效**：使用华为 AGC 调试凭证与官方 `hap-sign-tool.jar` 签名并同步修正 Panda `.abc` 命名路由与 `router_map.json` 的第三方应用均经 `bm install` 真机安装成功——`DeviceInfoX`（10/10 文件）与 `CoolApk 7.1.5`（主包 `default.hap` + 全部 10 个 `libs/arm64/*.so`，**11/11 文件均带 `lsattr` `V` (`FS_VERITY_FL`)**），内核 `dmesg` 均记录 `sha256-ce` + `code_sign_verify_certchain` 信任链通过，全页读回零错误，写入尝试被内核以 `Operation not permitted` 拒绝。
 >     5. **双负控严格拒绝（零绕过铁证）**：未签名同包 `bm install` 返回 **`code:9568320 error: no signature file.`**；对已签名 HAP 仅翻转 1 字节返回 **`code:9568324 error: signature verification failed due to out of integrity.`**。
->     6. **零回归与双分区回退**：`BOOT_COMPLETED=true`、`LSMOD_COUNT=242`、`MOD_ERRORS=0`、核心 SA（`10/401/1120/1130/3001/4010/4606`）与 `wlan0` 全部在线；双分区回退 M5（`boot_a=c83a8468…` + `vendor_boot_a=c4b6a64f…` + `set_active a`）使用本机临时脚本 `/mnt/e/marble-tmp/flash-h20-m6-control.sh`。
+>     6. **Fastboot 一键刷机包工程化**：新增 [assemble_marble_fastboot_package.py](../tools/packaging/assemble_marble_fastboot_package.py)、[Flash-Marble.ps1](../tools/packaging/Flash-Marble.ps1) 与 [flash-marble.sh](../tools/packaging/flash-marble.sh)，支持一键组装并自校验 Batch M6 增量升级包与完整安装刷机包。
+>     7. **零回归与双分区回退**：`BOOT_COMPLETED=true`、`LSMOD_COUNT=242`、`MOD_ERRORS=0`、核心 SA（`10/401/1120/1130/3001/4010/4606`）与 `wlan0` 全部在线；双分区回退 M5（`boot_a=c83a8468…` + `vendor_boot_a=c4b6a64f…` + `set_active a`）使用本机临时脚本 `/mnt/e/marble-tmp/flash-h20-m6-control.sh`。
 >
 > - **前序基线（2026-11-26 — 批次 M5 全项实机修复已闭环）**：
 >   - **批次 M5（锁屏 96B PIN 认证 + 震动提前拉起与 `event6` 权限保护 + 双击亮屏 `event10` 自动建节点 + 抬起亮屏 DRM DPMS 判熄屏与去重重置 + IMS 短信 3GPP 路由修正与 VoLTE/VoNR HD `ImsCallInterface` + 相机 OV64B40 全视场 4:3 `4624x3472` 直转 NV21 与 GT9764 CDAF + AOD `SA 65840` / Reminder `SA 3204` 实况窗刷新）**：
@@ -60,11 +61,11 @@
 
 ## 1. 硬件与分区边界（严格遵守）
 
-- **目标机**：Xiaomi `marble`（SM7475 `ukee`），序列号 `5030e45e`，内核 `5.10.274-Bouquet-anyhmos`，单 DSI 1080×2400 6.67" OLED，无 `init_boot`。
+- **目标机**：Xiaomi `marble`（SM7475 `ukee`），内核 `5.10.274-Bouquet-anyhmos`，单 DSI 1080×2400 6.67" OLED，无 `init_boot`。
 - **Donor ROM**：`ADY-AL10 207.0.0.111(SP10)`（本地解包在 `work/donor-rom/ADY-AL10-207.0.0.111-SP10/fs`）。
 - **严格分区安全**：
   - **允许刷 `boot_a` 和 `vendor_boot_a`**，按适配需要更新内核、bootstrap、引导和兼容载荷。
-  - **刷完必须立刻执行 `fastboot.exe -s 5030e45e set_active a < /dev/null`**，防止 `slot-retry-count` 归零掉 fastboot。
+  - **刷完必须立刻执行 `fastboot.exe -s <device-serial> set_active a < /dev/null`**，防止 `slot-retry-count` 归零掉 fastboot。
   - **绝不触碰**：`super`、`userdata`、`abl`、`xbl`、`vbmeta*`、`modem*`、`dsp*`、`bluetooth*`、`persist`、`recovery*`。
 - **只读原厂分区（机内完好未动）**：
   - `modem_a` (`/dev/block/sde7`, vfat RO)：含 `image/adsp2.{mdt,b*}`、`image/*.jsn`（7 个 PD 描述文件）、`image/qca6490/{amss20.bin,Data20.msc,bd_l*.elf,...}`。
@@ -172,9 +173,9 @@
   构建器验证四个诊断件及对应当前源码，预构件不一致时停止。动画单增量直接以 H20 为输入，不走这条命令。达到该候选自己的回退和实机前置条件后才安排转移及刷写。
 - 历史刷写示例（非本轮操作）：
   ```sh
-  fastboot.exe -s 5030e45e flash vendor_boot_a 'E:\marble-tmp\vendor_boot_next.img' < /dev/null && \
-  fastboot.exe -s 5030e45e set_active a < /dev/null && \
-  fastboot.exe -s 5030e45e reboot < /dev/null
+  fastboot.exe -s <device-serial> flash vendor_boot_a 'E:\marble-tmp\vendor_boot_next.img' < /dev/null && \
+  fastboot.exe -s <device-serial> set_active a < /dev/null && \
+  fastboot.exe -s <device-serial> reboot < /dev/null
   ```
 
 ### 踩过的关键坑（别再踩）

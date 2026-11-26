@@ -1,19 +1,21 @@
 # 当前源码构建 / Building the selected sources
 
-源码已按功能收敛，构建直接使用最终文件，不再从 v1、v2 逐轮生成后续源码。当前仍是研发源码，并非完整 ROM 或从零一键刷机工具。
+本仓库采用**“通用鸿蒙兼容层（`compat/`）+ 机型目录（`devices/marble/` 为当前主线目标、`devices/sheng/` 为参考基线）”**分层结构，保留各子系统当前选定实现及其编译/打包脚本。
 
-The tree keeps the selected implementation of each component. It does not include proprietary inputs, full upstream repositories or flashable images. v146 device acceptance is documented separately; this is not a claim of byte-for-byte reproducibility for every component.
+The tree keeps the selected implementation of each component. It does not redistribute proprietary donor images, stock firmware, private signing keys, or flashable `.img` artifacts.
 
 ## 外部输入 / External inputs
 
-- sheng 官方 OS3.0.303.0.WNXCNXM 的匹配内核配置、模块和固件，以及项目使用的 MatePad Air HarmonyOS donor 链接库；自行准备，不随仓库分发。
-- Harmony native SDK `6.0.0.47`、AArch64 Linux GCC/strip，以及需要的 Android Bionic/C++ 链接环境。
-- `external/upstream-sources.json` 记录的上游源码版本；原有许可位于 `external/licenses/`。
-- libdrm 静态库、匹配的生成接口头文件、PAL/OpenSSL 等组件输入。部分接口头已收录。
+### `marble` 主线构建输入（SM7475 · Batch M6）
+- **开源内核与工具链**：[`Pzqqt/android_kernel_xiaomi_marble`](https://github.com/Pzqqt/android_kernel_xiaomi_marble)（`bouquet_ci`，Linux `5.10.274`，`marble_defconfig`，Slim LLVM 23.1.6，开启 `CONFIG_CFI_CLANG` + `CONFIG_LTO_CLANG_THIN` + `CONFIG_MODVERSIONS`），通过 `tools/build/build_marble_kernel.sh` 叠加 `devices/marble/kernel/marble-exports.patch` 与 Batch M6 `devices/marble/kernel/marble-codesign.patch`（`fs/code_sign/` + `fs-verity` + ECDSA NIST P-256/P-384）并执行 657 模块 KABI CRC/vermagic 审计。
+- **Donor ROM 与原厂固件**：手机 HarmonyOS Donor `ADY-AL10 207.0.0.111(SP10)` 链接库/系统文件与 `marble` 本机只读原厂 `boot`/`vendor_boot`/`vbmeta*`/`vendor` 备份（均自行准备，不随仓库分发）。
+- **Harmony native SDK & 交叉编译环境**：Harmony native SDK `6.0.0.47`、AArch64 Linux GCC/Clang 与 Bionic/C++ 链接环境。
+- **批次与一键刷机打包**：`tools/packaging/build_marble_h20_m6_codesign.py` 打包 Batch M6 `boot_a`/`vendor_boot_a`，[assemble_marble_fastboot_package.py](../tools/packaging/assemble_marble_fastboot_package.py) 组装跨平台自校验 Fastboot 一键刷机包（见 [PACKAGING.md](PACKAGING.md)）。
 
-Within the prepared `super`, only `vendor_dlkm` remains stock Xiaomi. Boot image updates require the matching development baseline. Recovery follows the established procedure of restoring this device's own backed-up boot/vendor_boot/init_boot trio first.
+### `sheng` 参考基线输入（SM8550 · 归档参考）
+- `sheng` 官方 OS3.0.303.0.WNXCNXM 的匹配内核配置/模块/固件，以及 MatePad Air (`GEM-W00`) HarmonyOS donor 链接库；`external/upstream-sources.json` 记录上游版本，许可证位于 `external/licenses/`。
 
-全新安装的数据分区要求及最新挂载修复见 [USERDATA.md](USERDATA.md)。普通 ext4 格式化即可准备文件系统；不需要专用 UUID 或标记，启动程序不会自动格式化。The updated mount logic accepts normally formatted ext4 and never formats automatically; the corresponding image still needs device testing.
+全新安装的 ext4 `userdata` 挂载要求见 [USERDATA.md](USERDATA.md)。普通未加密 ext4 即可直接挂载，启动程序严格禁用自动格式化；`marble` Batch M6 首次启动时由 `compat/services/marble_ext4_verity_enable.c` 无损启用 ext4 `RO_COMPAT_VERITY` 以支持内核 `fs-verity` 代码签名。
 
 ## 构建入口 / Build entry points
 
@@ -42,7 +44,7 @@ python3 tools/build/build_current.py bootstrap init-entry touch touch-launcher w
 | `HMOS_BT_VENDOR_LINK`（兼容 `SHENG_BT_VENDOR_LINK`） | 仓库 `work/donor-bluetooth-v136/vendor/lib64` |
 
 `compat/ipc/Makefile`（`hmos_ipc.ko`）与 `compat/graphics/dmabuf_sync/kernel/Makefile`（`hmos_dmabuf_sync.ko`）为跨机型共享内核模块，需在匹配内核源码和配置下构建：
-- `marble`（Linux 5.10.274）：配套 `devices/marble/kernel/marble-exports.patch` + `marble_hmos_exports.c`（导出 `hmos_ipc_api_v1`），通过 `tools/build/build_marble_kernel.sh` 或 `.github/workflows/build-marble-kernel.yml` 构建并执行 CFI / vermagic / `Module.symvers` CRC 校验。
+- `marble`（Linux 5.10.274）：配套 `devices/marble/kernel/marble-exports.patch` + `marble_hmos_exports.c`（导出 `hmos_ipc_api_v1`）及 Batch M6 `devices/marble/kernel/marble-codesign.patch` + `devices/marble/kernel/marble-codesign/`（`/dev/code_sign`、`FS_IOC_ENABLE_CODE_SIGN`、ECDSA NIST P-256/P-384），通过 `tools/build/build_marble_kernel.sh` 或 `.github/workflows/build-marble-kernel.yml` 构建并执行 CFI / vermagic / `Module.symvers` CRC 校验。
 - `sheng`（参考机型 5.15.178）：配套 `devices/sheng/kernel/gki-sheng-exports.patch`。
 
 Mesa 补丁以记录的 upstream HEAD 为基础，当前冻结配置位于 `compat/graphics/`（`apply_mesa.py`、`mesa-gallium-egl.patch`、`mesa-turnip.patch`）；旧版补丁归档于 `archive/sheng/legacy-mesa/`。

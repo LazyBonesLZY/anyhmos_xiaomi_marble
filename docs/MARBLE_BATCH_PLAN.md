@@ -986,9 +986,11 @@ H11实验镜像 `aa247d8d7b97e0020f728f136a2ebb441a60011b7ca83f2dfb9750d238af2ee
   - 等效于 `tune2fs -O verity`，离线单测与 `tune2fs` + `e2fsck -fn` 逐字节一致（含 `metadata_csum` 与 `^metadata_csum` 两种模式）；遇脏日志（`INCOMPAT_RECOVER=0x4`）时安全返回 `rc=20`，由 `init-userdata-ext4.sh` 先触发内核 `jbd2` 回放并干净卸载后再原子置位 `0x8000`，确保重启后永久生效且 `userdata` 零损失。
 - **4. 真机冷启动正/负控验收（`BOOT_ID=52d5c34b-ba82-46a6-8679-2b1099e2e688`）**：
   - `userdata` `s_feature_ro_compat=0x0000807b`、`/dev/code_sign` (`10:127`)、`.fs-verity` 已载入 `fs_verity_key0`（`X509.ecdsa-nist-p384`）、`key_enable` 成功激活并注入 9 条供体证书路径、`local_code_sign` 按需运行与退出正常。
-  - 官方 `hap-sign-tool.jar` + AGC 调试凭证签名的 `deviceinfox`（`com.lazzyy.test`）经 `bm install` 返回 **`install bundle successfully.`** 并加入桌面（`PACKAGE_ADDED`）；`dmesg` 记录主包 `entry.hap` 与全部 9 个 `libs/arm64/*.so` 均经 `sha256-ce` + `code_sign_verify_certchain` 验签，`lsattr` 显示 **10/10 文件均带 `V`（`FS_VERITY_FL`）**，全页读回零错误，写操作返回 `Operation not permitted`。
+  - 官方 `hap-sign-tool.jar` + AGC 调试凭证签名的第三方应用经 `bm install` 均安装成功（`install bundle successfully.`）：`DeviceInfoX`（10/10 文件带 `lsattr V`）与 `CoolApk 7.1.5`（同步修正 Panda `.abc` 命名路由与 `router_map.json`，主包 `default.hap` + 10 个 `libs/arm64/*.so` 共 **11/11 文件均带 `lsattr` `V` (`FS_VERITY_FL`)**）；`dmesg` 均记录 `sha256-ce` + `code_sign_verify_certchain` 信任链通过，全页读回零错误，写操作返回 `Operation not permitted`。
   - 负控：未签名包被拒（`code:9568320 error: no signature file.`），1 字节篡改已签名包被拒（`code:9568324 error: signature verification failed due to out of integrity.`）。
   - 零回归：`BOOT_COMPLETED=true`、`LSMOD_COUNT=242`、`MOD_ERRORS=0`、核心 SA 与 `wlan0` 正常；双分区回退 M5（`c83a8468`/`c4b6a64f`）使用 `/mnt/e/marble-tmp/flash-h20-m6-control.sh`。
+- **5. 跨平台 Fastboot 一键刷机包（[assemble_marble_fastboot_package.py](../tools/packaging/assemble_marble_fastboot_package.py)、[Flash-Marble.ps1](../tools/packaging/Flash-Marble.ps1)、[flash-marble.sh](../tools/packaging/flash-marble.sh)）**：
+  - 支持组装 Batch M6 增量升级包（`boot` + `vendor_boot`，保留 `super`/`userdata`）与完整一键刷机包（含 `vbmeta*` + 9 GiB 稀疏 `super`），强制核对设备型号、解锁状态、Bootloader 模式与全文件 SHA-256，并在刷完后强制 `set_active a`；离线单测 [test_marble_fastboot_package.py](../tests/test_marble_fastboot_package.py) 4/4 通过。
 
 <a id="marble-store-attestation"></a>
 ## 应用商店与主题商店：设备证明核查（2026-11-25）
