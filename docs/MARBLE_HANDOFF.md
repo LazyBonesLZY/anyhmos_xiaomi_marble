@@ -42,17 +42,17 @@
 **历史快照（2026-11-24 00:15，UTC+8）：当时装机为 M15 G**（`de7d8b6d…`，早期记录 boot `e85209ff-82f2-48be-b6e0-0bc0ecb7114e`，最新实测 boot `5c9288b4-01de-4507-9e63-e5652a2dc9e0`）。G 是 F 加一个惰性的音频诊断归档，WLAN 和 init 不变，没有自动启动 PAL。只刷了 `vendor_boot_a`；`boot_a`、`abl/xbl`、基带等底层分区保持原样，用户数据未格式化或迁移。见[装机指纹](MARBLE_EXPECTED_AFTER_FLASH.md#历史装机m15-g)与[真机验收](VERIFICATION.md#m15-g真机应用启动与-wlan-联网)。
 
 > **本轮离线已备妥、尚未打包刷机的 M15 H（音频单变量）产物**：
-> - 已用 `tools/build/build_current.py` 重新编译 8 个音频目标到 `work/marble-audio-ohos-build/`（含 `libhmos_audio_{vdi,vdi_loader,manager_service}.so`、`native_audio_{hdi_publisher,service_launcher}`、`native_system_audio_check`、`libhmos_pal_{server,lifecycle}.so`），并编译了独立录音验证探针 `work/marble-audio-ohos-build/pal_capture_probe`（源码 [pal_capture_probe.c](../work/marble-dual-20261123/pal_capture_probe.c)）。
-> - 已编写离线打包脚本 [build-m15-audio-pal.py](../work/marble-dual-20261123/build-m15-audio-pal.py)（基于 M15 F `ffd33f03…` 单变量合入音频栈：`unshare -m` + `overlay` 隔离 `/vendor/etc`、原厂 `Forte` ACDB、去掉 `agmipc-service`、补齐 `/dev/snd/*` 枚举与 `audio_host`/`audio_server` 启动包装）。**尚未运行打包，尚未扩展刷机脚本，也未刷入设备。**
+> - 已用 `tools/build/build_current.py` 重新编译 8 个音频目标到 `work/marble-audio-ohos-build/`（含 `libhmos_audio_{vdi,vdi_loader,manager_service}.so`、`native_audio_{hdi_publisher,service_launcher}`、`native_system_audio_check`、`libhmos_pal_{server,lifecycle}.so`），并编译了独立录音验证探针 `work/marble-audio-ohos-build/pal_capture_probe`（源码 pal_capture_probe.c（`work/marble-dual-20261123/pal_capture_probe.c`））。
+> - 已编写离线打包脚本 build-m15-audio-pal.py（`work/marble-dual-20261123/build-m15-audio-pal.py`）（基于 M15 F `ffd33f03…` 单变量合入音频栈：`unshare -m` + `overlay` 隔离 `/vendor/etc`、原厂 `Forte` ACDB、去掉 `agmipc-service`、补齐 `/dev/snd/*` 枚举与 `audio_host`/`audio_server` 启动包装）。**尚未运行打包，尚未扩展刷机脚本，也未刷入设备。**
 
 | 项目 | 已验证 | 仍待完成 |
 | --- | --- | --- |
 | 应用启动 | G 上从桌面点击，设置和时钟分别取得 WMS 前台焦点。开机约 44 分钟仍是首发 `distributeddata` PID 3238、SA 1301 在线。 | 未逐一验收所有内置或第三方应用；早期 `311b` 的数据库超时触发点未完全定位。 |
-| WLAN | 恢复芯片 HDI 和 WPA 按需加载后，F 扫描通过；G 重启后自动重连（`wlan0 up / carrier=1`、`table 2014` 默认路由），原生 `getaddrinfo` DNS 与 OpenSSL TLS 校验 + HTTPS（204/200）在 `UID 0` 与 `UID 20020092`（附带 `netsys_socket` `1097`）均通过。[联网日志](../work/marble-dual-20261123/m15-g-wlan-connected-1795437468.serial.txt#L282-L307) · [HTTPS 实测](../work/marble-dual-20261123/m15-g-net-probe-1795441303-exec-supp.serial.txt#L1-L18) | 地址动态续租（DHCP 交互）与 GUI 应用内 HTTPS 仍待验；保留当前连接。 |
+| WLAN | 恢复芯片 HDI 和 WPA 按需加载后，F 扫描通过；G 重启后自动重连（`wlan0 up / carrier=1`、`table 2014` 默认路由），原生 `getaddrinfo` DNS 与 OpenSSL TLS 校验 + HTTPS（204/200）在 `UID 0` 与 `UID 20020092`（附带 `netsys_socket` `1097`）均通过。联网日志（`work/marble-dual-20261123/m15-g-wlan-connected-1795437468.serial.txt`） · HTTPS 实测（`work/marble-dual-20261123/m15-g-net-probe-1795441303-exec-supp.serial.txt`） | 地址动态续租（DHCP 交互）与 GUI 应用内 HTTPS 仍待验；保留当前连接。 |
 | 存储 | `/data` 为 ext4 `rw`；`8640/8650/5000` + `libhmos_ram_no_tee.so` `quotactl` 回退 + `SA 66074`（`index_insert_service`）动态拉起，`270d36fa` 设置`< 存储>`实测显示 `已使用 28.34 GB/256 GB`（`11%`）、7 类分类条目、缓存 `330 MB` 与应用大小列表，`QUOTA_ERR_13602204=0`。 | ext4 下 `/sys/fs/hmfs/userdata/main_blkaddr` 仍按预期跳过（`errno=2`），不影响设置存储展示。 |
 | 通知 / 实况窗 | F 一分钟倒计时能显示桌面胶囊；到期发布成功。 | 到期后胶囊仍留，显示数字随超时继续增大；待核对到期更新和取消结果。提示音另验。 |
 | HAP | F 原生 SA 4101 按需加载通过，UID 1000 的 init helper 以 user 100 查询到已安装的 Clock；独立调试 HAP 通过 SDK 离线签名验证。 | 实测 `const.product.udid`、`const.product.devUdid` 与 `ohos.boot.sn` 均返回 `errNum:106`，`bm get -u` 失败（`libudidmodule.z.so` 未在 `autorun/`）；待补通 UDID 与 helper 白名单后再验安装/启动/卸载。 |
-| 声音 / 录音 | G 上 ADSP、真实声卡已识别；`linker64 --list` 通过。在 `5c9288b4` 冷态 ADSP 下补齐 `/proc/asound/cards` 后，单 owner 原厂 `Forte` `agm_init_probe` 加载 `Forte_acdb_cal.acdb` + `Forte_workspaceFileXml.qwsp`，完成 `GPR INIT START` 与 `spf_core_apm_close_all`（`op 1001013 status 0`），返回 **`AGM_PROBE INIT rc=0`、`AGM_PROBE DEINIT rc=0`（`AGM_TRIAL_APP_RC 0`）**。[冷态通过结果](../work/marble-dual-20261123/m15-g-agm-cards-5c9288b4-forte-1795442842-result.serial.txt#L171-L219) | 下一候选镜像接入完整 PAL/AGM 服务并配置原厂 `Forte` ACDB，再验收实际播放、音量键与麦克风录音。 |
+| 声音 / 录音 | G 上 ADSP、真实声卡已识别；`linker64 --list` 通过。在 `5c9288b4` 冷态 ADSP 下补齐 `/proc/asound/cards` 后，单 owner 原厂 `Forte` `agm_init_probe` 加载 `Forte_acdb_cal.acdb` + `Forte_workspaceFileXml.qwsp`，完成 `GPR INIT START` 与 `spf_core_apm_close_all`（`op 1001013 status 0`），返回 **`AGM_PROBE INIT rc=0`、`AGM_PROBE DEINIT rc=0`（`AGM_TRIAL_APP_RC 0`）**。冷态通过结果（`work/marble-dual-20261123/m15-g-agm-cards-5c9288b4-forte-1795442842-result.serial.txt`） | 下一候选镜像接入完整 PAL/AGM 服务并配置原厂 `Forte` ACDB，再验收实际播放、音量键与麦克风录音。 |
 | USB / HDC | Windows SDK 客户端已实跑；宿主端点与 UDC 保护有离线测试。 | 当前 COM9 就是物理 USB 的 ACM 救援口。G 未部署 HDC 启动配置，未验授权和哈希往返；保留 COM9，不自动切换。 |
 
 [历史验收和待办背景见下文](#2-当前装机镜像与已验证项)。当前优先做音频及 HAP 的独立验证，保留已连接的 WLAN。
@@ -83,15 +83,15 @@
 | 分区 | 镜像路径 | SHA-256 |
 | --- | --- | --- |
 | `boot_a` | `work/marble-phase4-m15.BTQ5GO/boot_phase4.img`（与前几版完全一致） | `c83a8468955ca6584df29b6e5b7cba27c4b27ae5563a43401566bad301c9cae8` |
-| `vendor_boot_a`（**当前装机 G**） | [M15 音频诊断层](../work/marble-m15-agm-layer.ZCVqd9/vendor_boot_m15_F_agm_payload_only.img) | `de7d8b6d2af89a6aa4a4d0e7b907c2ac1dd0638a958db5da48f24d64510d520f` |
-| `vendor_boot_a`（直接回退 F） | [M15 WPA 按需镜像](../work/marble-m15-wpa-ondemand.gy37bj3j/vendor_boot_m15_wpa_ondemand_control.img) | `ffd33f03f4ab6e690e65e95c2813972e1f58c4f1ab1c1eb8ab37a255998505fd` |
-| `vendor_boot_a`（回退 E） | [M15 芯片 HDI 对照镜像](../work/marble-m15-chip-hdi.7ubhdbv5/vendor_boot_m15_chip_hdi_control.img) | `3c458ced7f013ab7698a7a274bba380a76189a6faae7046634b325964d18ae50` |
-| `vendor_boot_a`（回退 D） | [M15 通知对照镜像](../work/marble-m15-notify-control.LeNOUk/vendor_boot_m15_notify_3203_control.img) | `c1619de2e43fb8ed29e1064c4468b15a73b93bccd82ae17c22ca4b604e251bd7` |
-| `vendor_boot_a`（回退 C） | [M15 调度与存储控制镜像](../work/marble-m15-role-storage.1v2ynS/vendor_boot_m15_samgr_storage_control.img) | `0e710df5091df335e4c0bf73bb6e354a32317b507d808def3235379c201e3716` |
-| `vendor_boot_a`（回退 B） | [仅保留原厂调度角色的 M15](../work/marble-m15-role-control.MXDrsj/vendor_boot_m15_samgr_role_control.img) | `86ab6421ea962d8ab03dc2794674eaec91b725964e01d4d64eb6641516c29afa` |
-| `vendor_boot_a`（回退 A） | [M15 原件](../work/marble-phase4-m15.BTQ5GO/vendor_boot_phase4.img) | `9f64479d8567706f6a6b1cd375475b26916a22f6b6a997debe34ec372f28646a` |
+| `vendor_boot_a`（**当前装机 G**） | M15 音频诊断层（`work/marble-m15-agm-layer.ZCVqd9/vendor_boot_m15_F_agm_payload_only.img`） | `de7d8b6d2af89a6aa4a4d0e7b907c2ac1dd0638a958db5da48f24d64510d520f` |
+| `vendor_boot_a`（直接回退 F） | M15 WPA 按需镜像（`work/marble-m15-wpa-ondemand.gy37bj3j/vendor_boot_m15_wpa_ondemand_control.img`） | `ffd33f03f4ab6e690e65e95c2813972e1f58c4f1ab1c1eb8ab37a255998505fd` |
+| `vendor_boot_a`（回退 E） | M15 芯片 HDI 对照镜像（`work/marble-m15-chip-hdi.7ubhdbv5/vendor_boot_m15_chip_hdi_control.img`） | `3c458ced7f013ab7698a7a274bba380a76189a6faae7046634b325964d18ae50` |
+| `vendor_boot_a`（回退 D） | M15 通知对照镜像（`work/marble-m15-notify-control.LeNOUk/vendor_boot_m15_notify_3203_control.img`） | `c1619de2e43fb8ed29e1064c4468b15a73b93bccd82ae17c22ca4b604e251bd7` |
+| `vendor_boot_a`（回退 C） | M15 调度与存储控制镜像（`work/marble-m15-role-storage.1v2ynS/vendor_boot_m15_samgr_storage_control.img`） | `0e710df5091df335e4c0bf73bb6e354a32317b507d808def3235379c201e3716` |
+| `vendor_boot_a`（回退 B） | 仅保留原厂调度角色的 M15（`work/marble-m15-role-control.MXDrsj/vendor_boot_m15_samgr_role_control.img`） | `86ab6421ea962d8ab03dc2794674eaec91b725964e01d4d64eb6641516c29afa` |
+| `vendor_boot_a`（回退 A） | M15 原件（`work/marble-phase4-m15.BTQ5GO/vendor_boot_phase4.img`） | `9f64479d8567706f6a6b1cd375475b26916a22f6b6a997debe34ec372f28646a` |
 
-直接回退 F 的 Windows 副本为 `E:\marble-tmp\vendor_boot_m15_wpa_ondemand_ffd33f03.img`，已核对完整 SHA-256。仅在需要回退时使用[带身份校验的刷写脚本](../work/marble-dual-20261123/flash-m15-role-control.sh)的 `restore-wpa-ondemand` 模式；回退后重新读回分区哈希及 `boot_id`。
+直接回退 F 的 Windows 副本为 `E:\marble-tmp\vendor_boot_m15_wpa_ondemand_ffd33f03.img`，已核对完整 SHA-256。仅在需要回退时使用带身份校验的刷写脚本（`work/marble-dual-20261123/flash-m15-role-control.sh`）的 `restore-wpa-ondemand` 模式；回退后重新读回分区哈希及 `boot_id`。
 
 ### 历史真机验收背景（`verifym15b` / `verifym1` / `diagm1b`）
 
@@ -195,7 +195,7 @@
 ### 步骤 2：直接打包、刷写并验收 M15 H（音频单变量），再推进 HAP、实况窗与存储
 - 音频（当前立即衔接点）：
   1. 运行 `python3 work/marble-dual-20261123/build-m15-audio-pal.py`，确认离线 round-trip、AVB footer 及 CPIO/LZ4 大小均低于 `311b` 上限，并已复制到 `/mnt/e/marble-tmp/`。
-  2. 在 [flash-m15-role-control.sh](../work/marble-dual-20261123/flash-m15-role-control.sh) 中增加 `audio-pal`（`before=de7d8b6d…` → M15 H）与 `restore-from-audio-pal`（回退 F `ffd33f03…`），刷写 `vendor_boot_a` 并执行 `set_active a`。
+  2. 在 flash-m15-role-control.sh（`work/marble-dual-20261123/flash-m15-role-control.sh`） 中增加 `audio-pal`（`before=de7d8b6d…` → M15 H）与 `restore-from-audio-pal`（回退 F `ffd33f03…`），刷写 `vendor_boot_a` 并执行 `set_active a`。
   3. 通过 `COM9` 依次验收：桌面/SA 1301/WLAN 自动重连零回归、`/vendor/etc/usb_audio_policy_configuration.xml` 未被污染、`marble-pal-server.log`（`AGMIPC_SHIM_INIT_OK direct=48`、`PAL_SERVER_AGM_INIT_RC=0`、`PAL_SERVER_PAL_INIT_RC=0`、`PAL_SERVER_READY=1`）、`hmos-audio-{host,server}.txt`、`native_system_audio_check` 扬声器播放、音量键、以及临时上传 `work/marble-audio-ohos-build/pal_capture_probe` 验收麦克风录音；随后更新 `docs/VERIFICATION.md` / `docs/MARBLE_EXPECTED_AFTER_FLASH.md` / `docs/MARBLE_HANDOFF.md` 并跑全量单元测试。
 - HAP：使用绑定测试设备的调试配置及原生授权安装入口，验收独立包的安装、版本、启动和卸载；不替换已有用户包。实况窗：对比同一通知的到期更新和取消结果，检查应用在前台与后台时是否一致。
 - 存储：容量统计与服务调度分别验收；保留现有 userdata，配额迁移仅在有独立备份和离线验证后另行安排。

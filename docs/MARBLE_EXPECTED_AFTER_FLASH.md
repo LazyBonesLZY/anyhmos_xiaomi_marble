@@ -53,7 +53,7 @@
 | RenderService 实际映射的 `librender_service_base.z.so` | `b4c7c0b86a42fd3e329fae5444bb5ff17f176aaff5313873d53bd6d17c17157a` |
 | RenderService 实际映射的 Turnip | `de21593bf75316332f112ad8ae746d9583daffaa195cb12c16eddf6a936d1c35` |
 
-原动画进程启动并有 DSI 主平面动态像素，随后退出且桌面接管；WLAN 获得 IPv4、原网关回包。保留启动初段黑帧记录，动画出帧不等于从上电开始全程可见。图形库保持 H20，原快手 App 回归另验。[真机记录](MARBLE_BATCH_PLAN.md#h20-live-animation-and-audio) · [回退工具](../work/marble-dual-20261123/flash-h20-bootanim-control.sh)：装机退回 `c687adec…` 用 `restore <当前 boot_id>`。
+原动画进程启动并有 DSI 主平面动态像素，随后退出且桌面接管；WLAN 获得 IPv4、原网关回包。保留启动初段黑帧记录，动画出帧不等于从上电开始全程可见。图形库保持 H20，原快手 App 回归另验。[真机记录](MARBLE_BATCH_PLAN.md#h20-live-animation-and-audio) · 回退工具（`work/marble-dual-20261123/flash-h20-bootanim-control.sh`）：装机退回 `c687adec…` 用 `restore <当前 boot_id>`。
 
 <a id="当前装机h20-yuv-native"></a>
 
@@ -68,7 +68,7 @@
 | RenderService 实际映射的 `librender_service_base.z.so` | `b4c7c0b86a42fd3e329fae5444bb5ff17f176aaff5313873d53bd6d17c17157a` |
 | RenderService 实际映射的 Turnip | `de21593bf75316332f112ad8ae746d9583daffaa195cb12c16eddf6a936d1c35` |
 
-同一快手视频的动态画面和紧邻的 YUV/RGB 导入成功均有实机证据；同镜像另通过固定 WAV 和 M4A 的原生播放时间线与双向拖动。实际 WebView、固定 MP4 界面拖动和扬声器出声各自独立。[刷写和验收证据](MARBLE_BATCH_PLAN.md#第43轮h20-修复快手黑视频真实-yuv-导入及画面通过)。直接回退 H19 `b966b9a6…`，使用[固定身份的回退脚本](../work/marble-dual-20261123/flash-m15-role-control.sh)的 `restore-yuv-native` 模式。
+同一快手视频的动态画面和紧邻的 YUV/RGB 导入成功均有实机证据；同镜像另通过固定 WAV 和 M4A 的原生播放时间线与双向拖动。实际 WebView、固定 MP4 界面拖动和扬声器出声各自独立。[刷写和验收证据](MARBLE_BATCH_PLAN.md#第43轮h20-修复快手黑视频真实-yuv-导入及画面通过)。直接回退 H19 `b966b9a6…`，使用固定身份的回退脚本（`work/marble-dual-20261123/flash-m15-role-control.sh`）的 `restore-yuv-native` 模式。
 
 ## 历史装机：M15 G
 
@@ -95,8 +95,8 @@ G 已验设置与时钟前台、WLAN 真实联网和基础 Bionic 装载；其�
 
 | 镜像 | 完整 SHA-256 | 状态 |
 | --- | --- | --- |
-| [原调度修复候选](../work/marble-phase4-samgr-app.eKC4oH/images/vendor_boot_phase4.img) | `311b642b5af845c6db9d25b4ed42eda461c97d65b125f4beaddae2cdd861818d` | 已试装、已回退 |
-| [WLAN 配置集成候选](../work/marble-phase4-wlan-stage.cykCHh/images/vendor_boot_phase4.img) | `5e779fa6949f15e0e5f247b4e32dd916add4ce215046390f48098f7142b28bcf` | 基于 `311b642b…`，仅离线往返验证，不作为桌面恢复镜像 |
+| 原调度修复候选（`work/marble-phase4-samgr-app.eKC4oH/images/vendor_boot_phase4.img`） | `311b642b5af845c6db9d25b4ed42eda461c97d65b125f4beaddae2cdd861818d` | 已试装、已回退 |
+| WLAN 配置集成候选（`work/marble-phase4-wlan-stage.cykCHh/images/vendor_boot_phase4.img`） | `5e779fa6949f15e0e5f247b4e32dd916add4ce215046390f48098f7142b28bcf` | 基于 `311b642b…`，仅离线往返验证，不作为桌面恢复镜像 |
 
 若重测该候选，刷完 `vendor_boot_a` 后，从引导根执行 `/busybox sh /hmos-root/compat/bin/marble_identity.sh`。以打包清单和实机读回核对下表。
 不一致的行就是「镜像没生效」或「启动路径把文件写到了别处」。

@@ -3349,8 +3349,8 @@
     },
     {
       "path": "docs/MARBLE_BATCH_PLAN.md",
-      "bytes": 274699,
-      "sha256": "c9a779cb4ba4b6f372ace66504530ba51ddd2dc25621ab5ad73c4c12fda6f666"
+      "bytes": 274664,
+      "sha256": "0e47a7e3a4284d12431c154eafbff28b577bbd42a575921d8b193cdc8f5f54f5"
     },
     {
       "path": "docs/MARBLE_DCM_SOFT_TEE.md",
@@ -3359,8 +3359,8 @@
     },
     {
       "path": "docs/MARBLE_EXPECTED_AFTER_FLASH.md",
-      "bytes": 12195,
-      "sha256": "a198505ae6cac4d1595d86f6ed48ce2dd3e8c3f4d2c5079a424e80f3a233cf77"
+      "bytes": 12199,
+      "sha256": "399ec9a5203771054b94af842dc65f19b3cbc44d5e34dcac39dd3dc55be33c16"
     },
     {
       "path": "docs/MARBLE_FIX_MATRIX.md",
@@ -3369,8 +3369,8 @@
     },
     {
       "path": "docs/MARBLE_HANDOFF.md",
-      "bytes": 34649,
-      "sha256": "e4739c72c4a0a39c4c5c7d807366dcf7e5d13dde5a842c615f974f6c1a4a5995"
+      "bytes": 34636,
+      "sha256": "d01c7ca9968fa75a7219c92869bdf57c8e42bdef53dcf169a9828f75a8a0f7a5"
     },
     {
       "path": "docs/MARBLE_IDENTITY.md",
@@ -3409,8 +3409,8 @@
     },
     {
       "path": "docs/VERIFICATION.md",
-      "bytes": 57451,
-      "sha256": "b60182c319146a0b61cd9f61c2031ba5852a6e993687f3aeb0b3e9e3c5c25d4c"
+      "bytes": 57299,
+      "sha256": "07232a65b7988b7b74663992145cc8265f550d43cd214f0b9d23132c0f77ca4c"
     },
     {
       "path": "external/dependency-records/build-report.json",
