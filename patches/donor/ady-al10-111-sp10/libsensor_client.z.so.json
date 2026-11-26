@@ -20,5 +20,6 @@
       ]
     }
   ],
+  "retired_reason": "On ADY SP10 the original 0x78 slot calls LoadSystemAbility(int, int). This rejected relocation selected 0x80, the callback overload; it dereferenced the 10000-ms timeout as pointer 0x2710 and crashed powermgr. Keep the donor library unchanged.",
   "device_validated": false
 }

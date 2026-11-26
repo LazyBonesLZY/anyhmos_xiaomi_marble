@@ -12,6 +12,18 @@ typedef struct SscBackend SscBackend;
 enum SscSensorKind {
     SSC_ACCEL = 1,
     SSC_GYRO = 2,
+    SSC_AMBIENT_LIGHT = 5,
+    SSC_MAGNETIC_FIELD = 6,
+    SSC_PROXIMITY = 12,
+    SSC_ORIENTATION = 256,
+    SSC_GRAVITY = 257,
+    SSC_ROTATION_VECTOR = 259,
+    SSC_GAME_ROTATION_VECTOR = 262,
+    SSC_SIGNIFICANT_MOTION = 264,
+    SSC_PEDOMETER_DETECTION = 265,
+    SSC_PEDOMETER = 266,
+    SSC_GEOMAGNETIC_ROTATION_VECTOR = 277,
+    SSC_DEVICE_ORIENTATION = 279,
 };
 
 enum SscResult {
@@ -60,7 +72,8 @@ struct SscBackendError {
 /* 数值、状态和DSP时间戳保持原值；接收时间为报文级单调时钟 */
 struct SscRawSample {
     uint32_t kind;
-    float values[3];
+    float values[4];
+    uint32_t value_count;
     uint64_t status;
     uint64_t timestamp_ticks;
     uint64_t arrival_mono_ns;
@@ -83,6 +96,7 @@ enum SscInfoField {
     SSC_INFO_OP_MODES = 1u << 9,
     SSC_INFO_SELECTED_RESOLUTION = 1u << 10,
     SSC_INFO_SELECTED_RANGE = 1u << 11,
+    SSC_INFO_STREAM_TYPE = 1u << 12,
 };
 
 struct SscRange { float minimum, maximum; };
@@ -101,6 +115,7 @@ struct SscSensorInfo {
     char op_modes[16][32];
     float selected_resolution;
     struct SscRange selected_range;
+    int32_t stream_type;
 };
 
 /* 参数仅在回调期间有效；回调应及时返回，不在回调内调用生命周期接口 */

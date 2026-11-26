@@ -85,7 +85,8 @@ static int keydir(char *path, size_t cap)
     snprintf(path,cap,"/data/local/tmp/hmos-dbkey-contract");
 #else
     uid_t uid=getuid();
-    if(uid>=20000000) snprintf(path,cap,"/data/storage/el1/base/.hmos-dbkeys");
+    if(uid>=20000000||(uid>=10000&&access("/data/storage/el1/base",W_OK|X_OK)==0))
+        snprintf(path,cap,"/data/storage/el1/base/.hmos-dbkeys");
     else snprintf(path,cap,"/data/service/el1/public/database/.hmos-dbkeys/%u",(unsigned)uid);
 #endif
     if(mkdir(path,0700)<0&&errno!=EEXIST) return FAIL;

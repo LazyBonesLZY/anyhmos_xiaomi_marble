@@ -63,7 +63,8 @@ static void *capture_worker_main(void *opaque)
         if (!ready) break;
         ssize_t received=recv(c->fd,&packet,sizeof(packet),MSG_DONTWAIT|MSG_TRUNC);
         if ((size_t)received<sizeof(packet.h) || received<0 ||
-            packet.h.magic!=HMOS_PAL_MAGIC || packet.h.op<HMOS_PAL_CAPTURE_OPEN ||
+            packet.h.magic!=HMOS_PAL_MAGIC ||
+            packet.h.op<HMOS_PAL_CAPTURE_OPEN || packet.h.op>HMOS_PAL_MIC_GET_MUTE ||
             packet.h.bytes || (size_t)received!=sizeof(packet.h)) break;
     }
     __atomic_store_n(&w->operation_started,capture_now_ns(),__ATOMIC_RELEASE);

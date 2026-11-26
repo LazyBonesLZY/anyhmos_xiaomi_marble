@@ -1,0 +1,123 @@
+{
+  "source": {
+    "dump_branch": "missi-user-15-AQ3A.250226.002-OS3.0.3.0.VMRMIXM-release-keys",
+    "raw_prefix": "https://gitea.com/fiqri19102002/marble-dump/raw/branch/missi-user-15-AQ3A.250226.002-OS3.0.3.0.VMRMIXM-release-keys/"
+  },
+  "media_codecs_ukee": {
+    "path": "vendor/etc/media_codecs_ukee.xml",
+    "sha256": "986e18e9aea162988da7fd1f7eeb5e88f598d00a0320b6e0d023bd264f8ca8dd",
+    "components": [
+      {
+        "name": "c2.qti.avc.decoder",
+        "type": "video/avc"
+      },
+      {
+        "name": "c2.qti.avc.decoder.low_latency",
+        "type": "video/avc"
+      },
+      {
+        "name": "c2.qti.avc.decoder.secure",
+        "type": "video/avc"
+      },
+      {
+        "name": "c2.qti.hevc.decoder",
+        "type": "video/hevc"
+      },
+      {
+        "name": "c2.qti.hevc.decoder.low_latency",
+        "type": "video/hevc"
+      },
+      {
+        "name": "c2.qti.hevc.decoder.secure",
+        "type": "video/hevc"
+      },
+      {
+        "name": "c2.qti.vp9.decoder",
+        "type": "video/x-vnd.on2.vp9"
+      },
+      {
+        "name": "c2.qti.vp9.decoder.low_latency",
+        "type": "video/x-vnd.on2.vp9"
+      },
+      {
+        "name": "c2.qti.vp9.decoder.secure",
+        "type": "video/x-vnd.on2.vp9"
+      },
+      {
+        "name": "c2.qti.avc.encoder",
+        "type": "video/avc"
+      },
+      {
+        "name": "c2.qti.hevc.encoder",
+        "type": "video/hevc"
+      },
+      {
+        "name": "c2.qti.hevc.encoder.cq",
+        "type": "video/hevc"
+      },
+      {
+        "name": "c2.qti.heic.encoder",
+        "type": "image/vnd.android.heic"
+      }
+    ]
+  },
+  "media_codecs_google_c2_video": {
+    "path": "vendor/etc/media_codecs_google_c2_video.xml",
+    "sha256": "3ccf0f117cfd6812e5e9575b3c6eb873865e8ddd9d860318abf30ef4671730e0",
+    "components": [
+      {
+        "name": "c2.android.mpeg4.decoder",
+        "type": "video/mp4v-es"
+      },
+      {
+        "name": "c2.android.h263.decoder",
+        "type": "video/3gpp"
+      },
+      {
+        "name": "c2.android.avc.decoder",
+        "type": "video/avc"
+      },
+      {
+        "name": "c2.android.hevc.decoder",
+        "type": "video/hevc"
+      },
+      {
+        "name": "c2.android.vp8.decoder",
+        "type": "video/x-vnd.on2.vp8"
+      },
+      {
+        "name": "c2.android.vp9.decoder",
+        "type": "video/x-vnd.on2.vp9"
+      },
+      {
+        "name": "c2.android.av1.decoder",
+        "type": "video/av01"
+      },
+      {
+        "name": "c2.android.h263.encoder",
+        "type": "video/3gpp"
+      },
+      {
+        "name": "c2.android.avc.encoder",
+        "type": "video/avc"
+      },
+      {
+        "name": "c2.android.hevc.encoder",
+        "type": "video/hevc"
+      },
+      {
+        "name": "c2.android.mpeg4.encoder",
+        "type": "video/mp4v-es"
+      },
+      {
+        "name": "c2.android.vp8.encoder",
+        "type": "video/x-vnd.on2.vp8"
+      },
+      {
+        "name": "c2.android.vp9.encoder",
+        "type": "video/x-vnd.on2.vp9"
+      }
+    ],
+    "note": "declared by AOSP but NOT implemented by this dump: vendor/lib64 ships libcodec2_soft_common.so only, no libcodec2_soft_<codec>.so"
+  }
+}

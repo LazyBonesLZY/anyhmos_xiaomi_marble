@@ -22,7 +22,7 @@ struct Ack {
     bool has_sns_result, has_client;
 };
 struct Report { uint64_t client; struct View payload; };
-struct Sample { float data[3]; uint64_t status, timestamp, arrival_ns; };
+struct Sample { float data[4]; uint32_t value_count; uint64_t status, timestamp, arrival_ns; };
 struct Sensor {
     const char *type;
     struct Suid suid;
@@ -186,14 +186,20 @@ static size_t BuildRequest(uint8_t *packet, uint16_t txn, struct Suid suid, cons
     return BuildSensorRequest(packet, txn, suid, 512, body.data, body.size);
 }
 
-static size_t BuildStreamRequest(uint8_t *packet, struct Suid suid, bool disable, float rate_hz)
+static size_t BuildStreamRequestMode(uint8_t *packet, struct Suid suid, bool disable, bool on_change, float rate_hz)
 {
+    if (disable) return BuildSensorRequest(packet, 4, suid, 10, NULL, 0);
+    if (on_change) return BuildSensorRequest(packet, 3, suid, 514, NULL, 0);
     uint8_t config[5] = {0x0d};
     uint32_t bits;
     memcpy(&bits, &rate_hz, sizeof(bits));
     for (unsigned int i = 0; i < 4; ++i) config[i + 1] = (uint8_t)(bits >> (i * 8));
-    return BuildSensorRequest(packet, disable ? 4 : 3, suid, disable ? 10 : 513,
-        disable ? NULL : config, disable ? 0 : sizeof(config));
+    return BuildSensorRequest(packet, 3, suid, 513, config, sizeof(config));
+}
+
+static size_t BuildStreamRequest(uint8_t *packet, struct Suid suid, bool disable, float rate_hz)
+{
+    return BuildStreamRequestMode(packet, suid, disable, false, rate_hz);
 }
 
 /* QMI头已在调用方关联；此处只解已知TLV，不输出client ID */
@@ -317,6 +323,21 @@ static bool ParseFloatArray(struct View value, float *out, size_t capacity, uint
     return next == 0;
 }
 
+static unsigned int SscTypeClassFromName(struct View normalized)
+{
+    static const struct { const char *name; unsigned int kind; } table[] = {
+        {"accel", 1}, {"gyro", 2}, {"ambient_light", 5}, {"mag", 6},
+        {"proximity", 12}, {"ori", 256}, {"gravity", 257},
+        {"akm_rotv", 259}, {"game_rv", 262}, {"sig_motion", 264},
+        {"pedometer", 265}, {"oem_step_counter", 266},
+        {"geomag_rv", 277}, {"device_orient", 279},
+    };
+    for (size_t i = 0; i < sizeof(table) / sizeof(table[0]); ++i) {
+        if (TextEquals(normalized, table[i].name)) return table[i].kind;
+    }
+    return 0;
+}
+
 static bool ParseInfoAttribute(uint64_t id, struct View value, struct SscSensorInfo *info)
 {
     if (id == 24) {
@@ -367,12 +388,13 @@ static bool ParseInfoAttribute(uint64_t id, struct View value, struct SscSensorI
                     else info->truncated |= flag;
                 }
                 ++count; info->present |= flag;
-            } else if ((id == 4 || id == 9 || id == 10) && data.id == 4) {
-                if (data.wire != 1) return false;
+            } else if ((id == 4 || id == 9 || id == 10 || id == 16) &&
+                       ((data.id == 4 && data.wire == 1) || (id == 16 && data.id == 5 && data.wire == 0))) {
                 int64_t number;
                 memcpy(&number, &data.value, 8);
                 if (id == 4) { info->version = data.value; info->present |= SSC_INFO_VERSION; }
                 if (id == 10) { info->sleep_current_ua = number; info->present |= SSC_INFO_SLEEP_CURRENT; }
+                if (id == 16) { info->stream_type = (int32_t)number; info->present |= SSC_INFO_STREAM_TYPE; }
                 if (id == 9) {
                     if (count < 16) info->active_current_ua[count] = number;
                     else info->truncated |= SSC_INFO_ACTIVE_CURRENT;
@@ -489,7 +511,7 @@ static bool ParseAttribute(struct View view, struct Sensor *sensor)
                 sensor->type_raw_matches = TextEquals(data.bytes, sensor->type);
                 struct View normalized = TrimTerminator(data.bytes);
                 sensor->type_matches = TextEquals(normalized, sensor->type);
-                sensor->type_class = TextEquals(normalized, "accel") ? 1 : TextEquals(normalized, "gyro") ? 2 : 0;
+                sensor->type_class = SscTypeClassFromName(normalized);
             } else if (id == 3 && data.id == 5) {
                 if (data.wire != 0 || data.value > 1) return false;
                 sensor->available_seen = true; sensor->available = data.value != 0;
@@ -500,12 +522,24 @@ static bool ParseAttribute(struct View view, struct Sensor *sensor)
     return next == 0;
 }
 
+static bool StoreSample(struct Sensor *sensor, const struct Sample *sample, bool finite)
+{
+    ++sensor->sample_count;
+    if (!finite) {
+        ++sensor->invalid_samples;
+        return true;
+    }
+    if (sensor->stored_samples >= 32) return false;
+    sensor->samples[sensor->stored_samples++] = *sample;
+    return true;
+}
+
 static bool ParseSample(struct View payload, uint64_t timestamp, struct Sensor *sensor)
 {
     _Static_assert(sizeof(float) == 4, "float32 ABI");
     struct Field field;
-    struct Sample sample = {.timestamp = timestamp, .arrival_ns = sensor->arrival_ns};
-    unsigned int count = 0;
+    struct Sample sample = {.status = 3, .timestamp = timestamp, .arrival_ns = sensor->arrival_ns};
+    unsigned int total = 0;
     bool status_seen = false, finite = true;
     int next;
     while ((next = NextField(&payload, &field)) > 0) {
@@ -514,10 +548,11 @@ static bool ParseSample(struct View payload, uint64_t timestamp, struct Sensor *
             if (field.wire != 5 && field.wire != 2) return false;
             if (floats.size % 4 != 0) return false;
             while (floats.size != 0) {
-                if (count >= 3) return false;
+                if (total >= 8) return false;
                 uint32_t bits = Read32(floats.data);
                 if ((bits & 0x7f800000) == 0x7f800000) finite = false;
-                memcpy(&sample.data[count++], &bits, 4);
+                if (total < 4) memcpy(&sample.data[total], &bits, 4);
+                ++total;
                 floats.data += 4; floats.size -= 4;
             }
         } else if (field.id == 2) {
@@ -525,14 +560,37 @@ static bool ParseSample(struct View payload, uint64_t timestamp, struct Sensor *
             status_seen = true; sample.status = field.value;
         }
     }
-    if (next < 0 || count != 3 || !status_seen) return false;
-    ++sensor->sample_count;
-    if (!finite) ++sensor->invalid_samples;
-    else {
-        if (sensor->stored_samples >= 32) return false;
-        sensor->samples[sensor->stored_samples++] = sample;
+    if (next < 0 || total == 0) return false;
+    sample.value_count = total < 4 ? total : 4;
+    return StoreSample(sensor, &sample, finite);
+}
+
+static bool ParseProximitySample(struct View payload, uint64_t timestamp, struct Sensor *sensor)
+{
+    struct Field field;
+    uint64_t near_far = 0;
+    uint64_t status = 3;
+    int next;
+    while ((next = NextField(&payload, &field)) > 0) {
+        if (field.id == 1) {
+            if (field.wire != 0) return false;
+            near_far = field.value;
+        } else if (field.id == 3) {
+            if (field.wire != 0) return false;
+            status = field.value;
+        }
     }
-    return true;
+    if (next < 0) return false;
+    struct Sample sample = {.data = {near_far == 1 ? 0.0f : 5.0f}, .value_count = 1,
+        .status = status, .timestamp = timestamp, .arrival_ns = sensor->arrival_ns};
+    return StoreSample(sensor, &sample, true);
+}
+
+static bool ParseScalarEvent(uint64_t timestamp, struct Sensor *sensor, float value)
+{
+    struct Sample sample = {.data = {value}, .value_count = 1, .status = 3,
+        .timestamp = timestamp, .arrival_ns = sensor->arrival_ns};
+    return StoreSample(sensor, &sample, true);
 }
 
 static bool ParsePayload(uint32_t msg, struct View payload, struct Sensor *sensor)
@@ -589,6 +647,12 @@ static bool ParseEvents(struct View view, unsigned int mode, struct Sensor *sens
         if (inner < 0 || seen != 7) return false;
         if (mode == 2 && msg == 1025) {
             if (!ParseSample(payload, timestamp, sensor)) return false;
+        } else if (mode == 2 && msg == 769) {
+            if (!ParseProximitySample(payload, timestamp, sensor)) return false;
+        } else if (mode == 2 && msg == 1028) {
+            if (!ParseScalarEvent(timestamp, sensor, 1.0f)) return false;
+        } else if (mode == 2 && (msg == 768 || msg == 775 || msg == 1022 || msg == 1026 || msg == 1027 || msg == 1031)) {
+            continue;
         } else if (((mode == 1 && (msg == 128 || msg == 130)) ||
              (mode == 0 && (msg == 768 || msg == 130)) ||
              (mode == 2 && msg == 130)) && !ParsePayload(msg, payload, sensor)) return false;

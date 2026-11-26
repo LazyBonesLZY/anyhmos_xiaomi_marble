@@ -141,6 +141,12 @@ extern "C" void HmosObserveBufferImport(const void* backend, void* window,
 }
 
 // End required component: native_surface_diagnostic_v4.cpp
+static bool VerboseDiagEnabled()
+{
+    static const bool enabled = (access("/data/local/tmp/hmos-render-verbose", F_OK) == 0);
+    return enabled;
+}
+
 extern "C" void HmosObserveDelete(void*)
     asm("_ZN4OHOS5Rosen17NativeBufferUtils13DeleteVkImageEPv");
 extern "C" void HmosObserveDelete(void* helper)
@@ -150,7 +156,7 @@ extern "C" void HmosObserveDelete(void* helper)
     if (!original) std::abort();
     static unsigned calls = 0;
     const auto n = __atomic_add_fetch(&calls, 1, __ATOMIC_RELAXED);
-    if (n <= 16 || n % 64 == 0) {
+    if (n <= 4 || (VerboseDiagEnabled() && n % 64 == 0)) {
         std::fprintf(stderr,
             "HMOS_DELETE_V5 n=%u helper=%p refs=%u device=%p image=%p memory=%p\n",
             n, helper, helper ? Field<uint32_t>(helper, 56) : 0,
@@ -183,7 +189,8 @@ extern "C" bool HmosObserveImage(void* self, void* gpu, const void* texture,
         cleanup, helper, ignoreAlpha);
     static unsigned calls = 0, failed = 0;
     const auto n = __atomic_add_fetch(&calls, 1, __ATOMIC_RELAXED);
-    if (n <= 12 || n % 64 == 0 || (!result && __atomic_add_fetch(&failed, 1, __ATOMIC_RELAXED) <= 16))
+    if (n <= 4 || (VerboseDiagEnabled() && n % 64 == 0) ||
+        (!result && __atomic_add_fetch(&failed, 1, __ATOMIC_RELAXED) <= 16))
         std::fprintf(stderr, "HMOS_IMAGE_V6 n=%u result=%d self=%p gpu=%p texture=%p color=%u alpha=%u cleanup=%p helper=%p\n",
             n, result, self, gpu, texture, format.color, format.alpha,
             reinterpret_cast<void*>(cleanup), helper);
@@ -217,7 +224,7 @@ extern "C" void HmosImageD0(void* self)
     if (!fn) std::abort();
     static unsigned calls = 0;
     const auto n = __atomic_add_fetch(&calls, 1, __ATOMIC_RELAXED);
-    if (n <= 12 || n % 64 == 0)
+    if (n <= 4 || (VerboseDiagEnabled() && n % 64 == 0))
         std::fprintf(stderr, "HMOS_IMAGE_D0 n=%u self=%p tid=%ld\n", n, self, syscall(SYS_gettid));
     fn(self);
 }
@@ -231,7 +238,7 @@ extern "C" void HmosImageD1(void* self)
     if (!fn) std::abort();
     static unsigned calls = 0;
     const auto n = __atomic_add_fetch(&calls, 1, __ATOMIC_RELAXED);
-    if (n <= 12 || n % 64 == 0)
+    if (n <= 4 || (VerboseDiagEnabled() && n % 64 == 0))
         std::fprintf(stderr, "HMOS_IMAGE_D1 n=%u self=%p tid=%ld\n", n, self, syscall(SYS_gettid));
     fn(self);
 }
@@ -249,25 +256,25 @@ extern "C" void HmosRegisterPostV2(void* gpu, const PostV2& post)
         "_ZN4OHOS5Rosen7Drawing10GPUContext16RegisterPostFuncERKNSt3__h8functionIFvRKNS4_IFvvEEEEEE"));
     if (!original) std::abort();
     const long owner = syscall(SYS_gettid);
+    const bool ownerInline = (access("/data/local/tmp/hmos-gpu-owner-cleanup", F_OK) == 0);
     std::fprintf(stderr, "HMOS_POST_V2_REGISTER gpu=%p owner=%ld enabled=%d\n", gpu, owner, bool(post));
     if (!post) { original(gpu, post); return; }
-    original(gpu, [post, owner](const TaskV2& task) {
+    original(gpu, [post, owner, ownerInline](const TaskV2& task) {
         static unsigned queued = 0, inlineCalls = 0;
         const auto n = __atomic_add_fetch(&queued, 1, __ATOMIC_RELAXED);
-        const long caller = syscall(SYS_gettid);
-        if (caller == owner && access("/data/local/tmp/hmos-gpu-owner-cleanup", F_OK) == 0) {
+        if (ownerInline && syscall(SYS_gettid) == owner) {
             const auto done = __atomic_add_fetch(&inlineCalls, 1, __ATOMIC_RELAXED);
-            if (done <= 12 || done % 64 == 0)
-                std::fprintf(stderr, "HMOS_POST_V2_INLINE done=%u owner=%ld caller=%ld\n", done, owner, caller);
+            if (done <= 2 || (VerboseDiagEnabled() && done % 64 == 0))
+                std::fprintf(stderr, "HMOS_POST_V2_INLINE done=%u owner=%ld\n", done, owner);
             task();
             return;
         }
-        if (n <= 12 || n % 64 == 0)
-            std::fprintf(stderr, "HMOS_POST_V2_QUEUE n=%u owner=%ld caller=%ld\n", n, owner, caller);
+        if (n <= 2 || (VerboseDiagEnabled() && n % 64 == 0))
+            std::fprintf(stderr, "HMOS_POST_V2_QUEUE n=%u owner=%ld\n", n, owner);
         post([task, owner, n]() {
             static unsigned executed = 0;
             const auto done = __atomic_add_fetch(&executed, 1, __ATOMIC_RELAXED);
-            if (done <= 12 || done % 64 == 0)
+            if (done <= 2 || (VerboseDiagEnabled() && done % 64 == 0))
                 std::fprintf(stderr, "HMOS_POST_V2_RUN done=%u queued_id=%u owner=%ld actual=%ld\n", done, n, owner, syscall(SYS_gettid));
             task();
         });

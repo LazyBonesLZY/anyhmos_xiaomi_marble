@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+#include "boot_serial_bridge.h"
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -795,6 +796,12 @@ static int hmos_root(void) {
     if(textfile("/hmos-root/system/etc/init.cfg",cfg)<0||textfile("/hmos-root/system/etc/fstab.required","# Physical userdata already mounted by hmos bootstrap; never format here.\n")<0)return -1;
     if(textfile("/hmos-root/system/etc/param/hmos_debug.para","persist.init.debug.loglevel=0\n")<0)return -1;
     char cmdline[32768];if(readfile("/proc/cmdline",cmdline,sizeof(cmdline))<0)return -1;
+    char serial_config[32768];
+    if(readfile("/proc/bootconfig",serial_config,sizeof(serial_config))>=0){
+        int serial_rc=hmos_bridge_boot_serial(cmdline,sizeof(cmdline),serial_config);
+        if(serial_rc<0){note("HMOS boot serial conflict or invalid source; preserving identity, HOLD");return -1;}
+        note("HMOS boot serial bridge appended=%d",serial_rc);
+    }
     size_t n=strlen(cmdline);if(n+150>=sizeof(cmdline))return -1;strcat(cmdline," ohos.boot.hardware=hmos ohos.boot.selinux=permissive androidboot.selinux=permissive\n");
     if(textfile("/hmos-ram/cmdline",cmdline)<0||mount("/hmos-ram/cmdline","/hmos-root/proc/cmdline",0,MS_BIND,0)<0)return -1;
     char bootconfig[32768];ssize_t z=readfile("/proc/bootconfig",bootconfig,sizeof(bootconfig));if(z<0)bootconfig[0]=0;
@@ -961,7 +968,9 @@ static void trace_handoff(int kind) {
                         dprintf(1,"AUTOSTART_STDIO_READY input=0 output=1 error=2\n");
                         const char *autostart = access("/graphics/start-native-desktop-v116.sh",F_OK)==0
                             ? "/graphics/start-native-desktop-v116.sh"
-                            : "/graphics/start-phase3-marble.sh";
+                            : (access("/graphics/start-phase4-marble.sh",F_OK)==0
+                                ? "/graphics/start-phase4-marble.sh"
+                                : "/graphics/start-phase3-marble.sh");
                         execl("/busybox","busybox","timeout","900","/busybox","sh",autostart,(char*)0);
                         _exit(127);
                     }

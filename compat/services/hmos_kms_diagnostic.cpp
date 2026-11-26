@@ -55,7 +55,7 @@ int main(int argc,char **argv){
     auto *rs=drmModeGetResources(s.fd);CHECK(rs);drmModeModeInfo mode{};unsigned index=0;
     for(int i=0;i<rs->count_connectors&&!s.connector;i++){auto *c=drmModeGetConnector(s.fd,rs->connectors[i]);if(!c)continue;
         if(c->connection==DRM_MODE_CONNECTED&&c->connector_type==DRM_MODE_CONNECTOR_DSI){
-            for(int m=0;m<c->count_modes;m++)if(c->modes[m].hdisplay==3048&&c->modes[m].vdisplay==2032&&c->modes[m].vrefresh==hz){mode=c->modes[m];s.connector=c->connector_id;break;}
+            for(int m=0;m<c->count_modes;m++)if(((c->modes[m].hdisplay==3048&&c->modes[m].vdisplay==2032)||(c->modes[m].hdisplay==1080&&c->modes[m].vdisplay==2400))&&c->modes[m].vrefresh==hz){mode=c->modes[m];s.connector=c->connector_id;break;}
             for(int j=0;j<c->count_encoders&&s.connector&&!s.crtc;j++){auto *e=drmModeGetEncoder(s.fd,c->encoders[j]);if(e){
                 for(int k=0;k<rs->count_crtcs;k++)if(e->possible_crtcs&(1u<<k)){s.crtc=rs->crtcs[k];index=k;break;}drmModeFreeEncoder(e);}}}
         drmModeFreeConnector(c);}

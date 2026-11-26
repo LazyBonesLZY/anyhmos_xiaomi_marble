@@ -33,7 +33,7 @@ int main(int argc,char **argv) {
     LOAD(SetDisplayClientBuffer);LOAD(Commit);LOAD(SetDisplayPowerStatus);LOAD(DestroyVdiImpl);
     CHECK(RegHotPlugCallback(plug,nullptr)==0&&connected);
     std::vector<C::V1_0::DisplayModeInfo> modes;CHECK(GetDisplaySupportedModes(0,modes)==0&&!modes.empty());
-    auto m=modes[0];CHECK((m.width==3048&&m.height==2032)||(m.width==2032&&m.height==3048));
+    auto m=modes[0];CHECK((m.width==3048&&m.height==2032)||(m.width==2032&&m.height==3048)||(m.width==1080&&m.height==2400));
     auto create=reinterpret_cast<B::CreateDisplayBufferVdiFunc>(dlsym(allocator,"CreateDisplayBufferVdi"));
     auto destroy=reinterpret_cast<B::DestroyDisplayBufferVdiFunc>(dlsym(allocator,"DestroyDisplayBufferVdi"));CHECK(create&&destroy);
     auto *vdi=create();CHECK(vdi);BufferHandle *buffer=nullptr;

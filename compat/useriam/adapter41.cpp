@@ -9,8 +9,27 @@ class HmosUserAuth41 final : public HDI::UserAuth::V4_1::IUserAuthInterface {
  sptr<Base> base_;
 public:
  explicit HmosUserAuth41(Base *base):base_(base){}
- int32_t BeginAuthenticationExt(uint64_t contextId, const OHOS::HDI::UserAuth::V4_1::AuthParamExt& param, std::vector<OHOS::HDI::UserAuth::V4_0::ScheduleInfo>& scheduleInfos) override {(void)contextId;(void)param;(void)scheduleInfos;return -8;}
- int32_t BeginEnrollmentExt(const std::vector<uint8_t>& authToken, const OHOS::HDI::UserAuth::V4_1::EnrollParamExt& param, OHOS::HDI::UserAuth::V4_0::ScheduleInfo& info) override {(void)authToken;(void)param;(void)info;return -8;}
+ int32_t BeginAuthenticationExt(uint64_t contextId, const OHOS::HDI::UserAuth::V4_1::AuthParamExt& param, std::vector<OHOS::HDI::UserAuth::V4_0::ScheduleInfo>& scheduleInfos) override {
+  OHOS::HDI::UserAuth::V4_0::AuthParam v40Param{};
+  v40Param.baseParam = param.baseParam;
+  v40Param.authType = param.authType;
+  v40Param.authIntent = param.authIntent;
+  v40Param.isOsAccountVerified = param.isOsAccountVerified;
+  v40Param.collectorUdid = param.collectorUdid;
+  return base_->BeginAuthentication(contextId, v40Param, scheduleInfos);
+ }
+ int32_t BeginEnrollmentExt(const std::vector<uint8_t>& authToken, const OHOS::HDI::UserAuth::V4_1::EnrollParamExt& param, OHOS::HDI::UserAuth::V4_0::ScheduleInfo& info) override {
+  OHOS::HDI::UserAuth::V4_0::EnrollParam v40Param{};
+  v40Param.authType = param.authType;
+  v40Param.executorSensorHint = param.executorSensorHint;
+  v40Param.callerName = param.callerName;
+  v40Param.callerType = param.callerType;
+  v40Param.apiVersion = param.apiVersion;
+  v40Param.userId = param.userId;
+  v40Param.userType = param.userType;
+  v40Param.authSubType = param.authSubType;
+  return base_->BeginEnrollment(authToken, v40Param, info);
+ }
  int32_t Init(const std::string& deviceUdid) override {return base_->Init(deviceUdid);}
  int32_t AddExecutor(const OHOS::HDI::UserAuth::V4_0::ExecutorRegisterInfo& info, uint64_t& index, std::vector<uint8_t>& publicKey, std::vector<uint64_t>& templateIds) override {return base_->AddExecutor(info,index,publicKey,templateIds);}
  int32_t DeleteExecutor(uint64_t index) override {return base_->DeleteExecutor(index);}

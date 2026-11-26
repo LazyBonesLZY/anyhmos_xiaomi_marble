@@ -13,6 +13,11 @@ extern "C" int32_t LoadVdiImpl();
 extern "C" int32_t DestroyVdiImpl();
 extern "C" int32_t RegHotPlugCallback(HotPlugCallback cb, void* data);
 extern "C" int32_t GetDisplayCapability(uint32_t devId, DisplayCapability& info);
+// ADY's Composer 1.4 VDI uses an int32 out parameter for this C symbol.
+namespace V1_4 {
+enum class DisplayConnectionType : int32_t { INTERNAL = 0, EXTERNAL = 1 };
+}
+extern "C" int32_t GetDisplayConnectionType(uint32_t devId, V1_4::DisplayConnectionType& type);
 extern "C" int32_t GetDisplaySupportedModes(uint32_t devId, std::vector<DisplayModeInfo>& modes);
 extern "C" int32_t GetDisplayMode(uint32_t devId, uint32_t& modeId);
 extern "C" int32_t SetDisplayMode(uint32_t devId, uint32_t modeId);
@@ -21,6 +26,7 @@ extern "C" int32_t SetDisplayPowerStatus(uint32_t devId, V1_0::DispPowerStatus s
 extern "C" int32_t GetDisplayBacklight(uint32_t devId, uint32_t& level);
 extern "C" int32_t SetDisplayBacklight(uint32_t devId, uint32_t level);
 extern "C" int32_t GetDisplayProperty(uint32_t devId, uint32_t id, uint64_t& value);
+extern "C" int32_t GetDisplayClientTargetProperty(uint32_t devId, int32_t& pixelFormat, int32_t& dataspace);
 extern "C" int32_t GetDisplayCompChange(uint32_t devId, std::vector<uint32_t>& layers, std::vector<int32_t>& types);
 extern "C" int32_t SetDisplayClientCrop(uint32_t devId, const IRect& rect);
 extern "C" int32_t SetDisplayClientBuffer(uint32_t devId, const BufferHandle& buffer, int32_t fence);

@@ -58,8 +58,15 @@ struct Enumeration {
     Sensor::ISensorInterface *implementation;
     std::atomic<bool> complete{false};
     int32_t result = HDF_FAILURE;
+    size_t count = 0;
     bool accel = false;
     bool gyro = false;
+    bool als = false;
+    bool prox = false;
+    bool mag = false;
+    bool grav = false;
+    bool rotv = false;
+    bool ori = false;
 };
 
 void *Enumerate(void *context)
@@ -67,9 +74,19 @@ void *Enumerate(void *context)
     auto &enumeration = *static_cast<Enumeration *>(context);
     std::vector<Sensor::HdfSensorInformation> info;
     enumeration.result = enumeration.implementation->GetAllSensorInfo(info);
+    enumeration.count = info.size();
     for (const auto &sensor : info) {
-        enumeration.accel |= sensor.deviceSensorInfo.sensorType == 1;
-        enumeration.gyro |= sensor.deviceSensorInfo.sensorType == 2;
+        switch (sensor.deviceSensorInfo.sensorType) {
+        case 1: enumeration.accel = true; break;
+        case 2: enumeration.gyro = true; break;
+        case 5: enumeration.als = true; break;
+        case 6: enumeration.mag = true; break;
+        case 12: enumeration.prox = true; break;
+        case 256: enumeration.ori = true; break;
+        case 257: enumeration.grav = true; break;
+        case 259: enumeration.rotv = true; break;
+        default: break;
+        }
     }
     enumeration.complete.store(true, std::memory_order_release);
     return nullptr;
@@ -94,12 +111,17 @@ bool WaitForSensors(Sensor::ISensorInterface *implementation)
             }
         }
         int joined = pthread_join(worker, nullptr);
-        std::printf("SENSOR_PUBLISH_ENUM rc=%d accel=%d gyro=%d join=%d\n",
-            enumeration.result, enumeration.accel, enumeration.gyro, joined);
+        std::printf(
+            "SENSOR_PUBLISH_ENUM rc=%d count=%zu accel=%d gyro=%d als=%d prox=%d mag=%d grav=%d rotv=%d ori=%d join=%d\n",
+            enumeration.result, enumeration.count, enumeration.accel, enumeration.gyro,
+            enumeration.als, enumeration.prox, enumeration.mag, enumeration.grav,
+            enumeration.rotv, enumeration.ori, joined);
         if (joined != 0) return false;
         if (stopping) break;
-        if (enumeration.result == HDF_SUCCESS && enumeration.accel && enumeration.gyro) return true;
-        // 失败发现不缓存，持续等待原SSC实际发布两类传感器
+        if (enumeration.result == HDF_SUCCESS && enumeration.accel && enumeration.gyro && enumeration.als) {
+            return true;
+        }
+        // 失败发现不缓存，持续等待原SSC实际发布传感器
         if (!WaitMilliseconds(backoff)) break;
         backoff = backoff < 4000 ? backoff * 2 : 5000;
     }

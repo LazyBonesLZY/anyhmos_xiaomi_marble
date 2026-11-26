@@ -1,0 +1,20 @@
+/* Only the symbols the vendor audio stack imports from libaudioroute.so may be
+ * exported.  The anonymous version block keeps the symbols unversioned so the
+ * vendor objects (whose references are unversioned) bind normally.
+ *
+ * Needed by libaudioroute_ext.so : audio_route_init, audio_route_free,
+ *                                   audio_route_update_mixer
+ * Needed by libar-pal.so         : audio_route_apply_and_update_path,
+ *                                   audio_route_reset_and_update_path,
+ *                                   audio_route_free
+ */
+{
+  global:
+    audio_route_init;
+    audio_route_free;
+    audio_route_update_mixer;
+    audio_route_apply_and_update_path;
+    audio_route_reset_and_update_path;
+  local:
+    *;
+};

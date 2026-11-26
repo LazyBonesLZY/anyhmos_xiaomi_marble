@@ -1,0 +1,6 @@
+1.0 {
+  global:
+    _ZN4OHOS4Wifi17WifiSaLoadManager10LoadWifiSaEi;
+  local:
+    *;
+};

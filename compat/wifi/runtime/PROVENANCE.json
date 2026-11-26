@@ -1,0 +1,42 @@
+{
+  "generated_by": "tools/build/build_wifi_supplicant.sh",
+  "toolchain": "OHOS SDK clang (aarch64-linux-ohos, musl sysroot)",
+  "wpa_supplicant": {
+    "repo": "https://gitee.com/openharmony/third_party_wpa_supplicant.git",
+    "branch": "OpenHarmony-4.1-Release",
+    "commit": "3fbb878d5379bb2b0cfc67715299e3d81177e59a",
+    "path": "/home/lazybones/anyhmos_xiaomi_marble/work/marble-wifi-src/wpa_supplicant_4.1/wpa_supplicant-2.9"
+  },
+  "communication_wifi": {
+    "repo": "https://gitee.com/openharmony/communication_wifi.git",
+    "branch": "OpenHarmony-4.1-Release",
+    "commit": "ec55ef5cae9cc747767c6c59e4a204fe30719795",
+    "path": "/home/lazybones/anyhmos_xiaomi_marble/work/marble-wifi-src/communication_wifi_4.1"
+  },
+  "libnl": {
+    "headers": "OpenHarmony third_party/libnl 3.7.0 (include/ only)",
+    "runtime_needed": "/system/lib64/chipset-sdk/libnl_share.z.so"
+  },
+  "sources": {
+    "libwpa.map": "270622f3d6dc371edd64f925659b40c8921cf1c76658a4fc7a6a2265fd2ec479",
+    ".config": "b9e88467fcb28502d50400b59369b717230527fe7b41b117891d56220cb8ec73",
+    "libnl.tar.gz": "352133ec9545da76f77e70ccb48c9d7e5324d67f6474744647a7ed382b5e05fa"
+  },
+  "artifacts": {
+    "lib64/libwpa.z.so": "3aba955306495fe81e8bfedbe4935070d360c9366c33bcebcf99356bb2a6fa02",
+    "bin/wpa_supplicant": "62abdde40ef27f6b7e3f144b35da9f31a885bd7d13706bab0e9b981c7f17eded"
+  },
+  "contract": {
+    "soname": "libwpa.z.so",
+    "symbol": "wpa_main@@1.0",
+    "ctrl_iface": "unix + @abstract:",
+    "driver": "nl80211",
+    "compiled_out": [
+      "CONFIG_SAE",
+      "CONFIG_OWE",
+      "CONFIG_FILS",
+      "CONFIG_AP",
+      "CONFIG_IEEE8021X_EAPOL"
+    ]
+  }
+}

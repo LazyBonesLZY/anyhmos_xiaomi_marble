@@ -1,0 +1,18 @@
+{
+  "path": "/system/lib64/librender_service.z.so",
+  "input_sha256": "e56a496d9077da7db5d11e09a377a0d62fd921ca7c228c8b41e575a05bfe31f8",
+  "output_sha256": "506058c957b25b0d55cef05fb8a0928051c464efb8451a8df48662f2b5f22b99",
+  "changes": [
+    {
+      "offset": 6626076,
+      "before": "885240b91f29007121010054a86302d1e00319aae1031f2ab36302d157670094a80357f8280100b50d000014e8630291e00319aa21008052f36302914f670094e85340f9c80000b4090140f96122009129815ef80001098b9b2e0594e00314aaf2010094",
+      "after": "e00314aa09020094885240b91f29007121010054a86302d1e00319aae1031f2ab36302d155670094a80357f8280100b50d000014e8630291e00319aa21008052f36302914d670094e85340f9c80000b4090140f96122009129815ef80001098b992e0594"
+    }
+  ],
+  "evidence": {
+    "function": "OHOS::Rosen::RSScreen::PhysicalScreenInit",
+    "virtual_address": "0x652b1c",
+    "proof": "Read the actual HDI capability before classifying the physical display. Preserve both original type branches, the type comparison, and both reference cleanup paths. Four PC-relative BL instructions retain their original targets. This does not change the separate HDI connection type or the virtual-screen constructor."
+  },
+  "device_validated": false
+}

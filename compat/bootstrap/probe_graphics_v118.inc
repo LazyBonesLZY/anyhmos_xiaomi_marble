@@ -24,6 +24,8 @@ static int graphics_run_script(const char *script) {
 }
 static int graphics_ram_root(void) {
     if(access("/hmos-hdf-graphics.hcb",F_OK)<0){
+        if(access("/graphics/stage-phase4-marble.sh",F_OK)==0)
+            return graphics_run_script("/graphics/stage-phase4-marble.sh");
         if(access("/graphics/stage-phase3-marble.sh",F_OK)==0)
             return graphics_run_script("/graphics/stage-phase3-marble.sh");
         return 0;

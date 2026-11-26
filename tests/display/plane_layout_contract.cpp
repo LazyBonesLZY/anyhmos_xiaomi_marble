@@ -36,8 +36,8 @@ int main()
         for (size_t plane = 0; plane < expected.size(); ++plane) {
             const auto &got = layout.planes[plane];
             const auto &want = expected[plane];
-            CHECK(got.offset == want.offset && got.hStride == want.rowStride);
-            CHECK(got.vStride == want.columnStride);
+            CHECK(got.offset == want.offset && got.hStride == want.columnStride);
+            CHECK(got.vStride == want.rowStride);
             for (uint32_t y = 0; y < want.height; ++y) {
                 for (uint32_t x = 0; x < want.width; ++x) {
                     const size_t offset = want.offset + y * want.rowStride + x * want.columnStride;
@@ -47,7 +47,7 @@ int main()
             }
             for (uint32_t y = 0; y < want.height; ++y) {
                 for (uint32_t x = 0; x < want.width; ++x) {
-                    const size_t offset = got.offset + y * got.hStride + x * got.vStride;
+                    const size_t offset = got.offset + y * got.vStride + x * got.hStride;
                     CHECK(offset < pixels.size());
                     CHECK(pixels[offset] == uint8_t(17 * plane + 3 * y + 5 * x));
                 }
@@ -62,14 +62,20 @@ int main()
     for (uint32_t format : {11u, 12u, 19u, 20u}) {
         CHECK(checkLayout(format, 73, 29, 384, 16384, {{0, 384, 4, 73, 29}}) == 0);
     }
-    for (uint32_t format : {24u, 25u}) {
-        CHECK(checkLayout(format, 70, 46, 128, 12288,
-            {{0, 128, 1, 70, 46}, {5888, 128, 2, 35, 23}}) == 0);
-    }
+    CHECK(checkLayout(24, 70, 46, 128, 12288,
+        {{0, 128, 1, 70, 46}, {5888, 128, 2, 35, 23}, {5889, 128, 2, 35, 23}}) == 0);
+    CHECK(checkLayout(25, 70, 46, 128, 12288,
+        {{0, 128, 1, 70, 46}, {5889, 128, 2, 35, 23}, {5888, 128, 2, 35, 23}}) == 0);
     for (uint32_t format : {28u, 29u}) {
         CHECK(checkLayout(format, 70, 46, 128, 12288,
             {{0, 128, 1, 70, 46}, {5888, 64, 1, 35, 23}, {7360, 64, 1, 35, 23}}) == 0);
+        CHECK(checkLayout(format, 351, 777, 384, 450560,
+            {{0, 384, 1, 351, 777}, {298368, 192, 1, 176, 389}, {373056, 192, 1, 176, 389}}) == 0);
     }
+    CHECK(checkLayout(24, 350, 777, 384, 450560,
+        {{0, 384, 1, 350, 777}, {298368, 384, 2, 175, 389}, {298369, 384, 2, 175, 389}}) == 0);
+    CHECK(checkLayout(25, 350, 777, 384, 450560,
+        {{0, 384, 1, 350, 777}, {298369, 384, 2, 175, 389}, {298368, 384, 2, 175, 389}}) == 0);
     CHECK(checkLayout(38, 37, 1, 37, 4096, {{0, 37, 1, 37, 1}}) == 0);
 
     BufferHandle valid{};
@@ -86,7 +92,7 @@ int main()
         switch (invalid) {
             case 0: handle.fd = -1; break;
             case 1: handle.width = 0; break;
-            case 2: handle.height = 45; break;
+            case 2: handle.height = 0; break;
             case 3: handle.stride = 127; break;
             case 4: handle.size = 100; break;
             case 5: handle.reserveFds = 1; break;

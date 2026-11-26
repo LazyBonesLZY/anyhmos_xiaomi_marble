@@ -1,0 +1,13 @@
+{
+  "process": "index_insert_service",
+  "systemability": [
+    {
+      "name": 66074,
+      "libpath": "libindex_insert_service.z.so",
+      "run-on-create": true,
+      "distributed": false,
+      "dump-level": 1,
+      "min_hdi_proxy_version": []
+    }
+  ]
+}

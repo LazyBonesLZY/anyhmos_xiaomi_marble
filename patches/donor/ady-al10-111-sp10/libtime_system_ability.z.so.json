@@ -1,49 +1,24 @@
 {
   "path": "/system/lib64/libtime_system_ability.z.so",
   "input_sha256": "bfc03000b6475c635b7fa0184ee87aba1d1e91b99eae4a16b0eb0eb64b15326d",
-  "output_sha256": "f9000b88a791c4ba04d47156a944d50b4f0e80a690e11b9ce9acec62f9d508fc",
+  "output_sha256": "fd69615fdb76b6b8479384b4b84b5c9b9b5b528615f4b671cc416bd99857bd0f",
+  "guards": [
+    {"offset": 242764, "bytes": "7f1a00f181000054"},
+    {"offset": 242800, "bytes": "407b33b8"},
+    {"offset": 243020, "bytes": "680600917f1a00f1f7279f1af30308aa1f1d00f161f7ff5449000014"}
+  ],
   "changes": [
     {
       "offset": 242772,
-      "before": "80018052",
-      "after": "00008012"
-    },
-    {
-      "offset": 242776,
-      "before": "01008152",
-      "after": "607a34b8"
-    },
-    {
-      "offset": 242780,
-      "before": "03000014",
-      "after": "3a000014"
+      "before": "800180520100815203000014",
+      "after": "00008012407b33b83c000014"
     }
   ],
-  "relocation_evidence": [
-    {
-      "old_offset": 228744,
-      "new_offset": 242772,
-      "kind": "manually_reviewed_function_mapping",
-      "proof": "Unique 820-byte unwind function, complete normalized instruction/register sequence identical; six real clock ids identical; skips the same unsupported clock path"
-    },
-    {
-      "old_offset": 228748,
-      "new_offset": 242776,
-      "kind": "manually_reviewed_function_mapping",
-      "proof": "Unique 820-byte unwind function, complete normalized instruction/register sequence identical; six real clock ids identical; skips the same unsupported clock path"
-    },
-    {
-      "old_offset": 228752,
-      "new_offset": 242780,
-      "kind": "manually_reviewed_function_mapping",
-      "proof": "Unique 820-byte unwind function, complete normalized instruction/register sequence identical; six real clock ids identical; skips the same unsupported clock path"
-    },
-    {
-      "old_offset": 241632,
-      "new_offset": 228984,
-      "kind": "manually_reviewed_function_mapping",
-      "proof": "Unique 820-byte unwind function, complete normalized instruction/register sequence identical; six real clock ids identical; skips the same unsupported clock path"
-    }
-  ],
+  "evidence": {
+    "function": "OHOS::MiscServices::TimerManager::GetInstance",
+    "supersedes_sha256": "f9000b88a791c4ba04d47156a944d50b4f0e80a690e11b9ce9acec62f9d508fc",
+    "old_failure": "Crash at 0x3c458: the relocated store used X19 as base and X20 as index, rather than ADY's X26 table base and X19 loop index.",
+    "proof": "At index 6, record -1 with the same STR operands as the donor's normal store at 0x3c470. Branch to 0x3c54c, the common loop update, which clears W23 and exits on index 7. Linux-supported slots 0 through 5, their error/cleanup paths, and their epoll and realtime cancellation setup are unchanged."
+  },
   "device_validated": false
 }

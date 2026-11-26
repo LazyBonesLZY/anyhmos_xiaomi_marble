@@ -60,7 +60,7 @@ static int capture_frame(struct IAudioCaptureVdi *self, int8_t *frame,
 {
     if (!self || !frame || !length || !reply_bytes) return -EINVAL;
     unsigned capacity=*length; *length=0; *reply_bytes=0;
-    if (!capacity || (capacity&3)) return -EINVAL;
+    if (!capacity || (capacity&1)) return -EINVAL;
     struct capture *c=(void *)self;
     unsigned copied=0;
     pthread_mutex_lock(&c->lock);
@@ -110,7 +110,7 @@ static int adapter_mic_get_mute(struct IAudioAdapterVdi *self, bool *mute)
     return rc;
 }
 static int capture_size(struct IAudioCaptureVdi *self, uint64_t *size)
-{ (void)self; if (!size) return -EINVAL; *size=4; return 0; }
+{ (void)self; if (!size) return -EINVAL; *size=2; return 0; }
 static int capture_count(struct IAudioCaptureVdi *self, uint64_t *count)
 { (void)self; if (!count) return -EINVAL; *count=240; return 0; }
 static int capture_buffer_size(struct IAudioCaptureVdi *self, uint64_t *size)
@@ -119,27 +119,52 @@ static int capture_attrs(struct IAudioCaptureVdi *self, struct AudioSampleAttrib
 { if (!attrs) return -EINVAL; *attrs=((struct capture *)self)->attrs; return 0; }
 static int capture_no_pause(struct IAudioCaptureVdi *self, bool *pause, bool *resume)
 { (void)self; if (!pause || !resume) return -EINVAL; *pause=false; *resume=false; return 0; }
+static uint32_t pin_to_pal_in_device(uint32_t pins)
+{
+    if (pins==PIN_VDI_IN_BLUETOOTH_SCO_HEADSET) return HMOS_PAL_DEV_IN_BT_SCO_HEADSET;
+    if (pins==PIN_VDI_IN_HS_MIC) return HMOS_PAL_DEV_IN_WIRED_HEADSET;
+    if (pins==PIN_VDI_IN_USB_HEADSET) return HMOS_PAL_DEV_IN_USB_HEADSET;
+    if (pins==PIN_VDI_IN_MIC) return HMOS_PAL_DEV_IN_HANDSET_MIC;
+    return 0;
+}
+static int capture_scene_supported(struct IAudioCaptureVdi *self,
+    const struct AudioSceneDescriptorVdi *scene, bool *supported)
+{
+    (void)self;
+    if (!scene || !supported) return -EINVAL;
+    *supported = pin_to_pal_in_device((uint32_t)scene->desc.pins) != 0;
+    return 0;
+}
+static int capture_select_scene(struct IAudioCaptureVdi *self,
+    const struct AudioSceneDescriptorVdi *scene)
+{
+    (void)self;
+    if (!scene) return -EINVAL;
+    return pin_to_pal_in_device((uint32_t)scene->desc.pins) ? 0 : -ENOTSUP;
+}
 static int create_capture_impl(struct IAudioAdapterVdi *self, const struct AudioDeviceDescriptorVdi *desc,
     const struct AudioSampleAttributesVdi *attrs, struct IAudioCaptureVdi **out)
 {
     if (!desc || !attrs || !out) return -EINVAL;
     *out=0;
-    if (desc->pins!=PIN_VDI_IN_MIC || attrs->sampleRate!=48000 || attrs->channelCount!=2 ||
+    uint32_t in_dev=pin_to_pal_in_device((uint32_t)desc->pins);
+    if (!in_dev || attrs->sampleRate!=48000 || (attrs->channelCount!=1 && attrs->channelCount!=2) ||
         attrs->format!=AUDIO_VDI_FORMAT_TYPE_PCM_16_BIT || !attrs->interleaved || attrs->isBigEndian ||
-        attrs->type!=AUDIO_VDI_IN_MEDIA) return -ENOTSUP;
+        (attrs->type!=AUDIO_VDI_IN_MEDIA && attrs->type!=AUDIO_VDI_IN_COMMUNICATION &&
+         attrs->type!=AUDIO_VDI_IN_CALL)) return -ENOTSUP;
     int rc=capture_available(); if (rc) return rc;
     struct capture *c=calloc(1,sizeof(*c)); if (!c) return -ENOMEM;
     c->fd=hmos_pal_connect();
     if (c->fd<0) { rc=c->fd; free(c); return rc; }
     struct hmos_pal_reply reply={0};
-    rc=hmos_pal_request(c->fd,HMOS_PAL_CAPTURE_OPEN,48000,2,0,0,&reply);
+    rc=hmos_pal_request(c->fd,HMOS_PAL_CAPTURE_OPEN,48000,
+        (attrs->channelCount & 0xFFFFu) | (in_dev << 16),0,0,&reply);
     if (rc) { close(c->fd); free(c); return rc; }
     rc=pthread_mutex_init(&c->lock,0);
     if (rc) { (void)capture_command(c,HMOS_PAL_CAPTURE_CLOSE,0,&reply); close(c->fd); free(c); return -rc; }
     c->attrs=*attrs;
 #define CAPTURE_OPTIONAL(field) c->api.field=(__typeof__(c->api.field))unsupported
     CAPTURE_OPTIONAL(CaptureFrameEc); CAPTURE_OPTIONAL(GetCapturePosition);
-    CAPTURE_OPTIONAL(CheckSceneCapability); CAPTURE_OPTIONAL(SelectScene);
     CAPTURE_OPTIONAL(SetVolume); CAPTURE_OPTIONAL(GetVolume); CAPTURE_OPTIONAL(GetGainThreshold);
     CAPTURE_OPTIONAL(GetGain); CAPTURE_OPTIONAL(SetGain); CAPTURE_OPTIONAL(SetSampleAttributes);
     CAPTURE_OPTIONAL(GetCurrentChannelId); CAPTURE_OPTIONAL(SetExtraParams); CAPTURE_OPTIONAL(GetExtraParams);
@@ -147,6 +172,8 @@ static int create_capture_impl(struct IAudioAdapterVdi *self, const struct Audio
     CAPTURE_OPTIONAL(RemoveAudioEffect); CAPTURE_OPTIONAL(Pause); CAPTURE_OPTIONAL(Resume);
     CAPTURE_OPTIONAL(Flush); CAPTURE_OPTIONAL(AudioDevDump);
 #undef CAPTURE_OPTIONAL
+    c->api.CheckSceneCapability=capture_scene_supported;
+    c->api.SelectScene=capture_select_scene;
     c->api.CaptureFrame=capture_frame; c->api.Start=capture_start; c->api.Stop=capture_stop;
     c->api.SetMute=capture_mute; c->api.GetMute=capture_get_mute;
     c->api.GetFrameSize=capture_size; c->api.GetFrameCount=capture_count;
@@ -180,7 +207,7 @@ static int capture_capability_impl(struct IAudioAdapterVdi *self, const struct A
     cap->deviceId=port->portId; cap->hardwareMode=true;
     cap->formatNum=1; cap->formatsLen=1; cap->formats[0]=AUDIO_VDI_FORMAT_TYPE_PCM_16_BIT;
     cap->sampleRateMasks=AUDIO_VDI_SAMPLE_RATE_MASK_48000;
-    cap->channelMasks=AUDIO_VDI_CHANNEL_STEREO; cap->channelCount=2;
+    cap->channelMasks=AUDIO_VDI_CHANNEL_MONO; cap->channelCount=1;
     cap->subPortsLen=1; cap->subPorts[0].portId=port->portId;
     cap->subPorts[0].mask=PORT_VDI_PASSTHROUGH_LPCM;
     cap->supportSampleFormatsLen=1; cap->supportSampleFormats[0]=AUDIO_VDI_SAMPLE_FORMAT_S16;

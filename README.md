@@ -30,11 +30,13 @@
 - [x] Phase 1：完成 Linux 5.10.274 内核导出补丁（`marble_hmos_exports.c` / `hmos_ipc_api_v1`）、`hmos_ipc.ko`、`hmos_dmabuf_sync.ko`、配套模块与静态 IPC 契约测试编译及 CFI/CRC 审计
 - [ ] Phase 2：`boot.img` ramdisk + `vendor_boot.img` 引导与 USB ACM 串口闭环（含实机备份与 IPC 契约验收）
 - [ ] Phase 3：9 GiB `super` 打包、ext4 `userdata` 挂载与鸿蒙核心服务拉起
-- [ ] Phase 4：单 DSI 1080×2400 显示重构、Adreno 725 Turnip 与 Goodix 原生触控点亮桌面
+- [ ] Phase 4：单 DSI 1080×2400 桌面和触控已上机；设置、时钟从桌面进入前台已实测，仍有独立子系统待验收。
 - [ ] Phase 5：Wi-Fi（QCA6490）、PAL 音频、蓝牙与电池充电连通
 - [ ] Phase 6：SSC 传感器、温控、120Hz 刷新率优化与手机 Donor 迁移
 
-完整技术差异与里程碑见 [docs/MARBLE_PORTING_PLAN.md](docs/MARBLE_PORTING_PLAN.md)。
+**最新真机进度（2026-11-23）：** M15 G 已恢复应用启动，Wi‑Fi 已通过网关与公网 IP 收发实测。存储容量汇总、实况窗到期、HAP 安装、录音及 HDC 传输仍待验收。见[进度与回退](docs/MARBLE_HANDOFF.md#0-当前实机状态)及[真机证据](docs/VERIFICATION.md#m15-g真机应用启动与-wlan-联网)。完整路线见[移植规划](docs/MARBLE_PORTING_PLAN.md)。
+
+**刷写与工件规则（2026-11-24 更新）**：用户允许按适配需要刷写 boot_a 和 vendor_boot_a，保留 userdata 及其它原厂底层分区；不逐轮堆积整镜备份。功能批次、最少恢复基线和依赖清理见[分批计划](docs/MARBLE_BATCH_PLAN.md)。
 
 ## 常用维护命令
 

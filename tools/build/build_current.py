@@ -23,11 +23,12 @@ def includes(paths):
     return ['-I'+str(p) for p in paths]
 
 
-def commands(out, default_display_route=0):
+def commands(out, default_display_route=0, *, single_dsi=False):
     if default_display_route not in (0, 2):
         raise ValueError('Default display route must be 0 or 2')
-    # 仅为显示实现及其契约测试传入显式启动默认
+    # 路由和面板拓扑独立；双 plane 直扫契约仍固定使用原拓扑。
     route_flags = ['-DHMOS_DEFAULT_DISPLAY_ROUTE=2'] if default_display_route == 2 else []
+    composer_flags = route_flags + (['-DHMOS_SPLIT_SCANOUT=0'] if single_dsi else [])
     # 按宿主系统选择 SDK 工具名，保留目标平台参数
     suffix = '.exe' if os.name == 'nt' else ''
     clang = str(SDK/('llvm/bin/clang'+suffix))
@@ -61,23 +62,24 @@ def commands(out, default_display_route=0):
             flags=['-nostdlib','-static','-Os','-fno-stack-protector','-fno-builtin',
                    '-Wl,-e,_start,-z,noexecstack,--build-id=none']
         result[key]=['aarch64-linux-gnu-gcc',*flags,str(ROOT/source),'-o',str(out/output)]
+    drm_inc = [STAGE/'include', STAGE/'include/libdrm']
     display_inc = [ROOT/'compat/display',ROOT/'compat/display/include/vdi-only',
         ROOT/'compat/display/include',ROOT/'compat/display/include/display/buffer',
         UPSTREAM/'drivers_hdf_core/interfaces/inner_api/hdi/base',
         UPSTREAM/'drivers_peripheral/display/buffer/hdi_service/include',
         UPSTREAM/'drivers_interface/display/composer/common/include',
         UPSTREAM/'hiviewdfx_hilog/interfaces/native/innerkits/include',
-        STAGE/'include',STAGE/'include/libdrm']
+        *drm_inc]
     add('composer','libdisplay_composer_vdi_impl.z.so',
         ['compat/display/composer_vdi.cpp','compat/display/composer_unsupported.cpp'],
-        ['-g','-shared','-fPIC','-Wl,-z,defs','-Wl,-soname,libdisplay_composer_vdi_impl.z.so']+route_flags,
+        ['-g','-shared','-fPIC','-Wl,-z,defs','-Wl,-soname,libdisplay_composer_vdi_impl.z.so']+composer_flags,
         [str(STAGE/'lib/libdrm.a'),*cpp_runtime],display_inc,True)
     # 使用模拟 DRM 提交验证模式切换，不访问物理显示设备
     add('mode-contract','mode_switch_contract',
         ['compat/display/composer_vdi.cpp','compat/display/composer_unsupported.cpp',
          'tests/display/mode_switch_contract.cpp'],
         ['-DACE5_MODE_TEST','-Wl,--wrap=drmModeCreatePropertyBlob',
-         '-Wl,--wrap=drmModeDestroyPropertyBlob','-Wl,--wrap=drmModeAtomicCommit']+route_flags,
+         '-Wl,--wrap=drmModeDestroyPropertyBlob','-Wl,--wrap=drmModeAtomicCommit']+composer_flags,
         [str(STAGE/'lib/libdrm.a'),*cpp_runtime],display_inc,True)
     add('vblank-probe','vblank_probe',['tests/display/vblank_probe.c'],
         [],[str(STAGE/'lib/libdrm.a')],display_inc)
@@ -87,7 +89,7 @@ def commands(out, default_display_route=0):
         ['-DACE5_MODE_TEST','-DACE5_SUBMIT_TEST',
          '-Wl,--wrap=drmModeAtomicAlloc','-Wl,--wrap=drmModeAtomicAddProperty',
          '-Wl,--wrap=drmModeAtomicCommit','-Wl,--wrap=drmPrimeFDToHandle',
-         '-Wl,--wrap=drmModeAddFB2','-Wl,--wrap=drmModeRmFB']+route_flags,
+         '-Wl,--wrap=drmModeAddFB2','-Wl,--wrap=drmModeRmFB']+composer_flags,
         [str(STAGE/'lib/libdrm.a'),*cpp_runtime],display_inc,True)
     # 使用模拟 DRM 验证直扫提交、释放同步和失败回退
     add('direct-contract','direct_scanout_contract',
@@ -106,7 +108,7 @@ def commands(out, default_display_route=0):
         ['compat/display/composer_vdi.cpp','compat/display/composer_unsupported.cpp',
          'tests/display/display_route_policy_contract.cpp'],
         ['-DACE5_DIRECT_TEST','-Wl,--wrap=open',
-         '-Wl,--wrap=read','-Wl,--wrap=close']+route_flags,
+         '-Wl,--wrap=read','-Wl,--wrap=close']+composer_flags,
         [str(STAGE/'lib/libdrm.a'),*cpp_runtime],display_inc,True)
     add('allocator','libdisplay_buffer_vdi_impl.z.so',['compat/display/buffer_vdi.cpp'],
         ['-g','-DACE5_LINEAR_STRIDE_ALIGNMENT=128','-shared','-fPIC','-Wl,-z,defs',
@@ -126,6 +128,14 @@ def commands(out, default_display_route=0):
         '-o',str(out/'native_display_wake')]
     add('display-mode','native_refresh_rate',['compat/display/native_refresh_rate.cpp'],
         ['-Os'],cpp_runtime,[],True)
+    diagnostic_flags = ['--sysroot='+str(SDK/'sysroot'),'-Wl,-z,defs']
+    # The VDI client shares the composer's C++ ABI and loads both VDI libs at runtime.
+    add('display-scanout','hmos_display_scanout',['compat/services/hmos_display_scanout.cpp'],
+        diagnostic_flags,[*cpp_runtime,'-ldl'],display_inc,True)
+    add('kms-diagnostic','hmos_kms_diagnostic',['compat/services/hmos_kms_diagnostic.cpp'],
+        diagnostic_flags,[str(STAGE/'lib/libdrm.a'),*cpp_runtime],drm_inc,True)
+    # The capture tool only uses the SDK's DRM UAPI, not libdrm.
+    add('capture-scanout','capture_scanout',['compat/services/capture_scanout.c'],diagnostic_flags)
     add('touch','hmos_thp_bridge',
         ['compat/touch/bridge.cpp','compat/touch/nvt_touch_core.cpp','compat/touch/nvt_finger_filter.cpp'],
         ['-std=c++20','-fexceptions'],cpp_runtime,[ROOT/'compat/touch'],True)
@@ -145,7 +155,10 @@ def commands(out, default_display_route=0):
         [],['-ldl'],shared_inc)
     add('audio-launcher','native_audio_service_launcher',['compat/audio/native_audio_service_launcher.c'])
     add('audio-check','native_system_audio_check',['compat/audio/native_system_audio_check.c'],[],['-lohaudio','-lm'])
-    palinc=Path(os.environ.get('HMOS_PAL_INCLUDE', os.environ.get('SHENG_PAL_INCLUDE','/root/hmos-reference/pal-sm8550-a13/inc')))
+    # PAL headers are kept in-tree (BSD-3, Qualcomm arpal) so the shims rebuild without
+    # the old /root/hmos-reference checkout.  See compat/audio/pal-headers/PROVENANCE.md.
+    palinc=Path(os.environ.get('HMOS_PAL_INCLUDE', os.environ.get('SHENG_PAL_INCLUDE',
+        str(ROOT/'compat/audio/pal-headers/inc'))))
     bionic=Path(os.environ.get('HMOS_BIONIC_LINK', os.environ.get('SHENG_BIONIC_LINK',str(ROOT/'work/audio-bionic-v1/lib64'))))
     bflags=['--target=aarch64-linux-android33','--sysroot='+str(SDK/'sysroot'),
         '-isystem',str(SDK/'sysroot/usr/include/aarch64-linux-ohos'),
@@ -163,11 +176,35 @@ def commands(out, default_display_route=0):
     # The lifecycle shim is Bionic and must not silently pick the OHOS libc.
     result['pal-lifecycle']=[clang,*bflags,'-Wl,-soname,libhmos_pal_lifecycle.so',str(audio/'pal_lifecycle.c'),'-lc','-ldl',
         '-o',str(out/'libhmos_pal_lifecycle.so')]
+    # Audio route library for the marble vendor PAL.  AOSP audio_route.c is compiled into a
+    # private hmos_ar_* namespace and compat/audio/audioroute/shim.c exports only the five
+    # symbols libar-pal.so / libaudioroute_ext.so import, treating their struct pointer as
+    # opaque.  Built with the Android NDK because the result must run on marble Bionic.
+    ndk=Path(os.environ.get('HMOS_NDK', '/home/lazybones/android-ndk-r27d'))
+    ndk_sysroot=ndk/'toolchains/llvm/prebuilt/linux-x86_64/sysroot'
+    audioroute=audio/'audioroute'
+    ar_bionic=Path(os.environ.get('HMOS_AUDIO_BIONIC',
+        os.environ.get('HMOS_BIONIC_LINK', str(ROOT/'work/marble-bionic/lib64'))))
+    ar_renames=[f'-D{name}=hmos_ar_{name[len("audio_route_"):]}' for name in
+        ('audio_route_init','audio_route_free','audio_route_update_mixer',
+         'audio_route_apply_and_update_path','audio_route_reset_and_update_path')]
+    result['audioroute']=[str(ndk/'toolchains/llvm/prebuilt/linux-x86_64/bin/clang'),
+        '--target=aarch64-linux-android'+str(os.environ.get('HMOS_NDK_API', '33')),
+        '--sysroot='+str(ndk_sysroot),'-O2','-Wall','-Wextra','-Werror','-fPIC','-shared',
+        '-fvisibility=hidden','-D_GNU_SOURCE',*ar_renames,
+        '-I'+str(audioroute/'include'),'-I'+str(audioroute/'include/expat'),
+        '-Wl,-soname,libaudioroute.so','-Wl,-z,defs',
+        '-Wl,--version-script='+str(audioroute/'exports.map'),
+        str(audioroute/'audio_route.c'),str(audioroute/'shim.c'),
+        '-L'+str(ar_bionic),'-ltinyalsa','-lexpat','-llog','-ldl','-lc',
+        '-o',str(out/'libaudioroute.so')]
     pd=audio/'pd-mapper'
     result['pd-mapper']=['aarch64-linux-gnu-gcc','-static','-O2','-D_GNU_SOURCE',
         '-I'+str(pd),*[str(pd/n) for n in ('pd-mapper.c','assoc.c','json.c','servreg_loc.c',
           'qrtr.c','qmi.c','logging.c')],'-o',str(out/'hmos-pd-mapper')]
 
+    add('hisysevent-sink','hmos_hisysevent_sink',['compat/services/hisysevent_sink.c'],[],['-std=gnu11'])
+    add('brightness-persist','hmos_brightness_persist',['compat/services/brightness_persist.c'],[],['-std=gnu11'])
     add('wifi-category','libhmos_wifi_category_v134.so',
         ['compat/wifi/wifi_caps_v134.c','compat/wifi/wifi_category_ioctl_v134.c'],
         ['-std=gnu11','-fPIC','-fvisibility=hidden','-shared',
@@ -215,6 +252,30 @@ def commands(out, default_display_route=0):
     # v139 host check is a two-translation-unit helper, not the old v137 binary.
     result['bluetooth-current-c']=[clang,*cflags,'-DHMOS_CURRENT_BT_API','-c',
         str(ROOT/'compat/bluetooth/native_bt_host_check_v137.c'),'-o',str(out/'bt-current.o')]
+    # marble: reuse the same donor HDI sources under marble artifact names.
+    # marble_bt_bridge.c is plain C (H4/TTY + btpower + bluetooth_a firmware) and
+    # is built both as the daemon and as a shared library for the symbol contract.
+    result['bluetooth-bridge-marble']=[clang,*cflags,'-std=gnu11',
+        str(ROOT/'compat/bluetooth/marble_bt_bridge.c'),
+        '-o',str(out/'hmos_bt_bridge_marble')]
+    result['bluetooth-bridge-marble-lib']=[clang,*cflags,'-std=gnu11','-fPIC','-shared',
+        '-DHMOS_BT_BRIDGE_NO_MAIN','-Wl,-soname,libhmos_bt_bridge_marble.so',
+        str(ROOT/'compat/bluetooth/marble_bt_bridge.c'),
+        '-o',str(out/'libhmos_bt_bridge_marble.so')]
+    # Explicit diagnostic target only; not a boot payload or service.
+    add('bluetooth-rom-probe-marble','marble_bt_rom_probe',
+        ['compat/bluetooth/marble_bt_rom_probe.c'],['-std=c11','-Werror'])
+    add('bluetooth-fw-probe-marble','marble_bt_fw_probe',
+        ['compat/bluetooth/marble_bt_fw_probe.c'],['-std=c11','-Werror'])
+    result['bluetooth-vendor-marble']=[clangpp,*cflags,
+        '-I'+str(UPSTREAM/'drivers_peripheral/bluetooth/hci/hdi_service/implement'),
+        '-shared','-fPIC',str(ROOT/'compat/bluetooth/bluetooth_vendor_v136.cpp'),
+        '-ldl','-Wl,-soname,libbt_vendor.z.so','-o',str(out/'libbt_vendor.z.so')]
+    bt_publish=Path(os.environ.get('HMOS_BT_VENDOR_LINK', os.environ.get('SHENG_BT_VENDOR_LINK',str(ROOT/'work/donor-bluetooth-v136/vendor/lib64'))))
+    add('bluetooth-hdi-marble','hmos_bt_hdi_publisher_marble',
+        ['compat/bluetooth/native_bt_hdi_publisher_v136.cpp'],[],
+        hdi_libs+[str(bt_publish/'libbluetooth_hci_stub_1.0.z.so'),'-ldl','-Wl,--allow-shlib-undefined'],
+        [ROOT/'compat/bluetooth/include',ROOT/'compat/bluetooth/include'/('bluetooth/hci')]+shared_inc,True)
     add('bluetooth-current','native_bt_host_check_v139',
         ['compat/bluetooth/native_bt_current_v139.cpp'],[],
         [str(out/'bt-current.o'),*cpp_runtime,'-ldl','-Wl,--allow-shlib-undefined'],[],True)
@@ -227,6 +288,37 @@ def commands(out, default_display_route=0):
     add('surface-post','libhmos_surface_diagnostic.so',
         ['compat/services/surface_post.cpp','compat/services/native_buffer_import_observer.S'],
         ['-shared','-fPIC'],cpp_runtime,[],True)
+    add('sceneboard-optional-sa','libhmos_sceneboard_optional_sa.so',
+        ['compat/framework/fallbacks/sceneboard_optional_sa.cpp'],
+        ['-shared','-fPIC','-Wl,-z,relro,-z,now',
+         '-Wl,--version-script='+str(ROOT/'compat/framework/fallbacks/sceneboard_optional_sa.map'),
+         '-Wl,-soname,libhmos_sceneboard_optional_sa.so'],
+        ['-ldl'],[],True)
+    # marble DCM SA 65866 software-TEE replacement. The token is derived from
+    # this device's own serial/model/UDID and signed with a per-device key; it is
+    # a local stand-in for the Huawei cloud token, not a Huawei attestation.
+    add('dcm-token','dcm_token.o',['compat/dcm/dcm_token.c'],['-c'],['-std=gnu11'],[ROOT/'compat/dcm'])
+    add('dcm-local-ca','dcm_local_ca.o',['compat/dcm/dcm_local_ca.c'],['-c'],['-std=gnu11'],
+        [ROOT/'compat/dcm',ROOT/'work/openssl-inc'])
+    add('dcm-probe','hmos_dcm_token_probe',
+        ['compat/dcm/hmos_dcm_token_probe.cpp'],[],
+        [str(out/'dcm_token.o'),str(LINK/'libipc_single.z.so'),str(LINK/'libipc_common.z.so'),
+         str(LINK/'libutils.z.so'),str(LINK/'libhilog.so'),str(LINK/'libc++.so'),
+         '-ldl','-Wl,--allow-shlib-undefined'],
+        [ROOT/'compat/dcm']+shared_inc,True)
+    add('dcm-service','hmos_dcm_service',
+        ['compat/dcm/hmos_dcm_service.cpp'],[],
+        [str(out/'dcm_token.o'),str(out/'dcm_local_ca.o'),str(LINK/'libipc_single.z.so'),
+         str(LINK/'libipc_common.z.so'),str(LINK/'libutils.z.so'),str(LINK/'libhilog.so'),
+         str(LINK/'libcrypto_openssl.z.so'),str(LINK/'libc++.so'),
+         '-ldl','-Wl,--allow-shlib-undefined'],
+        [ROOT/'compat/dcm',ROOT/'work/openssl-inc']+shared_inc,True)
+    add('wifi-ui-unavailable','libhmos_wifi_ui_unavailable.so',
+        ['compat/framework/fallbacks/wifi_ui_unavailable.c'],
+        ['-shared','-fPIC','-Wl,-z,relro,-z,now',
+         '-Wl,--version-script='+str(ROOT/'compat/framework/fallbacks/wifi_ui_unavailable.map'),
+         '-Wl,-soname,libhmos_wifi_ui_unavailable.so'],
+        ['-ldl'])
     return result
 
 
@@ -235,11 +327,14 @@ def main():
     parser.add_argument('targets',nargs='*')
     parser.add_argument('--list',action='store_true')
     parser.add_argument('--default-display-route',type=int,choices=(0,2),default=0)
+    parser.add_argument('--single-dsi',action='store_true',
+        help='Build composer and compatible contracts for a single DSI panel. Default: sheng split '
+             'scanout. The direct-contract target always tests split scanout.')
     parser.add_argument('--dry-run',action='store_true')
     parser.add_argument('--out',type=Path,default=ROOT/'work/current-build')
     args=parser.parse_args()
     out=args.out.resolve()
-    plan=commands(out,args.default_display_route)
+    plan=commands(out,args.default_display_route,single_dsi=args.single_dsi)
     if args.list:
         print('\n'.join(plan));return
     if not args.targets:parser.error('Select targets explicitly, or use --list.')
@@ -247,6 +342,10 @@ def main():
     targets=list(dict.fromkeys(args.targets))
     if 'bluetooth-current' in targets and 'bluetooth-current-c' not in targets:
         targets.insert(targets.index('bluetooth-current'),'bluetooth-current-c')
+    if ('dcm-service' in targets or 'dcm-probe' in targets) and 'dcm-token' not in targets:
+        targets.insert(0,'dcm-token')
+    if 'dcm-service' in targets and 'dcm-local-ca' not in targets:
+        targets.insert(0,'dcm-local-ca')
     if args.dry_run:
         print(json.dumps({name:plan[name] for name in targets},indent=2));return
     out.mkdir(parents=True,exist_ok=True)

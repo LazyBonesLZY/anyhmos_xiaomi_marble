@@ -36,3 +36,4 @@ node_modules/
 .env.*
 *.pem
 *.key
+/compat/useriam/out/

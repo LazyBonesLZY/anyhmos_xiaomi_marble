@@ -59,9 +59,11 @@ def main():
     includes = [SOURCE, args.generated, args.generated / "sensor", args.public_headers,
                 args.hdf / "hdi", args.hdf / "utils", args.hdf / "osal/uhdf",
                 args.ipc_headers, args.hdf / "ipc"]
-    cppflags = [*common, "-std=c++17", "-g", "-fPIC", "-fvisibility=hidden", "-fno-rtti",
-                "-flto", "-fsanitize=cfi", "-fsanitize-cfi-cross-dso",
-                "-mbranch-protection=pac-ret", "-fstack-protector-strong",
+    cppflags = [*common, "-std=c++17", "-Wno-deprecated-declarations", "-g", "-fPIC",
+                "-fvisibility=hidden", "-fno-rtti", "-flto", "-fsanitize=cfi",
+                "-fsanitize-cfi-cross-dso", "-mbranch-protection=pac-ret",
+                "-fstack-protector-strong",
+                "-include", ROOT / "compat/platform/platform_cpp_config.h", "-nostdlib++",
                 *["-I" + str(path) for path in includes]]
     base_libs = [args.donor_libs / name for name in
                  ("libutils.z.so", "libc++.so", "libipc_single.z.so", "libipc_common.z.so")]
@@ -75,16 +77,20 @@ def main():
                           args.hdf / "core"]
     linker = "-Wl,--dynamic-linker=/system/lib/ld-musl-aarch64.so.1"
     run([cxx, *["-I" + str(path) for path in publisher_includes], *cppflags,
-         "-include", ROOT / "compat/platform/platform_cpp_config.h", "-fno-exceptions",
-         "-nostdlib++", "-Wl,--no-undefined", linker,
+         "-fno-exceptions", "-Wl,--no-undefined", linker,
          "-Wl,-rpath,/system/lib64:/system/lib64/chipset-sdk:/system/lib64/chipset-sdk-sp:/system/lib64/platformsdk",
          SOURCE / "sensor_hdi_publisher.cpp", args.donor_libs / "libhdi.z.so",
          args.donor_libs / "libhdi_base.z.so", *base_libs, *system_libs,
          args.begetutil, "-o", output / "sensor_hdi_publisher"])
     run([cc, *common, "-std=c11", SOURCE / "native_sensorspd_launcher.c",
          linker, "-o", output / "native_sensorspd_launcher"])
+    run([cc, *common, "-std=c11", "--sysroot=" + str(args.sdk / "sysroot"),
+         SOURCE / "native_sensor_client_probe.c",
+         args.sdk / "sysroot/usr/lib/aarch64-linux-ohos/libohsensor.so",
+         linker, "-o", output / "native_sensor_client_probe"])
     for name in ("libssc_backend.a", "libssc_backend.so", service.name,
-                 "sensor_hdi_publisher", "native_sensorspd_launcher"):
+                 "sensor_hdi_publisher", "native_sensorspd_launcher",
+                 "native_sensor_client_probe"):
         artifact = output / name
         print(hashlib.sha256(artifact.read_bytes()).hexdigest(), artifact)
 

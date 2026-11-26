@@ -41,7 +41,18 @@ extern "C" int __wrap_drmModeAtomicCommit(int, drmModeAtomicReq *request, uint32
 }
 int main()
 {
+#if defined(HMOS_SPLIT_SCANOUT) && !HMOS_SPLIT_SCANOUT
+    auto connection = V1_4::DisplayConnectionType::EXTERNAL;
+    Check(GetDisplayConnectionType(0, connection) == -3 &&
+        connection == V1_4::DisplayConnectionType::EXTERNAL, "uninitialized output preserved");
+#endif
     Ace5InitializeModesForTest();
+#if defined(HMOS_SPLIT_SCANOUT) && !HMOS_SPLIT_SCANOUT
+    Check(GetDisplayConnectionType(1, connection) == -3 &&
+        connection == V1_4::DisplayConnectionType::EXTERNAL, "unsupported display output preserved");
+    Check(GetDisplayConnectionType(0, connection) == 0 && static_cast<int32_t>(connection) == 0,
+        "selected DSI device has internal connection type");
+#endif
     std::vector<DisplayModeInfo> modes;
     std::vector<DisplayModeInfoExt> extended;
     Check(GetDisplaySupportedModes(0, modes) == 0 && modes.size() == 2, "mode enumeration");

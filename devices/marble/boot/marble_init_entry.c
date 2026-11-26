@@ -42,12 +42,12 @@ static long access_exists(const char *path)
 static const char *const required_links[][2] = {
     {P "hmos-ipc.ko", "/hmos-ipc.ko"},
     {P "hmos-dmabuf-sync.ko", "/hmos-dmabuf-sync.ko"},
-    {P "token_contract", "/token_contract"},
-    {P "binder_nested", "/binder_nested"},
-    {P "binder_oneway_pid", "/binder_oneway_pid"},
 };
 
 static const char *const optional_links[][2] = {
+    {P "token_contract", "/token_contract"},
+    {P "binder_nested", "/binder_nested"},
+    {P "binder_oneway_pid", "/binder_oneway_pid"},
     {P "busybox", "/busybox"},
     {P "init.android.original", "/init.android.original"},
     {P "hmos-init-debug.cfg", "/hmos-init-debug.cfg"},

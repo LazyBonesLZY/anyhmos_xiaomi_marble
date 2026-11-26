@@ -1,0 +1,9 @@
+# Donor payload, not source.
+#
+# bin/ and lib64/ are regenerated from the local donor extracts by
+# `python3 compat/audio/runtime/assemble_runtime.py` (see manifest.json for the
+# per-file origin and SHA-256).  They are extracted from the device image, so
+# they must never be committed; the assembler and the two text manifests are
+# what the repository keeps.
+bin/*
+lib64/*

@@ -55,6 +55,32 @@ if $B test -f /sys/class/misc/hmos_dmabuf_sync/dev; then
  $B chmod 0660 "$R/dev/hmos_dmabuf_sync"
 fi
 
+# Stage compiled OpenHarmony compatibility shims when packaged into /graphics/.
+if $B test -f /graphics/libhmos_account_hmac.so; then
+ $B cp /graphics/libhmos_account_hmac.so "$R/compat/lib64/libhmos_account_hmac.so"
+ $B chmod 0644 "$R/compat/lib64/libhmos_account_hmac.so"
+ echo MARBLE_PHASE3_ACCOUNT_HMAC_STAGED
+fi
+
+if $B test -f /graphics/libdbkeys.so; then
+ $B cp /graphics/libdbkeys.so "$R/compat/lib64/libdbkeys.so"
+ $B chmod 0644 "$R/compat/lib64/libdbkeys.so"
+ $B mkdir -p "$R/data/service/el1/public/database/.hmos-dbkeys"
+ $B chown 0:0 "$R/data/service/el1/public/database/.hmos-dbkeys"
+ $B chmod 0711 "$R/data/service/el1/public/database/.hmos-dbkeys"
+ if $B test -f "$R/system/etc/passwd"; then
+  while IFS=: read -r _name _pass uid gid _rest; do
+   case "$uid" in ''|*[!0-9]*) continue;; esac
+   [ "$uid" -lt 10000 ] || continue
+   p="$R/data/service/el1/public/database/.hmos-dbkeys/$uid"
+   $B mkdir -p "$p"
+   $B chown "$uid:$gid" "$p"
+   $B chmod 0700 "$p"
+  done < "$R/system/etc/passwd"
+ fi
+ echo MARBLE_PHASE3_DBKEYS_STAGED
+fi
+
 # Apply guarded donor binary patches (SHA-256 verified input & output) in RAM.
 if $B test -f /graphics/apply-donor-patches-phase3.sh; then
  $B sh /graphics/apply-donor-patches-phase3.sh

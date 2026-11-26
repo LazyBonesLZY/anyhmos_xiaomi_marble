@@ -26,6 +26,63 @@ DeviceSensorInfo Identity(uint32_t kind)
     return {LOCAL_DEVICE, static_cast<int32_t>(kind), 0, Location::LOCAL};
 }
 
+constexpr uint32_t kMarbleKinds[] = {
+    SSC_ACCEL,
+    SSC_GYRO,
+    SSC_AMBIENT_LIGHT,
+    SSC_MAGNETIC_FIELD,
+    SSC_PROXIMITY,
+    SSC_ORIENTATION,
+    SSC_GRAVITY,
+    SSC_ROTATION_VECTOR,
+    SSC_GAME_ROTATION_VECTOR,
+    SSC_SIGNIFICANT_MOTION,
+    SSC_PEDOMETER_DETECTION,
+    SSC_PEDOMETER,
+    SSC_GEOMAGNETIC_ROTATION_VECTOR,
+    SSC_DEVICE_ORIENTATION,
+};
+
+bool IsOnChangeKind(uint32_t kind, const SscSensorInfo &native)
+{
+    if (native.present & SSC_INFO_STREAM_TYPE) {
+        return native.stream_type != 0;
+    }
+    return kind == SSC_AMBIENT_LIGHT || kind == SSC_PROXIMITY ||
+           kind == SSC_SIGNIFICANT_MOTION || kind == SSC_PEDOMETER_DETECTION ||
+           kind == SSC_PEDOMETER || kind == SSC_DEVICE_ORIENTATION;
+}
+
+size_t OutputFloatCount(uint32_t kind)
+{
+    switch (kind) {
+    case SSC_PROXIMITY:
+    case SSC_SIGNIFICANT_MOTION:
+    case SSC_PEDOMETER_DETECTION:
+    case SSC_PEDOMETER:
+    case SSC_DEVICE_ORIENTATION:
+        return 1;
+    case SSC_ROTATION_VECTOR:
+    case SSC_GAME_ROTATION_VECTOR:
+    case SSC_GEOMAGNETIC_ROTATION_VECTOR:
+        return 4;
+    default:
+        return 3;
+    }
+}
+
+float FallbackMaxRange(uint32_t kind)
+{
+    switch (kind) {
+    case SSC_PROXIMITY: return 5.0f;
+    case SSC_AMBIENT_LIGHT: return 65535.0f;
+    case SSC_GRAVITY: return 78.4f;
+    case SSC_ORIENTATION: return 360.0f;
+    case SSC_PEDOMETER: return 1000000.0f;
+    default: return 1.0f;
+    }
+}
+
 int32_t Result(int32_t result)
 {
     return result == SSC_OK ? HDF_SUCCESS : HDF_FAILURE;
@@ -55,7 +112,7 @@ struct SensorInterfaceService::Impl {
     // 启停锁与回调锁分离，停止线程时不阻塞数据回调
     std::mutex operationMutex;
     std::mutex callbackMutex;
-    std::array<Stream, 2> streams;
+    std::array<Stream, sizeof(kMarbleKinds) / sizeof(kMarbleKinds[0])> streams;
     std::map<uint64_t, Client> clients;
     SscTime time{};
     bool timeReady = false;
@@ -68,7 +125,7 @@ struct SensorInterfaceService::Impl {
         for (size_t index = 0; index < streams.size(); ++index) {
             auto &stream = streams[index];
             stream.owner = this;
-            stream.kind = index == 0 ? SSC_ACCEL : SSC_GYRO;
+            stream.kind = kMarbleKinds[index];
             SscBackendCreate(stream.kind, &stream.backend);
         }
     }
@@ -144,11 +201,26 @@ struct SensorInterfaceService::Impl {
         event.deviceSensorInfo = Identity(stream.kind);
         event.version = 0;
         event.timestamp = timestamp;
+        event.option = static_cast<uint32_t>(sample->status);
         event.mode = 1;
-        event.data.resize(sizeof(sample->values));
+        size_t floatCount = OutputFloatCount(stream.kind);
+        float packed[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        if (stream.kind == SSC_AMBIENT_LIGHT) {
+            packed[0] = sample->values[0];
+        } else {
+            size_t copyCount = sample->value_count > 0 && sample->value_count < floatCount
+                ? sample->value_count : floatCount;
+            if (copyCount > 4) {
+                copyCount = 4;
+            }
+            for (size_t i = 0; i < copyCount; ++i) {
+                packed[i] = sample->values[i];
+            }
+        }
+        event.data.resize(floatCount * sizeof(float));
         // SSC已输出设备坐标系的工厂校准SI数值，不重复旋转或缩放
-        std::memcpy(event.data.data(), sample->values, sizeof(sample->values));
-        event.dataLen = event.data.size();
+        std::memcpy(event.data.data(), packed, floatCount * sizeof(float));
+        event.dataLen = static_cast<uint32_t>(event.data.size());
         std::vector<Client> recipients;
         {
             std::lock_guard<std::mutex> lock(owner.callbackMutex);
@@ -174,7 +246,8 @@ struct SensorInterfaceService::Impl {
         float rate = 0.0f;
         for (auto id : stream.enabled) {
             auto iterator = stream.intervals.find(id);
-            int64_t interval = iterator == stream.intervals.end() ? DEFAULT_INTERVAL_NS : iterator->second;
+            int64_t interval = (iterator == stream.intervals.end() || iterator->second <= 0)
+                ? DEFAULT_INTERVAL_NS : iterator->second;
             rate = std::max(rate, static_cast<float>(1000000000.0 / interval));
         }
         if (stream.running && rate == stream.rate) {
@@ -248,7 +321,7 @@ struct SensorInterfaceService::Impl {
     {
         std::lock_guard<std::mutex> lock(operationMutex);
         auto *stream = Find(identity);
-        if (stream == nullptr || sampling <= 0 || report < 0) {
+        if (stream == nullptr || sampling < 0 || report < 0) {
             return HDF_ERR_INVALID_PARAM;
         }
         // 逐帧交付满足最大上报延迟，不额外积压批次
@@ -359,23 +432,41 @@ int32_t SensorInterfaceService::GetAllSensorInfo(std::vector<HdfSensorInformatio
             continue;
         }
         const auto &native = stream.info;
-        uint32_t required = SSC_INFO_SELECTED_RANGE | SSC_INFO_SELECTED_RESOLUTION | SSC_INFO_RATES;
-        if ((native.present & required) != required || native.rate_count == 0) {
-            // 元数据不完整时允许下一次重新发现
-            stream.discovered = false;
-            continue;
-        }
-        auto rates = std::minmax_element(native.rates_hz, native.rates_hz + native.rate_count);
         HdfSensorInformation sensor{};
         sensor.deviceSensorInfo = Identity(stream.kind);
-        sensor.sensorName = native.name;
-        sensor.vendorName = native.vendor;
+        sensor.sensorName = (native.present & SSC_INFO_NAME) ? native.name : "ssc_sensor";
+        sensor.vendorName = (native.present & SSC_INFO_VENDOR) ? native.vendor : "QTI";
         sensor.firmwareVersion = std::to_string(native.version);
-        sensor.maxRange = std::max(std::fabs(native.selected_range.minimum), std::fabs(native.selected_range.maximum));
-        sensor.accuracy = native.selected_resolution;
-        // 供体SensorService直接按纳秒接收HDI采样间隔
-        sensor.minDelay = static_cast<int64_t>(1000000000.0 / *rates.second);
-        sensor.maxDelay = static_cast<int64_t>(1000000000.0 / *rates.first);
+        if (native.present & SSC_INFO_SELECTED_RANGE) {
+            sensor.maxRange = std::max(std::fabs(native.selected_range.minimum), std::fabs(native.selected_range.maximum));
+        } else if ((native.present & SSC_INFO_RANGES) && native.range_count > 0) {
+            float maxR = 0.0f;
+            for (uint32_t i = 0; i < native.range_count; ++i) {
+                maxR = std::max(maxR, std::max(std::fabs(native.ranges[i].minimum), std::fabs(native.ranges[i].maximum)));
+            }
+            sensor.maxRange = maxR > 0.0f ? maxR : FallbackMaxRange(stream.kind);
+        } else {
+            sensor.maxRange = FallbackMaxRange(stream.kind);
+        }
+        if (native.present & SSC_INFO_SELECTED_RESOLUTION) {
+            sensor.accuracy = native.selected_resolution;
+        } else if ((native.present & SSC_INFO_RESOLUTIONS) && native.resolution_count > 0) {
+            sensor.accuracy = native.resolutions[0];
+        } else {
+            sensor.accuracy = stream.kind == SSC_PROXIMITY ? 5.0f : (stream.kind == SSC_AMBIENT_LIGHT ? 0.1f : 0.01f);
+        }
+        if ((native.present & SSC_INFO_RATES) && native.rate_count > 0) {
+            auto rates = std::minmax_element(native.rates_hz, native.rates_hz + native.rate_count);
+            // 供体SensorService直接按纳秒接收HDI采样间隔
+            sensor.minDelay = *rates.second > 0.0f ? static_cast<int64_t>(1000000000.0 / *rates.second) : 0;
+            sensor.maxDelay = *rates.first > 0.0f ? static_cast<int64_t>(1000000000.0 / *rates.first) : 0;
+        } else if (IsOnChangeKind(stream.kind, native)) {
+            sensor.minDelay = 0;
+            sensor.maxDelay = 0;
+        } else {
+            sensor.minDelay = 10000000;
+            sensor.maxDelay = 200000000;
+        }
         info.push_back(std::move(sensor));
     }
     return info.empty() ? HDF_FAILURE : HDF_SUCCESS;
@@ -422,9 +513,7 @@ int32_t SensorInterfaceService::SetBatchWithCallbackId(const DeviceSensorInfo &i
 
 int32_t SensorInterfaceService::Register(int32_t group, const sptr<ISensorCallback> &callback)
 {
-    (void)group;
-    (void)callback;
-    return HDF_ERR_NOT_SUPPORT;
+    return impl_->Register(group, callback, LEGACY_CLIENT, false);
 }
 
 int32_t SensorInterfaceService::RegisterAsync(int32_t group, const sptr<ISensorCallback> &callback)
@@ -480,12 +569,12 @@ int32_t SensorInterfaceService::GetSdcSensorInfo(std::vector<SdcSensorInfo> &inf
 }
 int32_t SensorInterfaceService::RegSensorPlugCallBack(const sptr<ISensorPlugCallback> &)
 {
-    return HDF_ERR_NOT_SUPPORT;
+    return HDF_SUCCESS;
 }
 
 int32_t SensorInterfaceService::UnRegSensorPlugCallBack(const sptr<ISensorPlugCallback> &)
 {
-    return HDF_ERR_NOT_SUPPORT;
+    return HDF_SUCCESS;
 }
 
 extern "C" __attribute__((visibility("default"))) ISensorInterface *SensorInterfaceImplGetInstance()

@@ -48,8 +48,13 @@ class MarblePhase3Tests(unittest.TestCase):
             'privacy_service',
             'huks_service',
             'accountmgr',
+            'hidumper_service',
         }
         self.assertEqual(set(services), expected)
+        self.assertEqual(
+            services['accountmgr']['env'],
+            [{'name': 'LD_PRELOAD', 'value': '/compat/lib64/libhmos_account_hmac.so'}],
+        )
         for name, svc in services.items():
             self.assertEqual(svc['disabled'], 1, name)
             self.assertEqual(svc['once'], 1, name)

@@ -1,0 +1,45 @@
+diff --git a/src/gallium/drivers/zink/zink_render_pass.c b/src/gallium/drivers/zink/zink_render_pass.c
+index 63e6724..0f07228 100644
+--- a/src/gallium/drivers/zink/zink_render_pass.c
++++ b/src/gallium/drivers/zink/zink_render_pass.c
+@@ -766,6 +766,20 @@ zink_render_msaa_expand(struct zink_context *ctx, uint32_t msaa_expand_mask)
+ {
+    assert(msaa_expand_mask);
+ 
++   /* MSAA 展开递归闸门：内部 blit 若在同一线程上再次触发同一帧缓冲的展开，
++    * 只记录并跳过，避免无限递归耗尽调用栈（根因见 transient_init 置位时机）。 */
++   static __thread unsigned expand_depth;
++   static unsigned expand_frames;
++   if (expand_depth >= 2) {
++      mesa_loge("ZINK_MSAA_EXPAND_CAP depth=%u mask=0x%x samples=%u",
++                expand_depth, msaa_expand_mask, ctx->fb_state.samples);
++      return;
++   }
++   if (!(expand_frames++ % 120))
++      mesa_loge("ZINK_MSAA_EXPAND mask=0x%x samples=%u depth=%u",
++                msaa_expand_mask, ctx->fb_state.samples, expand_depth);
++   ++expand_depth;
++
+    bool blitting = ctx->blitting;
+    u_foreach_bit(i, msaa_expand_mask) {
+       struct zink_ctx_surface *csurf = (struct zink_ctx_surface*)ctx->fb_state.cbufs[i];
+@@ -776,6 +790,8 @@ zink_render_msaa_expand(struct zink_context *ctx, uint32_t msaa_expand_mask)
+       }
+       if (csurf->transient_init)
+          continue;
++      /* resolve 幂等标记：置位必须先于 blit，重入的展开据此跳过同一附件 */
++      csurf->transient_init = true;
+       struct pipe_surface *dst_view = (struct pipe_surface*)csurf->transient;
+       assert(dst_view);
+       struct pipe_sampler_view src_templ, *src_view;
+@@ -810,8 +826,10 @@ zink_render_msaa_expand(struct zink_context *ctx, uint32_t msaa_expand_mask)
+       }
+       ctx->blitting = blitting;
+       pipe_sampler_view_reference(&src_view, NULL);
++      /* 展开完成：transient 内容已有效 */
+       csurf->transient_init = true;
+    }
++   --expand_depth;
+ }
+ 
+ unsigned

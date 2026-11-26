@@ -21,7 +21,8 @@ namespace {
 constexpr int32_t OK = 0, FAIL = -1, INVALID = -3, UNSUPPORTED = -5;
 constexpr uint64_t SUPPORTED_USAGE = 3 | (1ULL << 3) | (1ULL << 4) |
     (1ULL << 6) | (1ULL << 7) | (1ULL << 8) | (1ULL << 9) |
-    (1ULL << 10) | (1ULL << 16) | (1ULL << 26) | (1ULL << 27);
+    (1ULL << 10) | (1ULL << 14) | (1ULL << 15) | (1ULL << 16) |
+    (1ULL << 26) | (1ULL << 27);
 #ifndef ACE5_LINEAR_STRIDE_ALIGNMENT
 #define ACE5_LINEAR_STRIDE_ALIGNMENT 256
 #endif
@@ -59,7 +60,7 @@ bool Layout(uint32_t width, uint32_t height, uint64_t usage, uint32_t format,
         return true;
     }
     if (!width || !height || width > 16384 || height > 16384 || !bpp ||
-        (usage & ~allowed) || (yuv && ((width | height) & 1))) return false;
+        (usage & ~allowed)) return false;
     // Image decoding requests PREFER_NO_PADDING and ALLOC_NO_IPC. The latter
     // is a caller-side allocation-routing hint, with no extra memory layout.
     // CPU-decoded images can later become GPU textures. PREFER_NO_PADDING
@@ -69,7 +70,7 @@ bool Layout(uint32_t width, uint32_t height, uint64_t usage, uint32_t format,
     // Keep visible dimensions unchanged; allocate the complete backing slice.
     const uint32_t backingHeight = yuv ? height : (height + 3) & ~3U;
     size = uint64_t(stride) * backingHeight;
-    if (yuv) size += uint64_t(stride) * (height / 2);
+    if (yuv) size += uint64_t(stride) * ((uint64_t(height) + 1) / 2);
     return size <= MAX_SIZE;
 }
 bool Valid(const BufferHandle &h)
@@ -284,19 +285,26 @@ public:
     {
         if (!Valid(h)) return INVALID;
         layout.pixelFormat = h.format;
-        // 平面列步长按像素或交错色度组的字节数返回
+        // OHOS V1_2::ImagePlane maps hStride -> columnStride and vStride -> rowStride
+        // (verified against donor libdisplay_buffer_vdi_impl.z.so and libsurface.z.so::GetPlanesInfo).
         const uint32_t pixelStride = IsYuv420(h.format) || h.format == 38 ? 1 : BytesPerPixel(h.format);
-        layout.planes = {{0, uint32_t(h.stride), pixelStride}};
+        layout.planes = {{0, pixelStride, uint32_t(h.stride)}};
         if (IsYuv420(h.format)) {
             const uint32_t luma = uint32_t(h.stride) * uint32_t(h.height);
             if (IsPlanar420(h.format)) {
                 const uint32_t chromaStride = uint32_t(h.stride / 2);
-                const uint32_t chromaSize = chromaStride * uint32_t(h.height / 2);
-                // Plane order follows native memory order: Y,U,V or Y,V,U.
-                layout.planes.push_back({luma, chromaStride, 1});
-                layout.planes.push_back({luma + chromaSize, chromaStride, 1});
+                const uint32_t chromaSize = chromaStride * ((uint32_t(h.height) + 1) / 2);
+                // Plane order follows native memory order: Y,U,V (28) or Y,V,U (29).
+                layout.planes.push_back({luma, 1, chromaStride});
+                layout.planes.push_back({luma + chromaSize, 1, chromaStride});
+            } else if (h.format == 25) {
+                // NV21 (YCrCb_420_SP): planes[1]=U (luma+1), planes[2]=V (luma).
+                layout.planes.push_back({luma + 1, 2, uint32_t(h.stride)});
+                layout.planes.push_back({luma, 2, uint32_t(h.stride)});
             } else {
-                layout.planes.push_back({luma, uint32_t(h.stride), 2});
+                // NV12 (YCbCr_420_SP, format 24): planes[1]=U (luma), planes[2]=V (luma+1).
+                layout.planes.push_back({luma, 2, uint32_t(h.stride)});
+                layout.planes.push_back({luma + 1, 2, uint32_t(h.stride)});
             }
         }
         return OK;

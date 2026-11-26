@@ -1,0 +1,68 @@
+{
+  "path": "/system/lib64/librender_service_base.z.so",
+  "input_sha256": "d1482a820092766eb52f77f8268f21dd9eea7149045669553c7aaa66ca6c9b07",
+  "output_sha256": "b4c7c0b86a42fd3e329fae5444bb5ff17f176aaff5313873d53bd6d17c17157a",
+  "control_sha256": "e916d1850510f557cd5f3a22e2b038870edb7581b91b1ea63414adbf6ce28876",
+  "guards": [
+    {
+      "offset": 4057716,
+      "bytes": "e9008052",
+      "reason": "Keep the donor RGBA image usage 0x7: ADY Skia rejects borrowed Vulkan textures without VK_IMAGE_USAGE_SAMPLED_BIT (0x4)."
+    }
+  ],
+  "changes": [
+    {
+      "offset": 4059112,
+      "before": "bf031ef8",
+      "after": "0b009052",
+      "reason": "Reuse the first handle-field clear to preload the OHOS native handle. The paired 64-bit store initializes the entire field instead."
+    },
+    {
+      "offset": 4059120,
+      "before": "bf000072",
+      "after": "1f010071",
+      "reason": "Record whether the original VkFormat is UNDEFINED before setting handleTypes."
+    },
+    {
+      "offset": 4059136,
+      "before": "09009052",
+      "after": "29008052"
+    },
+    {
+      "offset": 4059140,
+      "before": "0b008152",
+      "after": "6901891a",
+      "reason": "Select native 0x8000 only for VkFormat UNDEFINED. The existing W9=1 path is retained for RGB."
+    },
+    {
+      "offset": 4059152,
+      "before": "a9031eb8",
+      "after": "a9031ef8",
+      "reason": "Write the zero-extended selected handle and its zero padding together."
+    },
+    {
+      "offset": 4059184,
+      "before": "69119f1a",
+      "after": "a9001553",
+      "reason": "Compute the original protected-image flag from W5 bit zero while NZCV carries the format comparison."
+    },
+    {
+      "offset": 4059228,
+      "before": "ff6300b9",
+      "after": "bf000072",
+      "reason": "Replace the redundant second zero store at SP+0x60 with the original protected TST to restore NZCV."
+    },
+    {
+      "offset": 4427004,
+      "before": "21008052",
+      "after": "01008052"
+    }
+  ],
+  "evidence": {
+    "scope": "Marble H19 isolated YUV import trial, no change to default recipe",
+    "function_va": "0x3dff94",
+    "no_new_section_or_cave": true,
+    "preserves_rgb_opaque_fd": true,
+    "existing_commit_patch_retained": true
+  }
+}

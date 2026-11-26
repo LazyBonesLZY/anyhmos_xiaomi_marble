@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Marble Web Fixture v1</title>
+<style>
+body{margin:20px;background:#fff;color:#111;font:18px sans-serif}
+h1{font-size:24px}
+canvas{display:block;width:192px;height:96px;border:1px solid #111}
+button{margin-top:16px;padding:12px;font:inherit}
+</style>
+<h1>Marble Web Fixture v1</h1>
+<p>Static HTML is visible.</p>
+<p id="state" aria-live="polite">STATIC / JS NOT RUN</p>
+<canvas id="grid" width="192" height="96">Canvas unavailable</canvas>
+<button id="tap" type="button" disabled>Tap once</button>
+<script>
+(function () {
+  'use strict';
+  const state = document.getElementById('state');
+  const canvas = document.getElementById('grid');
+  const tap = document.getElementById('tap');
+  const context = canvas.getContext('2d');
+  const run = new URLSearchParams(location.search).get('run') || '';
+  const tagged = /^[a-zA-Z0-9-]{1,24}$/.test(run);
+  const remote = location.protocol === 'http:' && location.hostname === '127.0.0.1';
+  const evidence = [];
+  const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00'];
+  function draw(offset) {
+    for (let i = 0; i < 4; ++i) {
+      context.fillStyle = colors[(i + offset) % 4];
+      context.fillRect(i % 2 * 96, Math.floor(i / 2) * 48, 96, 48);
+    }
+  }
+  function record(phase) {
+    if (!tagged || !remote) return;
+    const image = new Image();
+    evidence.push(image);
+    image.src = 'mark-' + run + '-' + phase + '.gif';
+  }
+  state.textContent = 'JS READY / ' + (tagged ? run : 'untagged');
+  if (!context) {
+    state.textContent += ' / CANVAS UNAVAILABLE';
+    return;
+  }
+  draw(0);
+  tap.disabled = false;
+  tap.addEventListener('click', function (event) {
+    if (!event.isTrusted || tap.disabled) return;
+    tap.disabled = true;
+    draw(1);
+    state.textContent = 'JS TAP 1 / ' + (tagged ? run : 'untagged');
+    record('tap1');
+  });
+  record('ready');
+}());
+</script>
+</html>

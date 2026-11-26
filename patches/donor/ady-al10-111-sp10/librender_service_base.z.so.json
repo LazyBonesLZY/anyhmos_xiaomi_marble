@@ -1,7 +1,14 @@
 {
   "path": "/system/lib64/librender_service_base.z.so",
   "input_sha256": "d1482a820092766eb52f77f8268f21dd9eea7149045669553c7aaa66ca6c9b07",
-  "output_sha256": "26478de54aefb7a5b6bdf119657cdb4c6b6b4a2049f27a3d2829c1cfd1b3cf9f",
+  "output_sha256": "e916d1850510f557cd5f3a22e2b038870edb7581b91b1ea63414adbf6ce28876",
+  "guards": [
+    {
+      "offset": 4057716,
+      "bytes": "e9008052",
+      "reason": "Keep the donor RGBA image usage 0x7: ADY Skia rejects borrowed Vulkan textures without VK_IMAGE_USAGE_SAMPLED_BIT (0x4)."
+    }
+  ],
   "changes": [
     {
       "offset": 4427004,
@@ -12,11 +19,6 @@
       "offset": 4059136,
       "before": "09009052",
       "after": "29008052"
-    },
-    {
-      "offset": 4057716,
-      "before": "e9008052",
-      "after": "69008052"
     }
   ],
   "relocation_evidence": [
@@ -42,6 +44,7 @@
       "old_offset": 9451828,
       "new_offset": 4057716,
       "kind": "normalized_aarch64_context",
+      "disposition": "preserve-original-usage",
       "anchor_instructions": 13,
       "symbols": [
         "_ZN4OHOS5Rosen17NativeBufferUtils34MakeBackendTextureFromNativeBufferEP18NativeWindowBufferiib"

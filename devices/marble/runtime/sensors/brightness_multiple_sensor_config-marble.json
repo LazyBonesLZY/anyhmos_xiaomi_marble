@@ -1,0 +1,18 @@
+{
+  "isSupportBackSensor" :false,
+  "disableBackSensorStartLevel" :46,
+  "disableBackSensorEndLevel" :81,
+  "threshDeltaPoints": [
+    [0,5],
+    [3,7],
+    [5,12],
+    [10,22],
+    [20,60],
+    [50,200],
+    [100,400],
+    [400,500],
+    [1000,3000],
+    [10000,20000],
+    [40000,30000]
+  ]
+}

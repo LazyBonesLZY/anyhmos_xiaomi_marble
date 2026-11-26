@@ -1,0 +1,5 @@
+# Compiled supplicant artifacts: rebuilt by tools/build/build_wifi_supplicant.sh
+bin/*
+lib64/*
+!bin/.keep
+!lib64/.keep

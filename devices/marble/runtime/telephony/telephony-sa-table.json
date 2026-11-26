@@ -1,0 +1,286 @@
+{
+  "schema": "marble-telephony/sa-table/1",
+  "generated_by": "telephony-modem (Little Code Sauce)",
+  "scope_note": "Planning table only. Nothing in this directory is imported by init yet; devices/marble/runtime/init/hmos-init-phase4.cfg does not import init-modem-marble.cfg.",
+  "donor": {
+    "rom": "ADY-AL10-207.0.0.111-SP10 (OHOS 7.0.0.111, API 26)",
+    "fs_root": "work/donor-rom/ADY-AL10-207.0.0.111-SP10/fs",
+    "profile": "system/system/profile/telephony.json",
+    "trust_profile": "system/system/profile/telephony_trust.json",
+    "init_cfg": "system/system/etc/init/telephony.cfg",
+    "hdf_hosts_cfg": "chip_prod/etc/init/hdf_devhost.cfg",
+    "hdf_hcb": "chip_prod/etc/hdfconfig/hdf_default.hcb"
+  },
+  "process": {
+    "name": "telephony",
+    "path": [
+      "/system/bin/sa_main",
+      "/system/profile/telephony.json"
+    ],
+    "uid": "radio",
+    "gid": [
+      "radio",
+      "shell",
+      "netsys_socket",
+      "sensor_host"
+    ],
+    "apl": "system_basic",
+    "secon": "u:r:telephony_sa:s0",
+    "saspawn": false,
+    "socket": [
+      "fusioncall"
+    ],
+    "permission_count": 57,
+    "permission_acls": [
+      "ohos.permission.MANAGE_WIFI_CONNECTION"
+    ],
+    "started_by_job": "early-boot",
+    "confidence": "verified-donor"
+  },
+  "system_abilities": [
+    {
+      "id": 4010,
+      "role": "core service (SIM/UIM state, radio state, network search entry)",
+      "libpath": "libtel_core_service.z.so",
+      "run_on_create": true,
+      "depend": [],
+      "declared_min_hdi_proxy_version": [
+        "libril_proxy_1.1.z.so"
+      ],
+      "actual_needed_proxy": [
+        "libril_proxy_1.5.z.so"
+      ],
+      "hdi": [
+        {
+          "service": "ril_service",
+          "hdf_host": "riladapter_host",
+          "hdf_host_cmdline": "/vendor/bin/hdf_devhost -i 9 -n riladapter_host",
+          "device_node": "riladapter_device",
+          "module_name": "libril_driver.z.so",
+          "extra_device_node": "riladapterext_device",
+          "extra_module_name": "libhril_hdf.z.so",
+          "extra_service": "ril_ext",
+          "client_proxy": "libril_proxy_1.5.z.so",
+          "server_stub": "libril_stub_1.5.z.so",
+          "provider_entry": "InitRilAdapter (libhril_hdf.z.so)",
+          "donor_vendor_layer": [
+            "libril_msgtransfer.z.so",
+            "libbalong-ril.z.so",
+            "libhw_commril.z.so"
+          ],
+          "donor_vendor_layer_compatible_with_marble": false,
+          "donor_vendor_layer_reason": "donor vendor RIL is Balong/AT over /dev/appvcom*; marble has no such node",
+          "confidence": "verified-donor"
+        }
+      ],
+      "dev_nodes": [
+        "AF_QIPCRTR (socket family 42; no /dev node)"
+      ],
+      "blocking": "needs a QMI-backed IRil provider; donor provider chain cannot bind to /dev/appvcom*",
+      "needed_for": [
+        "sim",
+        "5g"
+      ],
+      "confidence": "verified-donor"
+    },
+    {
+      "id": 4006,
+      "role": "cellular call (CS/volte call control)",
+      "libpath": "libtel_cellular_call.z.so",
+      "run_on_create": true,
+      "depend": [
+        4010
+      ],
+      "depend_time_out": 60000,
+      "hdi": [],
+      "dev_nodes": [],
+      "confidence": "verified-donor"
+    },
+    {
+      "id": 4007,
+      "role": "cellular data (APN, rmnet data calls)",
+      "libpath": "libtel_cellular_data.z.so",
+      "run_on_create": true,
+      "depend": [
+        4010
+      ],
+      "depend_time_out": 60000,
+      "hdi": [],
+      "dev_nodes": [
+        "rmnet netdev (kernel: rmnet_core.ko + ipam.ko)",
+        "/dev/net/tun (already created by stage-phase4)"
+      ],
+      "requires_sa_on_marble": [
+        1151,
+        1158
+      ],
+      "confidence": "verified-donor"
+    },
+    {
+      "id": 4008,
+      "role": "sms/mms",
+      "libpath": "libtel_sms_mms.z.so",
+      "run_on_create": true,
+      "depend": [
+        4010
+      ],
+      "depend_time_out": 60000,
+      "hdi": [],
+      "dev_nodes": [],
+      "donor_only_libs": [
+        "libhmicuuc.z.so"
+      ],
+      "confidence": "verified-donor"
+    },
+    {
+      "id": 4011,
+      "role": "telephony extension service (dual-sim, carrier, factory misc)",
+      "libpath": "libtelephony_ext_service.z.so",
+      "run_on_create": true,
+      "depend": [
+        4010
+      ],
+      "declared_min_hdi_proxy_version": [
+        "libdcall_proxy_1.0.z.so",
+        "libsensor_proxy_3.0.z.so",
+        "libfactory_proxy_1.0.z.so"
+      ],
+      "hdi": [
+        {
+          "service": "dcall_service",
+          "hdf_host": "dcall_host",
+          "module_name": "libdcall_driver.z.so",
+          "client_proxy": "libdcall_proxy_1.0.z.so",
+          "confidence": "verified-donor"
+        },
+        {
+          "service": "sensor HDI 3.0",
+          "hdf_host": "sensor_host",
+          "client_proxy": "libsensor_proxy_3.0.z.so",
+          "confidence": "verified-donor"
+        },
+        {
+          "service": "hdi_z_factory_service",
+          "module_name": "libhwdisplay_factory_driver.z.so",
+          "client_proxy": "libfactory_proxy_1.0.z.so",
+          "confidence": "verified-donor"
+        },
+        {
+          "service": "ims_fusioncall",
+          "client_proxy": "libims_fusioncall_proxy_1.0.z.so",
+          "confidence": "verified-donor"
+        }
+      ],
+      "dev_nodes": [],
+      "extra_needed": [
+        "libudxclient_proxy_1.0.z.so",
+        "libhril_innerkits_ext.z.so"
+      ],
+      "confidence": "verified-donor"
+    },
+    {
+      "id": 4014,
+      "role": "IMS (VoLTE/VoNR, IMS data channel, video telephony proxy)",
+      "libpath": "libtel_ims.z.so",
+      "run_on_create": true,
+      "depend": [],
+      "declared_min_hdi_proxy_version": [],
+      "hdi": [
+        {
+          "service": "ims_dc_interface_service_1.0",
+          "module_name": "libims_dc_interface_service_1.0.z.so",
+          "client_proxy": "libims_dc_proxy_1.0.z.so",
+          "confidence": "verified-donor"
+        },
+        {
+          "service": "ims vtproxy",
+          "client_proxy": "libims_vtproxy.so",
+          "confidence": "verified-donor"
+        }
+      ],
+      "dev_nodes": [],
+      "confidence": "verified-donor"
+    },
+    {
+      "id": 4016,
+      "role": "virtual sim service (VSIM, TEE hosted)",
+      "libpath": "libtelephony_vsim_service.z.so",
+      "run_on_create": false,
+      "depend": [],
+      "hdi": [],
+      "dev_nodes": [],
+      "requires_tee": [
+        "vsimapp.mbn (present in modem_a)",
+        "qseecom userspace client"
+      ],
+      "confidence": "verified-donor"
+    },
+    {
+      "id": 4017,
+      "role": "modem engine service (HMI)",
+      "libpath": "libtel_modem_engine_service.z.so",
+      "run_on_create": false,
+      "depend": [],
+      "declared_min_hdi_proxy_version": [
+        "libhmi_proxy_1.0.z.so"
+      ],
+      "hdi": [
+        {
+          "service": "hmi",
+          "module_name": "libhmi_driver.z.so",
+          "client_proxy": "libhmi_proxy_1.0.z.so",
+          "server_stub": "libhmi_stub_1.0.z.so",
+          "confidence": "verified-donor"
+        }
+      ],
+      "dev_nodes": [],
+      "confidence": "verified-donor"
+    },
+    {
+      "id": 66250,
+      "role": "eSIM LPA service",
+      "libpath": "liblpa_esim_service.z.so",
+      "run_on_create": false,
+      "depend": [],
+      "declared_min_hdi_proxy_version": [
+        "libfactory_proxy_1.0.z.so"
+      ],
+      "hdi": [],
+      "dev_nodes": [],
+      "requires_tee": [
+        "qseecom userspace client",
+        "cardapp/soter64 TEE apps"
+      ],
+      "start_on_demand_param": {
+        "name": "persist.telephony.esim.isactivestatus",
+        "value": "true"
+      },
+      "stop_on_demand_recycle_delaytime": 120000,
+      "confidence": "verified-donor"
+    }
+  ],
+  "minimal_subset_for_sim_and_5g": {
+    "rationale": "Only 4010 performs UIM/radio/network-search work; 4006/4007/4008 depend on it. 4010 needs one thing marble does not have: a QMI-backed IRil provider.",
+    "ids": [
+      4010
+    ],
+    "optional_ids": [
+      4007,
+      4006
+    ],
+    "not_required": [
+      4011,
+      4014,
+      4016,
+      4017,
+      66250
+    ],
+    "confidence": "inferred-from-needed-libs"
+  },
+  "confidence_legend": {
+    "verified-donor": "read directly out of the donor filesystem / ELF dynamic sections in this session",
+    "verified-local": "checked against a local artifact (dump index, kernel tree, baseline log) in this session",
+    "inferred": "reasoned from verified facts, not observed on a running device",
+    "unverified": "needs an on-device check by lead"
+  }
+}

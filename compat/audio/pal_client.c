@@ -49,7 +49,7 @@ int hmos_pal_capture_read(int fd, void *pcm, uint32_t capacity,
 {
     static uint32_t sequence;
     if (!pcm || !reply || !capacity || capacity>HMOS_PAL_CAPTURE_CHUNK ||
-        (capacity&3)) return -EINVAL;
+        (capacity&1)) return -EINVAL;
     memset(reply,0,sizeof(*reply));
     uint32_t seq=__atomic_add_fetch(&sequence,1,__ATOMIC_RELAXED);
     struct hmos_pal_request request={HMOS_PAL_MAGIC,HMOS_PAL_CAPTURE_READ,0,seq,capacity,0};
@@ -60,7 +60,7 @@ int hmos_pal_capture_read(int fd, void *pcm, uint32_t capacity,
     n=recv(fd,&packet,sizeof(packet),MSG_TRUNC);
     if (n<0) return -errno;
     if ((size_t)n<sizeof(packet.reply) || packet.reply.magic!=HMOS_PAL_MAGIC ||
-        packet.reply.sequence!=seq || packet.reply.bytes>capacity || (packet.reply.bytes&3) ||
+        packet.reply.sequence!=seq || packet.reply.bytes>capacity || (packet.reply.bytes&1) ||
         (size_t)n!=sizeof(packet.reply)+packet.reply.bytes ||
         (packet.reply.rc && packet.reply.bytes) ||
         (!packet.reply.rc && !packet.reply.bytes)) return -EPROTO;

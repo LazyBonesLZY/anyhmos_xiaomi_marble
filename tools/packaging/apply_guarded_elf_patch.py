@@ -12,7 +12,9 @@ def main():
  source=args.input.resolve(strict=True);output=args.output.resolve()
  if source==output:raise ValueError('Input and output must be different; preserve original ELF')
  if output.exists():raise FileExistsError(output)
- spec=json.loads(args.manifest.read_text(encoding='utf-8'));raw=source.read_bytes()
+ spec=json.loads(args.manifest.read_text(encoding='utf-8'))
+ if reason:=spec.get('retired_reason'):raise ValueError(f'Retired donor recipe: {reason}')
+ raw=source.read_bytes()
  if raw[:6]!=b'\x7fELF\x02\x01':raise ValueError('Expected little-endian ELF64')
  if digest(raw)!=spec['input_sha256']:raise ValueError('Input SHA mismatch; unsupported donor build')
  for guard in spec.get('guards',[]):
@@ -29,5 +31,5 @@ def main():
  if digest(result)!=spec['output_sha256']:raise ValueError('Output SHA mismatch; no file created')
  with output.open('xb') as file:file.write(result)
  os.chmod(output,stat.S_IMODE(source.stat().st_mode))
- print(json.dumps({'output':str(output),'bytes':len(result),'sha256':digest(result),'module':spec['name']},ensure_ascii=False))
+ print(json.dumps({'output':str(output),'bytes':len(result),'sha256':digest(result),'module':spec.get('name') or spec.get('path') or source.name},ensure_ascii=False))
 if __name__=='__main__':main()

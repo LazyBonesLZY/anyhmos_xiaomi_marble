@@ -1,0 +1,868 @@
+{
+  "format_version": 1,
+  "hash_algorithm": "SHA256",
+  "purpose": "marble (SM7475/ukee) PAL/AGM user-space runtime for the HarmonyOS NEXT port",
+  "roots": {
+    "bin": [
+      "agmplay"
+    ],
+    "lib64": [
+      "libar-pal.so",
+      "libagm.so",
+      "libagmclient.so",
+      "libagmdevice.so",
+      "libagmmixer.so",
+      "libagm_compress_plugin.so",
+      "libagm_mixer_plugin.so",
+      "libagm_pcm_plugin.so"
+    ]
+  },
+  "loaders": {
+    "linker": "bin/linker64"
+  },
+  "loader_provided": [
+    "ld-android.so"
+  ],
+  "donor_sets": [
+    {
+      "name": "dump",
+      "path": "work/marble-audio-dump/lib64",
+      "what": "marble Android 15 device dump (PAL/AGM/osal/AGMIPC client), self-consistent set",
+      "identity": {
+        "file_list": "work/marble-dump-all_files.txt",
+        "dump_paths": [
+          "system/system/lib64/",
+          "system/system/apex/"
+        ],
+        "rom_branch": null,
+        "note": "the ROM branch/build id of the dump is not recorded in this workspace (only the file list survived), so it is left unset instead of being guessed"
+      }
+    },
+    {
+      "name": "bionic",
+      "path": "work/marble-bionic",
+      "what": "marble Bionic runtime: bin/linker64 from system/bin, lib64 from com.android.runtime.apex + vendor system/lib64 (A15)",
+      "identity": {
+        "apex": "system/system/apex/com.android.runtime.apex",
+        "apex_sha256": "b98d530fdea732d2394d367e9b21c2759272bbcb968c6dc4000bb5066ad36a08",
+        "apex_payload_sha256": "8eb8d3351289e8774b0db563ee1eec77b091150d0ece50b63603ff2ae3d8050b",
+        "linker_source": "system/bin/linker64"
+      }
+    },
+    {
+      "name": "vendor",
+      "path": "work/marble-audio-vendor",
+      "what": "stock vendor_boot tar extract, different build; used only for objects the dump does not contain",
+      "identity": {
+        "tar": "work/marble-stock-vendor/marble-stock-vendor.tar.gz",
+        "mixing_policy": "never mixed per object: a file present in the dump or in bionic is always taken from there"
+      }
+    },
+    {
+      "name": "self-built",
+      "path": "work/marble-audio-build",
+      "what": "AOSP audio_route.c + opaque-pointer shim, NDK r27d, built by tools/build/build_current.py audioroute (source in compat/audio/audioroute)"
+    }
+  ],
+  "self_built": {
+    "libaudioroute_so": {
+      "source": "compat/audio/audioroute/{audio_route.c,shim.c}",
+      "export_map": "compat/audio/audioroute/exports.map",
+      "ndk": "r27d (27.3.13750724)",
+      "target": "aarch64-linux-android33",
+      "command": "python3 tools/build/build_current.py --out OUT audioroute"
+    }
+  },
+  "files": [
+    {
+      "path": "bin/agmplay",
+      "sha256": "09bd9b8bf8f6a414904bdff7733038841192be43c6e4ea29b7cd7e1db6a0b6f9",
+      "bytes": 27912,
+      "source": "vendor",
+      "source_path": "work/marble-audio-vendor/bin/agmplay",
+      "soname": null,
+      "needed": [
+        "libtinyalsa.so",
+        "libagmmixer.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "bin/linker64",
+      "sha256": "b7d436c5196c1e79b78e8d09f1eccaab364e0d6b057b8e1af2ec6c3ff0a9d745",
+      "bytes": 2277864,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/bin/linker64",
+      "soname": null,
+      "needed": []
+    },
+    {
+      "path": "lib64/libagm.so",
+      "sha256": "cd2442eea88a01e7166af07093b832e9efea7ed915519b1ea74ce5c8efabaf2c",
+      "bytes": 167560,
+      "source": "dump",
+      "source_path": "work/marble-audio-dump/lib64/libagm.so",
+      "soname": "libagm.so",
+      "needed": [
+        "libar-gsl.so",
+        "liblog.so",
+        "liblx-osal.so",
+        "libaudioroute.so",
+        "libats.so",
+        "libmisight.so",
+        "libcutils.so",
+        "libtinyalsa.so",
+        "libaudio_log_utils.so",
+        "libexpat.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libagm_compress_plugin.so",
+      "sha256": "52bb141b0b9ad50e5094eeac44ae029739b24a42446154845879ace87d9d3307",
+      "bytes": 36552,
+      "source": "dump",
+      "source_path": "work/marble-audio-dump/lib64/libagm_compress_plugin.so",
+      "soname": "libagm_compress_plugin.so",
+      "needed": [
+        "libsndcardparser.so",
+        "libagmclient.so",
+        "libutils.so",
+        "libcutils.so",
+        "liblog.so",
+        "libtinyalsa.so",
+        "libtinycompress.so",
+        "libaudio_log_utils.so",
+        "libexpat.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libagm_mixer_plugin.so",
+      "sha256": "9802a244ee207c706e2060fdd445e68f9e2e88326e0a8e8db13c97a34eebbd6c",
+      "bytes": 49640,
+      "source": "dump",
+      "source_path": "work/marble-audio-dump/lib64/libagm_mixer_plugin.so",
+      "soname": "libagm_mixer_plugin.so",
+      "needed": [
+        "libsndcardparser.so",
+        "libagmclient.so",
+        "libcutils.so",
+        "libutils.so",
+        "liblog.so",
+        "libtinyalsa.so",
+        "libaudio_log_utils.so",
+        "libexpat.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libagm_pcm_plugin.so",
+      "sha256": "da8a983f88235c0487ae41f164ef89883473957a6ffc2e49494ba7efd1f6e892",
+      "bytes": 28256,
+      "source": "dump",
+      "source_path": "work/marble-audio-dump/lib64/libagm_pcm_plugin.so",
+      "soname": "libagm_pcm_plugin.so",
+      "needed": [
+        "libsndcardparser.so",
+        "libagmclient.so",
+        "libutils.so",
+        "libcutils.so",
+        "liblog.so",
+        "libtinyalsa.so",
+        "libaudio_log_utils.so",
+        "libexpat.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libagmclient.so",
+      "sha256": "d8e05f0b69612328b60c45982250dbf3808275a3085883c1995b17c010cea7bc",
+      "bytes": 77192,
+      "source": "dump",
+      "source_path": "work/marble-audio-dump/lib64/libagmclient.so",
+      "soname": "libagmclient.so",
+      "needed": [
+        "libhidlbase.so",
+        "libutils.so",
+        "liblog.so",
+        "libcutils.so",
+        "libhardware.so",
+        "libbase.so",
+        "vendor.qti.hardware.AGMIPC@1.0.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libagmdevice.so",
+      "sha256": "15a28721f6d0dc6aefce8c486241aae739ff241a58cbdda25ae1e94782e71ce3",
+      "bytes": 15512,
+      "source": "dump",
+      "source_path": "work/marble-audio-dump/lib64/libagmdevice.so",
+      "soname": "libagmdevice.so",
+      "needed": [
+        "libagmmixer.so",
+        "libtinyalsa.so",
+        "liblog.so",
+        "libmisight.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libagmmixer.so",
+      "sha256": "9e652dc40bd0414bb6d6bb83edc293eab2ac4cd6258ad7755fdf5fbba38520db",
+      "bytes": 40448,
+      "source": "dump",
+      "source_path": "work/marble-audio-dump/lib64/libagmmixer.so",
+      "soname": "libagmmixer.so",
+      "needed": [
+        "libtinyalsa.so",
+        "libexpat.so",
+        "libcutils.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libar-acdb.so",
+      "sha256": "0a0af0ccd4a8720d82fd5c68964d0762e43d249295b91b0af6425257ee602078",
+      "bytes": 277904,
+      "source": "dump",
+      "source_path": "work/marble-audio-dump/lib64/libar-acdb.so",
+      "soname": "libar-acdb.so",
+      "needed": [
+        "liblx-osal.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libar-gpr.so",
+      "sha256": "8f1b5c0c689b71dd98885d065e816ab55174a3cf6dff3c4949073057a45817c2",
+      "bytes": 70992,
+      "source": "dump",
+      "source_path": "work/marble-audio-dump/lib64/libar-gpr.so",
+      "soname": "libar-gpr.so",
+      "needed": [
+        "liblx-osal.so",
+        "libcutils.so",
+        "liblog.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libar-gsl.so",
+      "sha256": "d46402219e582856b03d84972cef5ebb1687193c916d8ca7cc697a2b3b2120ad",
+      "bytes": 224440,
+      "source": "dump",
+      "source_path": "work/marble-audio-dump/lib64/libar-gsl.so",
+      "soname": "libar-gsl.so",
+      "needed": [
+        "liblx-osal.so",
+        "libar-acdb.so",
+        "liblx-ar_util.so",
+        "libar-gpr.so",
+        "libcutils.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libar-pal.so",
+      "sha256": "66f0fd2fe34ff5c9b7c49f220f9ddfb22db48dc25d08be9c5ddd20cc2dcc207d",
+      "bytes": 3161768,
+      "source": "dump",
+      "source_path": "work/marble-audio-dump/lib64/libar-pal.so",
+      "soname": "libar-pal.so",
+      "needed": [
+        "libar-gsl.so",
+        "liblog.so",
+        "libexpat.so",
+        "liblx-osal.so",
+        "libaudioroute.so",
+        "libcutils.so",
+        "libagmclient.so",
+        "libaudioroute_ext.so",
+        "libxlog.so",
+        "libtinyalsa.so",
+        "libtinycompress.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libats.so",
+      "sha256": "031e6ff4b520f9ed515e7ca6dc4b868a7ccbd87347e28319ca6bc9ae51d3995f",
+      "bytes": 113184,
+      "source": "dump",
+      "source_path": "work/marble-audio-dump/lib64/libats.so",
+      "soname": "libats.so",
+      "needed": [
+        "liblx-osal.so",
+        "libutils.so",
+        "libcutils.so",
+        "libdiag.so",
+        "libar-gsl.so",
+        "libar-acdb.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libaudio_log_utils.so",
+      "sha256": "d7f64d87d8aa58ae651e2a854b9a7248f27c825ece07dd30fb7cde9b779d1c65",
+      "bytes": 37216,
+      "source": "vendor",
+      "source_path": "work/marble-audio-vendor/lib64/libaudio_log_utils.so",
+      "soname": "libaudio_log_utils.so",
+      "needed": [
+        "libutils.so",
+        "libcutils.so",
+        "libexpat.so",
+        "liblog.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libaudioroute.so",
+      "sha256": "5fa0d0a29ab022932c3f9a5d675610406fe24f530154808b2007776723924e53",
+      "bytes": 18240,
+      "source": "self-built",
+      "source_path": "work/marble-audio-build/libaudioroute.so",
+      "soname": "libaudioroute.so",
+      "needed": [
+        "libtinyalsa.so",
+        "libexpat.so",
+        "liblog.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "lib64/libaudioroute_ext.so",
+      "sha256": "016f1532f6ca4fdccd02c86a5b050b31fed5bf5b206dc099caf6a171b73d923c",
+      "bytes": 45032,
+      "source": "dump",
+      "source_path": "work/marble-audio-dump/lib64/libaudioroute_ext.so",
+      "soname": "libaudioroute_ext.so",
+      "needed": [
+        "liblog.so",
+        "libcutils.so",
+        "libtinyalsa.so",
+        "libaudioroute.so",
+        "libexpat.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libbase.so",
+      "sha256": "5999723af40d7f3f5ea8faecd39705872f704902c0112fa780c28afa011f00ad",
+      "bytes": 228496,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/lib64/libbase.so",
+      "soname": "libbase.so",
+      "needed": [
+        "liblog.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libc++.so",
+      "sha256": "d675f3d902a3391c9509138be538fc14640bc2419c826a4f27dd40d36ee46c87",
+      "bytes": 1103760,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/lib64/libc++.so",
+      "soname": "libc++.so",
+      "needed": [
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libc.so",
+      "sha256": "fbec6160da8345e628b90851afd36043397e57520559c55d5aec5d06642db450",
+      "bytes": 1187872,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/lib64/libc.so",
+      "soname": "libc.so",
+      "needed": [
+        "ld-android.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libcutils.so",
+      "sha256": "3fb099157f2389501aa6c1a83e630a8fad25e34b7227708aca42b2d8ec6e4ef3",
+      "bytes": 106248,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/lib64/libcutils.so",
+      "soname": "libcutils.so",
+      "needed": [
+        "liblog.so",
+        "libbase.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libdiag.so",
+      "sha256": "a3f21e64bc459073feef438397d196823ae0d2f07124415408d741d547165119",
+      "bytes": 291800,
+      "source": "vendor",
+      "source_path": "work/marble-audio-vendor/lib64/libdiag.so",
+      "soname": "libdiag.so",
+      "needed": [
+        "liblog.so",
+        "libc.so",
+        "libcutils.so",
+        "libc++.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libdl.so",
+      "sha256": "2c1e97683c3ab05e4c241e7aaccefbffc5b7e97385577deba8e07bf461414e11",
+      "bytes": 17992,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/lib64/libdl.so",
+      "soname": "libdl.so",
+      "needed": [
+        "ld-android.so"
+      ]
+    },
+    {
+      "path": "lib64/libdl_android.so",
+      "sha256": "93840ac35be2035c1c67939b70ba190a8863cb71cc7c617e21d893b685e26e67",
+      "bytes": 10096,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/lib64/libdl_android.so",
+      "soname": "libdl_android.so",
+      "needed": [
+        "ld-android.so"
+      ]
+    },
+    {
+      "path": "lib64/libexpat.so",
+      "sha256": "081f3471ccfbbeaa35dc3b4bea29cfcaed286b29a7dce60ed99fd149d6324a58",
+      "bytes": 172504,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/lib64/libexpat.so",
+      "soname": "libexpat.so",
+      "needed": [
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libhardware.so",
+      "sha256": "4ff113175a73bf684b51f3689b2f38e53aa9001ecde7df632ec89f2572aa0821",
+      "bytes": 10920,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/lib64/libhardware.so",
+      "soname": "libhardware.so",
+      "needed": [
+        "libcutils.so",
+        "liblog.so",
+        "libvndksupport.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libhidlbase.so",
+      "sha256": "111cd785d7b63ed4e09694ecf34fc4b5eedc671f271eb963b4ea1dba2837c448",
+      "bytes": 657792,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/lib64/libhidlbase.so",
+      "soname": "libhidlbase.so",
+      "needed": [
+        "libbase.so",
+        "liblog.so",
+        "libutils.so",
+        "libcutils.so",
+        "libvndksupport.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libion.so",
+      "sha256": "bb8ef71781dd57d0369491f5265187a790fb7fc945f19c954c9b8da6996fbb15",
+      "bytes": 14360,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/lib64/libion.so",
+      "soname": "libion.so",
+      "needed": [
+        "liblog.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libjson.so",
+      "sha256": "ed95ae1af41aa70011c7231a3992b10969d4a6586de4cdbeb3371ec16519c15c",
+      "bytes": 44864,
+      "source": "vendor",
+      "source_path": "work/marble-audio-vendor/lib64/libjson.so",
+      "soname": "libjson.so",
+      "needed": [
+        "libcutils.so",
+        "libutils.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libjsoncpp.so",
+      "sha256": "833a220a60b691569a31fe3404730a066d9b6070015ae583843571d981f9b87c",
+      "bytes": 184448,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/lib64/libjsoncpp.so",
+      "soname": "libjsoncpp.so",
+      "needed": [
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/liblog.so",
+      "sha256": "2e99d484a213ec0396918475634bc1df71d10b530a5632f2aa1b8125f6740e05",
+      "bytes": 81912,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/lib64/liblog.so",
+      "soname": "liblog.so",
+      "needed": [
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/liblx-ar_util.so",
+      "sha256": "19b80e1ec7e1b99d74da02e45da605d37b07c844cb1c9764132ebe8b02dccb88",
+      "bytes": 27736,
+      "source": "dump",
+      "source_path": "work/marble-audio-dump/lib64/liblx-ar_util.so",
+      "soname": "liblx-ar_util.so",
+      "needed": [
+        "liblog.so",
+        "liblx-osal.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/liblx-osal.so",
+      "sha256": "b2565a4a84f8cf9bf4bb4b487f4e416d4c77ae6cdbdef9eb7a7cbf9286257a51",
+      "bytes": 62072,
+      "source": "dump",
+      "source_path": "work/marble-audio-dump/lib64/liblx-osal.so",
+      "soname": "liblx-osal.so",
+      "needed": [
+        "liblog.so",
+        "libdiag.so",
+        "libion.so",
+        "libpdmapper.so",
+        "libpdnotifier.so",
+        "libcutils.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libm.so",
+      "sha256": "38b42079c65806f306620eb187fecc161e54a5af5617e32aa1622b87763f50e6",
+      "bytes": 232808,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/lib64/libm.so",
+      "soname": "libm.so",
+      "needed": [
+        "libc.so"
+      ]
+    },
+    {
+      "path": "lib64/libmisight.so",
+      "sha256": "21d58532e9663291602a2aca48eaa972e1d426dea99c7ec196094ef9c4876a83",
+      "bytes": 28104,
+      "source": "vendor",
+      "source_path": "work/marble-audio-vendor/lib64/libmisight.so",
+      "soname": "libmisight.so",
+      "needed": [
+        "liblog.so",
+        "libcutils.so",
+        "libutils.so",
+        "libjsoncpp.so",
+        "libc.so",
+        "libc++.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libpdmapper.so",
+      "sha256": "03ac6dd8b85374de68eba36d58c3d387ee2c36a76a353cf6853c6d6e20e59ee3",
+      "bytes": 28168,
+      "source": "vendor",
+      "source_path": "work/marble-audio-vendor/lib64/libpdmapper.so",
+      "soname": "libpdmapper.so",
+      "needed": [
+        "libcutils.so",
+        "libutils.so",
+        "liblog.so",
+        "libjson.so",
+        "libqmi_cci.so",
+        "libqmi_common_so.so",
+        "libqmi_encdec.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libpdnotifier.so",
+      "sha256": "3a13dddd6bafbaab55b1f726c11ecb243480c6ee3a250e0ef3239327c1f03078",
+      "bytes": 19896,
+      "source": "vendor",
+      "source_path": "work/marble-audio-vendor/lib64/libpdnotifier.so",
+      "soname": "libpdnotifier.so",
+      "needed": [
+        "libcutils.so",
+        "libutils.so",
+        "liblog.so",
+        "libqmi_cci.so",
+        "libqmi_common_so.so",
+        "libqmi_encdec.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libqmi_cci.so",
+      "sha256": "ec35d6c23ab93e87a534240b2c652cb6351b96165349e9d22601b1eb0bface29",
+      "bytes": 54088,
+      "source": "vendor",
+      "source_path": "work/marble-audio-vendor/lib64/libqmi_cci.so",
+      "soname": "libqmi_cci.so",
+      "needed": [
+        "libcutils.so",
+        "libutils.so",
+        "libqmi_encdec.so",
+        "liblog.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libqmi_common_so.so",
+      "sha256": "7693f52fb1ad2c278e71b9b80b19126f984d7c97908258cb095c4656475025a1",
+      "bytes": 15056,
+      "source": "vendor",
+      "source_path": "work/marble-audio-vendor/lib64/libqmi_common_so.so",
+      "soname": "libqmi_common_so.so",
+      "needed": [
+        "libcutils.so",
+        "libutils.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libqmi_encdec.so",
+      "sha256": "00bb17b81811d7facd73da34239b34f66f64ecef849b1df0b38ab8485d990b4f",
+      "bytes": 23352,
+      "source": "vendor",
+      "source_path": "work/marble-audio-vendor/lib64/libqmi_encdec.so",
+      "soname": "libqmi_encdec.so",
+      "needed": [
+        "libcutils.so",
+        "libutils.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libsndcardparser.so",
+      "sha256": "7a599a1c636d79e75df534430c0c2dc4ac0e8adf13008d087f35455024cb752b",
+      "bytes": 27888,
+      "source": "vendor",
+      "source_path": "work/marble-audio-vendor/lib64/libsndcardparser.so",
+      "soname": "libsndcardparser.so",
+      "needed": [
+        "libexpat.so",
+        "libcutils.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libtinyalsa.so",
+      "sha256": "fce0ca164eae99b53c299fcfd0c8a0a5484481849ee318eb2c853f9418ef87f5",
+      "bytes": 48032,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/lib64/libtinyalsa.so",
+      "soname": "libtinyalsa.so",
+      "needed": [
+        "libc++.so",
+        "libc.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libtinycompress.so",
+      "sha256": "ff93aeaaf3448ee90a706535a610482417454c801a8f373ffa5332fbdab05da2",
+      "bytes": 23896,
+      "source": "vendor",
+      "source_path": "work/marble-audio-vendor/lib64/libtinycompress.so",
+      "soname": "libtinycompress.so",
+      "needed": [
+        "libcutils.so",
+        "libutils.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libutils.so",
+      "sha256": "1cc9c735f3f62bb9252c056bc96f8f8ea576532644a0f4211263f4932ac62b2d",
+      "bytes": 118464,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/lib64/libutils.so",
+      "soname": "libutils.so",
+      "needed": [
+        "libcutils.so",
+        "liblog.so",
+        "libvndksupport.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libvndksupport.so",
+      "sha256": "3af358074dfeee3b27c81b18660cbd744912ccd60286499d04178c990a2c3d36",
+      "bytes": 14488,
+      "source": "bionic",
+      "source_path": "work/marble-bionic/lib64/libvndksupport.so",
+      "soname": "libvndksupport.so",
+      "needed": [
+        "libdl_android.so",
+        "liblog.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/libxlog.so",
+      "sha256": "06130395ed2c80e4f47bdad3fcb4179fbdbe1173f4476b22d31cf34f7dfbe22d",
+      "bytes": 19560,
+      "source": "vendor",
+      "source_path": "work/marble-audio-vendor/lib64/libxlog.so",
+      "soname": "libxlog.so",
+      "needed": [
+        "liblog.so",
+        "libcutils.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "lib64/vendor.qti.hardware.AGMIPC@1.0.so",
+      "sha256": "46e3218ec83f5b61e2ed5c95112707f9852fb4e297f6eb5e17c33bb8bda6c08d",
+      "bytes": 348744,
+      "source": "vendor",
+      "source_path": "work/marble-audio-vendor/lib64/vendor.qti.hardware.AGMIPC@1.0.so",
+      "soname": "vendor.qti.hardware.AGMIPC@1.0.so",
+      "needed": [
+        "libhidlbase.so",
+        "liblog.so",
+        "libutils.so",
+        "libcutils.so",
+        "libc++.so",
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    }
+  ]
+}

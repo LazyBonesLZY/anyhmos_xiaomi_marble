@@ -1,0 +1,18 @@
+{
+  "path": "/system/lib64/librender_service_base.z.so",
+  "input_sha256": "d1482a820092766eb52f77f8268f21dd9eea7149045669553c7aaa66ca6c9b07",
+  "output_sha256": "9eda038c303adeaee1ebc1d582ab23281cedd3b79357535d19fe07061b2e1a24",
+  "guards": [
+    {"offset": 4427000, "bytes": "e063009121008052086d40f900013fd6"},
+    {"offset": 4057716, "bytes": "e9008052"}
+  ],
+  "changes": [
+    {"offset": 4059136, "before": "09009052", "after": "29008052"}
+  ],
+  "evidence": {
+    "function": "OHOS::Rosen::RSClientToRenderConnectionProxy::CommitTransaction",
+    "control_sha256": "e916d1850510f557cd5f3a22e2b038870edb7581b91b1ea63414adbf6ce28876",
+    "difference": "Preserve donor ASYNC instead of the sheng-derived SYNC call, with the same native buffer usage and handle type as the control. Only for the marble retained one-way sender-PID bootstrap; confirm that the consumer still accepts the transactions."
+  },
+  "device_validated": false
+}

@@ -1,0 +1,33 @@
+{
+  "process": "telephony",
+  "systemability": [
+    {
+      "name": 4010,
+      "libpath": "libtel_core_service.z.so",
+      "run-on-create": true,
+      "distributed": false,
+      "dump_level": 1
+    },
+    {
+      "name": 4007,
+      "libpath": "libtel_cellular_data.z.so",
+      "run-on-create": true,
+      "distributed": false,
+      "dump_level": 1
+    },
+    {
+      "name": 4008,
+      "libpath": "libtel_sms_mms.z.so",
+      "run-on-create": true,
+      "distributed": false,
+      "dump_level": 1
+    },
+    {
+      "name": 66250,
+      "libpath": "liblpa_esim_service.z.so",
+      "run-on-create": false,
+      "distributed": false,
+      "dump_level": 1
+    }
+  ]
+}

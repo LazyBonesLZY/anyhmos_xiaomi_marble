@@ -206,7 +206,8 @@ static int prepare_identity(const char *root)
 static int execute_original(void)
 {
     if (clearenv() || setenv("LD_LIBRARY_PATH", "/vendor/lib64:/system/lib64", 1) ||
-        setenv("LD_PRELOAD", "/vendor/lib64/libsensor_log_stderr.so", 1) ||
+        (access("/vendor/lib64/libsensor_log_stderr.so", R_OK) == 0 &&
+         setenv("LD_PRELOAD", "/vendor/lib64/libsensor_log_stderr.so", 1)) ||
         setenv("PATH", "/system/bin:/vendor/bin", 1)) return failed("environment");
     printf("SENSORSPD_EXEC uid=%u gid=%u pid=%u argument=sensorspd\n",
         (unsigned)getuid(), (unsigned)getgid(), (unsigned)getpid());

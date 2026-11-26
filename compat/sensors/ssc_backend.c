@@ -227,13 +227,59 @@ static void MarkRunning(SscBackend *backend)
     pthread_mutex_unlock(&backend->lock);
 }
 
+static const char *SscTypeString(uint32_t kind)
+{
+    switch (kind) {
+    case SSC_ACCEL: return "accel";
+    case SSC_GYRO: return "gyro";
+    case SSC_AMBIENT_LIGHT: return "ambient_light";
+    case SSC_MAGNETIC_FIELD: return "mag";
+    case SSC_PROXIMITY: return "proximity";
+    case SSC_ORIENTATION: return "ori";
+    case SSC_GRAVITY: return "gravity";
+    case SSC_ROTATION_VECTOR: return "akm_rotv";
+    case SSC_GAME_ROTATION_VECTOR: return "game_rv";
+    case SSC_SIGNIFICANT_MOTION: return "sig_motion";
+    case SSC_PEDOMETER_DETECTION: return "pedometer";
+    case SSC_PEDOMETER: return "oem_step_counter";
+    case SSC_GEOMAGNETIC_ROTATION_VECTOR: return "geomag_rv";
+    case SSC_DEVICE_ORIENTATION: return "device_orient";
+    default: return NULL;
+    }
+}
+
+static bool IsOnChangeSensor(uint32_t kind, const struct SscSensorInfo *info)
+{
+    if (info != NULL && (info->present & SSC_INFO_STREAM_TYPE)) {
+        return info->stream_type != 0;
+    }
+    return kind == SSC_AMBIENT_LIGHT || kind == SSC_PROXIMITY ||
+           kind == SSC_SIGNIFICANT_MOTION || kind == SSC_PEDOMETER_DETECTION ||
+           kind == SSC_PEDOMETER || kind == SSC_DEVICE_ORIENTATION;
+}
+
+static float ClampStreamingRate(float requested, const struct SscSensorInfo *info)
+{
+    if (info == NULL || info->rate_count == 0) return requested;
+    float min_rate = info->rates_hz[0], max_rate = info->rates_hz[0];
+    for (uint32_t i = 1; i < info->rate_count; ++i) {
+        if (info->rates_hz[i] < min_rate) min_rate = info->rates_hz[i];
+        if (info->rates_hz[i] > max_rate) max_rate = info->rates_hz[i];
+    }
+    if (requested < min_rate) return min_rate;
+    if (requested > max_rate) return max_rate;
+    return requested;
+}
+
 static int RunStream(SscBackend *backend, int fd, const struct Endpoint *endpoint,
     struct Sensor *sensor, bool *client_seen, uint64_t *client,
     struct SscBackendError *error, bool *submitted)
 {
     error->stage = SSC_CONFIG;
+    bool on_change = IsOnChangeSensor(backend->kind, sensor->info);
+    float rate = on_change ? backend->rate_hz : ClampStreamingRate(backend->rate_hz, sensor->info);
     uint8_t request[1012];
-    size_t request_size = BuildStreamRequest(request, sensor->suid, false, backend->rate_hz);
+    size_t request_size = BuildStreamRequestMode(request, sensor->suid, false, on_change, rate);
     const int64_t start = NowMs();
     if (!request_size || start < 0) return Failure(error, SSC_SYSTEM_ERROR, start < 0 ? errno : 0);
     if (qrtr_sendto(fd, endpoint->node, endpoint->port, request, (unsigned int)request_size))
@@ -265,7 +311,7 @@ static int RunStream(SscBackend *backend, int fd, const struct Endpoint *endpoin
             if (sensor->stored_samples != 0) { sample_seen = true; batch_ready = true; }
         }
         /* 先发布真实就绪状态，避免启动调用与上层回调锁互等 */
-        if (!running && ack_seen && sample_seen) {
+        if (!running && ack_seen && (on_change || sample_seen)) {
             running = true;
             error->stage = SSC_STREAM;
             MarkRunning(backend);
@@ -275,11 +321,13 @@ static int RunStream(SscBackend *backend, int fd, const struct Endpoint *endpoin
                 if (StopRequested(backend)) return SSC_STOPPED;
                 const struct Sample *sample = &sensor->samples[i];
                 struct SscRawSample raw = {.kind = backend->kind,
+                    .value_count = sample->value_count,
                     .status = sample->status, .timestamp_ticks = sample->timestamp,
                     .arrival_mono_ns = sample->arrival_ns};
                 memcpy(raw.values, sample->data, sizeof(raw.values));
                 backend->on_sample(&raw, backend->context);
             }
+            sensor->stored_samples = 0;
             batch_ready = false;
         }
     }
@@ -313,8 +361,9 @@ static void *Worker(void *argument)
     SscBackend *backend = argument;
     struct SscBackendError error = {0};
     struct Endpoint endpoint = {0};
-    struct SscSensorInfo info = {.kind = backend->kind};
-    struct Sensor sensor = {.type = backend->kind == SSC_ACCEL ? "accel" : "gyro", .info = &info};
+    struct SscSensorInfo info = {.kind = backend->kind, .stream_type = -1};
+    const char *type_name = SscTypeString(backend->kind);
+    struct Sensor sensor = {.type = type_name, .info = &info};
     bool client_seen = false, submitted = false;
     uint64_t client = 0;
     int fd = socket(AF_QIPCRTR, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
@@ -374,7 +423,7 @@ int32_t SscBackendCreate(uint32_t kind, SscBackend **out)
 {
     if (out == NULL) return SSC_INVALID;
     *out = NULL;
-    if (kind != SSC_ACCEL && kind != SSC_GYRO) return SSC_INVALID;
+    if (SscTypeString(kind) == NULL) return SSC_INVALID;
     SscBackend *backend = calloc(1, sizeof(*backend));
     if (backend == NULL) return SSC_SYSTEM_ERROR;
     backend->kind = kind;
@@ -490,8 +539,9 @@ int32_t SscBackendDiscover(SscBackend *backend, struct SscSensorInfo *out)
     uint8_t drain[32];
     while (read(backend->wake[0], drain, sizeof(drain)) > 0) {}
     pthread_mutex_unlock(&backend->lock);
-    struct SscSensorInfo info = {.kind = backend->kind};
-    struct Sensor sensor = {.type = backend->kind == SSC_ACCEL ? "accel" : "gyro", .info = &info};
+    struct SscSensorInfo info = {.kind = backend->kind, .stream_type = -1};
+    const char *type_name = SscTypeString(backend->kind);
+    struct Sensor sensor = {.type = type_name, .info = &info};
     struct SscBackendError error = {0};
     struct Endpoint endpoint = {0};
     bool client_seen = false;

@@ -21,7 +21,7 @@ wait_param() {
  limit="$3"
  i=0
  while [ "$i" -lt "$limit" ]; do
-  val=$(ohos_param get "$key" | $B tr -d '\r\n')
+  val=$(ohos_param get "$key" | $B tr -d ' \t\r\n')
   if [ "$val" = "$want" ]; then
    klog "PARAM_READY $key=$val after=${i}s"
    return 0
@@ -43,12 +43,10 @@ wait_param bootevent.param_watcher.started true 15 || true
 wait_param bootevent.concurrentTaskService.ready true 15 || true
 $B sleep 3
 
-klog "TRIGGER marble.debug.start.huks=true and marble.debug.start.account=true"
-ohos_param set marble.debug.start.huks true >/dev/null
+klog "TRIGGER marble.debug.start.account=true"
 ohos_param set marble.debug.start.account true >/dev/null
-wait_param bootevent.huksService.ready true 15 || true
-wait_param bootevent.account.ready true 15 || true
-$B sleep 3
+wait_param bootevent.account.ready true 20 || true
+$B sleep 2
 
 {
  echo "=== MARBLE PHASE 3 STATUS SNAPSHOT ==="
@@ -63,7 +61,7 @@ $B sleep 3
   marble.debug.start.coredeps \
   marble.debug.start.huks \
   marble.debug.start.account; do
-  printf '%s=%s\n' "$k" "$(ohos_param get "$k" | $B tr -d '\r\n')"
+  printf '%s=%s\n' "$k" "$(ohos_param get "$k" | $B tr -d ' \t\r\n')"
  done
 
  echo "--- PROCESSES ---"
@@ -89,12 +87,12 @@ fi
 
 # Emit compact summary to kmsg so live COM9 captures service states immediately.
 for line in \
- "samgr=$(ohos_param get bootevent.samgr.ready | $B tr -d '\r\n')" \
- "hdf_devmgr=$(ohos_param get bootevent.hdf_devmgr.ready | $B tr -d '\r\n')" \
- "param_watcher=$(ohos_param get bootevent.param_watcher.started | $B tr -d '\r\n')" \
- "concurrent_task=$(ohos_param get bootevent.concurrentTaskService.ready | $B tr -d '\r\n')" \
- "huks=$(ohos_param get bootevent.huksService.ready | $B tr -d '\r\n')" \
- "account=$(ohos_param get bootevent.account.ready | $B tr -d '\r\n')"; do
+ "samgr=$(ohos_param get bootevent.samgr.ready | $B tr -d ' \t\r\n')" \
+ "hdf_devmgr=$(ohos_param get bootevent.hdf_devmgr.ready | $B tr -d ' \t\r\n')" \
+ "param_watcher=$(ohos_param get bootevent.param_watcher.started | $B tr -d ' \t\r\n')" \
+ "concurrent_task=$(ohos_param get bootevent.concurrentTaskService.ready | $B tr -d ' \t\r\n')" \
+ "huks=$(ohos_param get bootevent.huksService.ready | $B tr -d ' \t\r\n')" \
+ "account=$(ohos_param get bootevent.account.ready | $B tr -d ' \t\r\n')"; do
  klog "SUMMARY $line"
 done
 

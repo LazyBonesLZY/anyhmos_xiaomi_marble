@@ -357,8 +357,12 @@ static long access_tokenid_ioctl(struct file *file, unsigned int cmd,
 		case ACCESS_TOKENID_SET_PERMISSION:
 			ret = access_tokenid_set_permission(file, uarg);
 			break;
+		case 0x5413: /* TIOCGWINSZ from musl/stdio isatty checks */
+		case 0x5401: /* TCGETS */
+			ret = -ENOTTY;
+			break;
 		default:
-			pr_err("%s: access tokenid cmd error, cmd:%u\n", __func__, cmd);
+			pr_err_ratelimited("%s: access tokenid cmd error, cmd:%u\n", __func__, cmd);
 			ret = -EOPNOTSUPP;
 	}
 

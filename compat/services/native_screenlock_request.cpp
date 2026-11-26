@@ -36,7 +36,11 @@ static sptr<IRemoteObject> makeOriginalRemote()
     auto* send=reinterpret_cast<const uint32_t*>(dlsym(lib,
         "_ZN4OHOS13IPCObjectStub16SendRequestInnerEjRNS_13MessageParcelES2_RNS_13MessageOptionE"));
     // Pinned donor dispatch: ldr x8,[x8,#200], immediately before blr x8.
-    if(!ctor||!originalRequest||!send||send[0x98/4]!=0xf9406508||send[0x9c/4]!=0xd63f0100){
+    // gem-w00 places the pair at +0x98; ady-al10 places it at +0x9c.
+    bool dispatchMatch=send&&(
+        (send[0x98/4]==0xf9406508&&send[0x9c/4]==0xd63f0100)||
+        (send[0x9c/4]==0xf9406508&&send[0xa0/4]==0xd63f0100));
+    if(!ctor||!originalRequest||!dispatchMatch){
         std::puts("SCREENLOCK_DONOR_ABI_GUARD_FAILED");return nullptr;
     }
     // Opaque storage deliberately exceeds the inspected complete constructor's

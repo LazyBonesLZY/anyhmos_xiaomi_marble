@@ -48,11 +48,17 @@ static int close_client_stream(struct client *c)
     return c->capture?close_capture(c):close_stream(c);
 }
 
-static int open_capture(struct client *c, unsigned rate, unsigned channels)
+static int open_capture(struct client *c, unsigned rate, unsigned arg1)
 {
     if (!capture_api_ready()) return -95;
     if (c->stream) return -16;
-    if (rate!=48000 || channels!=2) return -95;
+    unsigned channels=arg1 & 0xFFFFu;
+    unsigned in_dev=(arg1 >> 16) & 0xFFFFu;
+    if (!in_dev) in_dev=PAL_DEVICE_IN_HANDSET_MIC;
+    if (rate!=48000 || (channels!=1 && channels!=2)) return -95;
+    if (in_dev!=PAL_DEVICE_IN_HANDSET_MIC && in_dev!=PAL_DEVICE_IN_SPEAKER_MIC &&
+        in_dev!=PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET && in_dev!=PAL_DEVICE_IN_WIRED_HEADSET &&
+        in_dev!=PAL_DEVICE_IN_USB_HEADSET) return -95;
     struct { struct pal_stream_attributes value; unsigned char tail[128]; } a={0};
     struct { struct pal_device value; unsigned char tail[128]; } d={0};
     a.value.type=PAL_STREAM_LOW_LATENCY;
@@ -62,14 +68,18 @@ static int open_capture(struct client *c, unsigned rate, unsigned channels)
     a.value.in_media_config.aud_fmt_id=PAL_AUDIO_FMT_PCM_S16_LE;
     a.value.in_media_config.ch_info.channels=channels;
     a.value.in_media_config.ch_info.ch_map[0]=PAL_CHMAP_CHANNEL_FL;
-    a.value.in_media_config.ch_info.ch_map[1]=PAL_CHMAP_CHANNEL_FR;
-    d.value.id=PAL_DEVICE_IN_HANDSET_MIC;
+    if (channels==2) a.value.in_media_config.ch_info.ch_map[1]=PAL_CHMAP_CHANNEL_FR;
+    d.value.id=(pal_device_id_t)in_dev;
     d.value.config=a.value.in_media_config;
+    if (in_dev==PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET) {
+        d.value.config.sample_rate=8000;
+        d.value.config.ch_info.channels=1;
+    }
     uint64_t epoch=__atomic_load_n(&capture_card_epoch,__ATOMIC_ACQUIRE);
     int rc=stream_open(&a.value,1,&d.value,0,0,0,0,&c->stream);
     if (rc) return rc;
     if (!c->stream) return -5;
-    c->capture=1; c->state=1; c->frames=0; c->capture_epoch=epoch;
+    c->capture=1; c->capture_channels=channels; c->state=1; c->frames=0; c->capture_epoch=epoch;
     pal_buffer_config_t input={.buf_count=2,.buf_size=HMOS_PAL_CAPTURE_CHUNK};
     rc=stream_buffer(c->stream,&input,0);
     if (!rc && (capture_card_online() ||
@@ -127,7 +137,8 @@ static int dispatch_capture(struct client *c, const struct hmos_pal_request *h,
         return rc;
     }
     if (h->op!=HMOS_PAL_CAPTURE_READ) return -95;
-    if (c->state!=2 || !h->arg0 || h->arg0>HMOS_PAL_CAPTURE_CHUNK || (h->arg0&3)) return -22;
+    unsigned frame_bytes=c->capture_channels*2;
+    if (!frame_bytes || c->state!=2 || !h->arg0 || h->arg0>HMOS_PAL_CAPTURE_CHUNK || h->arg0%frame_bytes) return -22;
     if (capture_card_online() || c->capture_epoch!=
         __atomic_load_n(&capture_card_epoch,__ATOMIC_ACQUIRE)) return -19;
     struct { struct pal_buffer value; unsigned char tail[64]; } buffer={0};
@@ -137,7 +148,7 @@ static int dispatch_capture(struct client *c, const struct hmos_pal_request *h,
     if (received<0) return (int)received;
     if (capture_card_online() || c->capture_epoch!=
         __atomic_load_n(&capture_card_epoch,__ATOMIC_ACQUIRE)) return -19;
-    if (!received || (uint64_t)received>h->arg0 || (received&3)) return -5;
-    *bytes=(unsigned)received; c->frames+=(unsigned)received/4; *value=c->frames;
+    if (!received || (uint64_t)received>h->arg0 || (unsigned)received%frame_bytes) return -5;
+    *bytes=(unsigned)received; c->frames+=(unsigned)received/frame_bytes; *value=c->frames;
     return 0;
 }

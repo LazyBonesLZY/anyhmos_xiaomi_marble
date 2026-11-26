@@ -4,6 +4,7 @@
 #include <cerrno>
 #include <climits>
 #include <cstdarg>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
@@ -28,6 +29,20 @@
 #endif
 static_assert(HMOS_DEFAULT_DISPLAY_ROUTE == 0 || HMOS_DEFAULT_DISPLAY_ROUTE == 2,
     "Default display route must be 0 or 2");
+#ifndef HMOS_SPLIT_SCANOUT
+#define HMOS_SPLIT_SCANOUT 1
+#endif
+static_assert(HMOS_SPLIT_SCANOUT == 0 || HMOS_SPLIT_SCANOUT == 1,
+    "HMOS_SPLIT_SCANOUT must be 0 (single-DSI) or 1 (dual-DSI split)");
+#ifndef HMOS_NONBLOCK_COMMIT
+#if !HMOS_SPLIT_SCANOUT && !defined(ACE5_SUBMIT_TEST) && !defined(ACE5_DIRECT_TEST)
+#define HMOS_NONBLOCK_COMMIT 1
+#else
+#define HMOS_NONBLOCK_COMMIT 0
+#endif
+#endif
+static_assert(HMOS_NONBLOCK_COMMIT == 0 || HMOS_NONBLOCK_COMMIT == 1,
+    "HMOS_NONBLOCK_COMMIT must be 0 or 1");
 
 namespace OHOS::HDI::Display::Composer {
 namespace {
@@ -41,6 +56,53 @@ struct OwnedFence {
     ~OwnedFence() { if (fd >= 0) close(fd); }
     int Take() { int value = fd; fd = -1; return value; }
 };
+// Donor libdisplay_composer_service_1.5.z.so calls PackFd(fd, needDup=1)
+// (which dup()s fd into HdifdParcelable) and then calls stackFence.Move()
+// without closing the original fd returned by VDI::Commit(). Retain the last
+// published fd with (st_dev, st_ino) identity verification so we close the
+// previous frame's sync_file on the next Commit/power-off/cleanup (preventing
+// the 32,768 -EMFILE FD leak) without closing an fd already closed/reused by
+// standalone unit tests.
+struct PresentFenceCache {
+    int fd = -1;
+    bool hasIdentity = false;
+    dev_t dev = 0;
+    ino_t ino = 0;
+    void Reset() {
+        if (fd >= 0) {
+            struct stat st{};
+            bool safeToClose = (fstat(fd, &st) == 0) &&
+                (!hasIdentity || (st.st_dev == dev && st.st_ino == ino));
+            if (safeToClose) close(fd);
+        }
+        fd = -1;
+        hasIdentity = false;
+        dev = 0;
+        ino = 0;
+    }
+    void Adopt(int newFd) {
+        if (newFd >= 0 && newFd == fd) return;
+        Reset();
+        fd = newFd;
+        if (fd >= 0) {
+            struct stat st{};
+            if (fstat(fd, &st) == 0) {
+                hasIdentity = true;
+                dev = st.st_dev;
+                ino = st.st_ino;
+            }
+        }
+    }
+    int Borrow() const {
+        if (fd < 0) return -1;
+        struct stat st{};
+        if (fstat(fd, &st) != 0) return -1;
+        if (hasIdentity && (st.st_dev != dev || st.st_ino != ino)) return -1;
+        return fd;
+    }
+    ~PresentFenceCache() { Reset(); }
+};
+PresentFenceCache lastPresentFence;
 struct Buffer {
     BufferHandle value{};
     int fence = -1;
@@ -79,6 +141,9 @@ int scanoutPolicy = 0;
 uint64_t policyReadTime = 0, directFrames = 0, directFailures = 0, frameAtomicTotal = 0, frameAtomicEnd = 0;
 bool requireClientFrame = false, directAppliedError = false, planeRulesApplied = false;
 bool directReleaseUnavailable = false;
+#if !HMOS_SPLIT_SCANOUT
+bool panelColdReinitDone = false;
+#endif
 struct PlaneBlendRules {
     uint32_t id = 0;
     bool queried = false, valid = false;
@@ -91,7 +156,9 @@ int scanoutPolicyOverride = -1;
 std::mutex mutex;
 int drm = -1;
 // HMOS_SPLIT_SCANOUT_V1: each DSI half needs its own SSPP plane.
-uint32_t connector = 0, crtc = 0, plane = 0, secondPlane = 0, modeBlob = 0, currentFb = 0;
+uint32_t connector = 0, crtc = 0, plane = 0, secondPlane = 0, modeBlob = 0, currentFb = 0, retiringFb = 0;
+bool needsModeset = true;
+uint64_t nonblockCommits = 0, nonblockEbusy = 0, nonblockFallback = 0;
 uint32_t mmWidth = 0, mmHeight = 0, nextLayer = 1;
 drmModeModeInfo mode{};
 std::vector<drmModeModeInfo> displayModes;
@@ -103,10 +170,66 @@ Buffer client;
 // Late RS frames must never turn a successfully powered-off panel back on.
 bool requestedPowerOn = true;
 bool loggedOffSubmission = false;
+constexpr int32_t kPowerOn = 0;
+constexpr int32_t kPowerStandby = 1;
+constexpr int32_t kPowerSuspend = 2;
+constexpr int32_t kPowerOff = 3;
+constexpr int32_t kPowerOffFake = 4;
+constexpr int32_t kPowerPreOn = 5;
+constexpr int32_t kPowerPreOff = 6;
+constexpr int32_t kPowerDoze = 7;
+constexpr int32_t kPowerDozeSuspend = 8;
+int32_t currentPowerStatus = kPowerOn;
+bool powerStatusKnown = false;
+// Connector low-power ("LP" / "lp") enum property state (SDE_MODE_DPMS_ON/LP1/LP2).
+uint32_t lpPropId = 0;
+uint64_t lpValOn = 0, lpValLp1 = 1, lpValLp2 = 2;
+uint64_t currentLpMode = 0;
+// SM7475 SDE DSPP PCC v4 layout (exact match to uapi/display/drm/msm_drm_pp.h).
+struct DrmMsmPccCoeff {
+    uint32_t c;
+    uint32_t r;
+    uint32_t g;
+    uint32_t b;
+    uint32_t rg;
+    uint32_t gb;
+    uint32_t rb;
+    uint32_t rgb;
+};
+static_assert(sizeof(DrmMsmPccCoeff) == 32, "drm_msm_pcc_coeff must be 32 bytes");
+struct DrmMsmPcc {
+    uint64_t flags;
+    DrmMsmPccCoeff r;
+    DrmMsmPccCoeff g;
+    DrmMsmPccCoeff b;
+    uint32_t r_rr;
+    uint32_t r_gg;
+    uint32_t r_bb;
+    uint32_t g_rr;
+    uint32_t g_gg;
+    uint32_t g_bb;
+    uint32_t b_rr;
+    uint32_t b_gg;
+    uint32_t b_bb;
+};
+static_assert(sizeof(DrmMsmPcc) == 144, "drm_msm_pcc must be 144 bytes (0x90)");
+static_assert(offsetof(DrmMsmPcc, r) == 8, "drm_msm_pcc.r offset");
+static_assert(offsetof(DrmMsmPcc, g) == 40, "drm_msm_pcc.g offset");
+static_assert(offsetof(DrmMsmPcc, b) == 72, "drm_msm_pcc.b offset");
+static_assert(offsetof(DrmMsmPcc, r_rr) == 104, "drm_msm_pcc.r_rr offset");
+static_assert(offsetof(DrmMsmPcc, b_bb) == 136, "drm_msm_pcc.b_bb offset");
+uint32_t pccPropId = 0;
+uint32_t pccBlob = 0;
+bool pccDirty = false;
+bool pccXccEnabled = false;
+int32_t pccXccMatrix[12] = {0, 0x8000, 0, 0, 0, 0, 0x8000, 0, 0, 0, 0, 0x8000};
+bool pccColorModeEnabled = false;
+int32_t pccColorModeMatrix[9] = {0x8000, 0, 0, 0, 0x8000, 0, 0, 0, 0x8000};
 IRect clientCrop{};
 std::vector<IRect> clientDamage;
 std::mutex vsyncMutex;
-bool vsyncEnabled = false, quit = false, threadStarted = false;
+bool vsyncEnabled = false, vsyncPowerOn = true, vsyncWaiting = false, quit = false, threadStarted = false;
+pthread_cond_t vsyncCond = PTHREAD_COND_INITIALIZER;
 uint64_t vsyncPeriod = 16666667ULL;
 pthread_t vsyncThread;
 VBlankCallback vsyncCallback = nullptr;
@@ -152,16 +275,163 @@ int Property(drmModeAtomicReqPtr request, uint32_t id, uint32_t type,
     drmModeFreeObjectProperties(props);
     return result;
 }
+bool WriteSysfsBestEffort(const char *path, const char *value)
+{
+    int saved = errno;
+    int fd = open(path, O_WRONLY | O_CLOEXEC);
+    if (fd < 0) { errno = saved; return false; }
+    size_t len = strlen(value);
+    ssize_t n;
+    do { n = write(fd, value, len); } while (n < 0 && errno == EINTR);
+    close(fd);
+    errno = saved;
+    return n == static_cast<ssize_t>(len);
+}
+void WaitInFlightPresentFenceLocked()
+{
+    int prevFence = lastPresentFence.Borrow();
+    if (prevFence >= 0) {
+        pollfd wp{prevFence, POLLIN, 0};
+        int prc;
+        do { prc = poll(&wp, 1, 50); } while (prc < 0 && errno == EINTR);
+    }
+}
+uint32_t EncodePccConstQ15(int32_t value)
+{
+    if (value < -32768) value = -32768;
+    if (value > 32767) value = 32767;
+    return static_cast<uint32_t>(value);
+}
+uint32_t EncodePccCoeffS3_15(int32_t value)
+{
+    if (value < -131072) value = -131072;
+    if (value > 131071) value = 131071;
+    return static_cast<uint32_t>(value);
+}
+// Compose optional XCC (color temp / eye-comfort, 3x3 + offset) with optional
+// 3x3 color-mode gamut matrix (e.g. sRGB in P3), all in Q15 (0x8000 == 1.0):
+//   rgb_out = c_xcc + (M_xcc * M_colorMode) * rgb_in.
+bool ComposePcc12(bool xccEn, const int32_t xcc[12], bool cmEn, const int32_t cm[9], int32_t out12[12])
+{
+    if (!xccEn && !cmEn) return false;
+    if (xccEn && !cmEn) {
+        memcpy(out12, xcc, sizeof(int32_t) * 12);
+        return true;
+    }
+    if (!xccEn && cmEn) {
+        out12[0] = 0; out12[1] = cm[0]; out12[2] = cm[1]; out12[3] = cm[2];
+        out12[4] = 0; out12[5] = cm[3]; out12[6] = cm[4]; out12[7] = cm[5];
+        out12[8] = 0; out12[9] = cm[6]; out12[10] = cm[7]; out12[11] = cm[8];
+        return true;
+    }
+    for (int row = 0; row < 3; ++row) {
+        out12[row * 4 + 0] = xcc[row * 4 + 0];
+        for (int col = 0; col < 3; ++col) {
+            int64_t sum = 0;
+            for (int k = 0; k < 3; ++k) {
+                sum += static_cast<int64_t>(xcc[row * 4 + 1 + k]) * static_cast<int64_t>(cm[k * 3 + col]);
+            }
+            int64_t rounded = sum >= 0 ? (sum + 16384) / 32768 : -((-sum + 16384) / 32768);
+            if (rounded < -131072) rounded = -131072;
+            if (rounded > 131071) rounded = 131071;
+            out12[row * 4 + 1 + col] = static_cast<int32_t>(rounded);
+        }
+    }
+    return true;
+}
+void FillDrmMsmPcc(DrmMsmPcc &pcc, const int32_t xcc12[12])
+{
+    memset(&pcc, 0, sizeof(pcc));
+    pcc.flags = 0;
+    pcc.r.c = EncodePccConstQ15(xcc12[0]);
+    pcc.r.r = EncodePccCoeffS3_15(xcc12[1]);
+    pcc.r.g = EncodePccCoeffS3_15(xcc12[2]);
+    pcc.r.b = EncodePccCoeffS3_15(xcc12[3]);
+    pcc.g.c = EncodePccConstQ15(xcc12[4]);
+    pcc.g.r = EncodePccCoeffS3_15(xcc12[5]);
+    pcc.g.g = EncodePccCoeffS3_15(xcc12[6]);
+    pcc.g.b = EncodePccCoeffS3_15(xcc12[7]);
+    pcc.b.c = EncodePccConstQ15(xcc12[8]);
+    pcc.b.r = EncodePccCoeffS3_15(xcc12[9]);
+    pcc.b.g = EncodePccCoeffS3_15(xcc12[10]);
+    pcc.b.b = EncodePccCoeffS3_15(xcc12[11]);
+}
+int RebuildAndApplyPccLocked(bool allowImmediateCommit)
+{
+    int32_t effective[12]{};
+    const bool activePcc = ComposePcc12(pccXccEnabled, pccXccMatrix,
+        pccColorModeEnabled, pccColorModeMatrix, effective);
+    pccDirty = true;
+    if (drm < 0 || !crtc || !pccPropId) return OK;
+    uint32_t newBlob = 0;
+    if (activePcc) {
+        DrmMsmPcc payload{};
+        FillDrmMsmPcc(payload, effective);
+        if (drmModeCreatePropertyBlob(drm, &payload, sizeof(payload), &newBlob) != 0) {
+            Log("pcc create blob failed");
+            return FAIL;
+        }
+    }
+    const uint32_t oldBlob = pccBlob;
+    pccBlob = newBlob;
+    if (allowImmediateCommit && requestedPowerOn && currentFb != 0 && !needsModeset) {
+        auto *req = drmModeAtomicAlloc();
+        if (req) {
+            int rc = drmModeAtomicAddProperty(req, crtc, pccPropId, pccBlob) < 0 ? FAIL : OK;
+            if (!rc) {
+                /* Non-blocking only: if a frame is already in flight (EBUSY), never block VSync —
+                 * leave pccDirty=true so the next PresentDisplay attaches PCC atomically with 0 jank. */
+                rc = drmModeAtomicCommit(drm, req, DRM_MODE_ATOMIC_NONBLOCK, nullptr);
+            }
+            drmModeAtomicFree(req);
+            if (!rc) {
+                pccDirty = false;
+                if (oldBlob) drmModeDestroyPropertyBlob(drm, oldBlob);
+                Ace5Log("pcc immediate commit active=%d blob=%u diag=[%d,%d,%d]",
+                    int(activePcc), pccBlob, effective[1], effective[6], effective[11]);
+                return OK;
+            }
+            Ace5Log("pcc immediate commit deferred rc=%d errno=%d blob=%u", rc, errno, pccBlob);
+        }
+    }
+    if (oldBlob) drmModeDestroyPropertyBlob(drm, oldBlob);
+    return OK;
+}
+int CommitConnectorLpLocked(uint64_t lpValue)
+{
+    currentLpMode = lpValue;
+    if (drm < 0 || !connector || !lpPropId) return OK;
+    auto *req = drmModeAtomicAlloc();
+    if (!req) return FAIL;
+    int rc = drmModeAtomicAddProperty(req, connector, lpPropId, lpValue) < 0 ? FAIL : OK;
+    if (!rc) {
+        WaitInFlightPresentFenceLocked();
+        rc = drmModeAtomicCommit(drm, req, DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr);
+    }
+    drmModeAtomicFree(req);
+    if (rc) Ace5Log("connector LP commit val=%llu failed errno=%d", (unsigned long long)lpValue, errno);
+    return rc == 0 ? OK : FAIL;
+}
 void CleanupDrm()
 {
+    lastPresentFence.Reset();
     directRelease.Reset(); preparedDirectLayer = 0; requireClientFrame = false; directReleaseUnavailable = false;
     planeRulesApplied = false; planeBlend[0] = {}; planeBlend[1] = {};
+    needsModeset = true;
+    currentPowerStatus = kPowerOn; powerStatusKnown = false;
+    lpPropId = 0; lpValOn = 0; lpValLp1 = 1; lpValLp2 = 2; currentLpMode = 0;
+#if !HMOS_SPLIT_SCANOUT
+    panelColdReinitDone = false;
+#endif
     if (drm >= 0) {
         if (currentFb) drmModeRmFB(drm, currentFb);
+        if (retiringFb) drmModeRmFB(drm, retiringFb);
+        if (pccBlob) drmModeDestroyPropertyBlob(drm, pccBlob);
         if (modeBlob) drmModeDestroyPropertyBlob(drm, modeBlob);
         close(drm);
     }
-    drm = -1; connector = crtc = plane = secondPlane = modeBlob = currentFb = 0;
+    drm = -1; connector = crtc = plane = secondPlane = modeBlob = currentFb = retiringFb = 0;
+    pccPropId = 0; pccBlob = 0; pccDirty = false;
     propertyIds.clear(); displayModes.clear(); selectedMode = 0;
 }
 int Initialize()
@@ -186,6 +456,7 @@ int Initialize()
             for (int m = 0; m < c->count_modes; ++m) {
                 const auto &candidate = c->modes[m];
                 if (candidate.hdisplay != mode.hdisplay || candidate.vdisplay != mode.vdisplay || !candidate.vrefresh) continue;
+                if (candidate.vrefresh < 60 && memcmp(&candidate, &mode, sizeof(mode)) != 0) continue;
                 if (!memcmp(&candidate, &mode, sizeof(mode))) selectedMode = displayModes.size();
                 displayModes.push_back(candidate);
             }
@@ -231,20 +502,57 @@ int Initialize()
         }
         drmModeFreePlaneResources(planes);
     }
+#if HMOS_SPLIT_SCANOUT
     if (!connector || !crtc || !plane || !secondPlane || mode.hdisplay != 3048 || mode.vdisplay != 2032 || drmModeCreatePropertyBlob(drm, &mode, sizeof(mode), &modeBlob)) {
         Log("no usable display"); CleanupDrm(); return FAIL;
     }
+#else
+    if (!connector || !crtc || !plane || !mode.hdisplay || !mode.vdisplay || drmModeCreatePropertyBlob(drm, &mode, sizeof(mode), &modeBlob)) {
+        Log("no usable display"); CleanupDrm(); return FAIL;
+    }
+#endif
+    bool pccExactFound = false;
+    bool lpExactFound = false;
     for (auto item : {std::make_pair(crtc,uint32_t(DRM_MODE_OBJECT_CRTC)), std::make_pair(connector,uint32_t(DRM_MODE_OBJECT_CONNECTOR))}) {
         auto *props=drmModeObjectGetProperties(drm,item.first,item.second);
         if (!props) continue;
         for (uint32_t i=0;i<props->count_props;i++) {
             auto*p=drmModeGetProperty(drm,props->props[i]);
             if (!p) continue;
-            if (strstr(p->name,"core_") || strstr(p->name,"fence") || strstr(p->name,"sync") || strstr(p->name,"trigger") || strstr(p->name,"idle") || !strcmp(p->name,"LP"))
+            if (item.second == DRM_MODE_OBJECT_CRTC) {
+                if (!strcmp(p->name, "SDE_DSPP_PCC_V4")) {
+                    pccPropId = p->prop_id;
+                    pccExactFound = true;
+                    propertyIds[{crtc, p->name}] = p->prop_id;
+                    Ace5Log("discovered PCC prop name=%s id=%u", p->name, p->prop_id);
+                } else if (!pccExactFound && !strncmp(p->name, "SDE_DSPP_PCC_V", 14)) {
+                    pccPropId = p->prop_id;
+                    propertyIds[{crtc, p->name}] = p->prop_id;
+                    Ace5Log("discovered PCC fallback prop name=%s id=%u", p->name, p->prop_id);
+                }
+            } else if (item.second == DRM_MODE_OBJECT_CONNECTOR) {
+                if (!strcmp(p->name, "LP") || (!lpExactFound && !strcmp(p->name, "lp"))) {
+                    lpPropId = p->prop_id;
+                    lpExactFound = !strcmp(p->name, "LP");
+                    propertyIds[{connector, p->name}] = p->prop_id;
+                    for (int e = 0; e < p->count_enums; ++e) {
+                        if (!strcmp(p->enums[e].name, "ON")) lpValOn = p->enums[e].value;
+                        else if (!strcmp(p->enums[e].name, "LP1")) lpValLp1 = p->enums[e].value;
+                        else if (!strcmp(p->enums[e].name, "LP2")) lpValLp2 = p->enums[e].value;
+                    }
+                    Ace5Log("discovered LP prop name=%s id=%u ON=%llu LP1=%llu LP2=%llu",
+                        p->name, p->prop_id, (unsigned long long)lpValOn,
+                        (unsigned long long)lpValLp1, (unsigned long long)lpValLp2);
+                }
+            }
+            if (strstr(p->name,"core_") || strstr(p->name,"fence") || strstr(p->name,"sync") || strstr(p->name,"trigger") || strstr(p->name,"idle") || !strcmp(p->name,"LP") || !strcmp(p->name,"lp"))
                 Ace5Log("initial_property object=%u name=%s value=%llu", item.first,p->name,(unsigned long long)props->prop_values[i]);
             drmModeFreeProperty(p);
         }
         drmModeFreeObjectProperties(props);
+    }
+    if (pccPropId && (pccXccEnabled || pccColorModeEnabled)) {
+        RebuildAndApplyPccLocked(false);
     }
     hardwareCrtcIndex = crtcIndex;
     uint64_t monotonic = 0;
@@ -252,14 +560,39 @@ int Initialize()
         Log("hardware vsync requires monotonic kernel timestamps"); CleanupDrm(); return FAIL;
     }
     clientCrop = {0, 0, mode.hdisplay, mode.vdisplay};
-    Ace5Log("discovered Hmos dual DSI=%u CRTC=%u planes=%u,%u %ux%u@%u mm=%ux%u",
-        connector, crtc, plane, secondPlane, mode.hdisplay, mode.vdisplay, mode.vrefresh, mmWidth, mmHeight);
+    Ace5Log("discovered Hmos dual DSI=%u CRTC=%u planes=%u,%u %ux%u@%u mm=%ux%u pcc=%u lp=%u",
+        connector, crtc, plane, secondPlane, mode.hdisplay, mode.vdisplay, mode.vrefresh, mmWidth, mmHeight,
+        pccPropId, lpPropId);
     return OK;
 }
 uint64_t MonotonicNs()
 {
     timespec now{}; clock_gettime(CLOCK_MONOTONIC, &now);
     return uint64_t(now.tv_sec) * 1000000000ULL + now.tv_nsec;
+}
+// Pause VsyncLoop cleanly before ACTIVE=0 modesets so drmWaitVBlank is not
+// holding sde_enc->vblank_enabled active during sde_encoder_virt_disable.
+void PauseVsyncForModeset()
+{
+    bool wasWaiting = false;
+    {
+        std::lock_guard<std::mutex> state(vsyncMutex);
+        vsyncPowerOn = false;
+        wasWaiting = vsyncWaiting;
+    }
+    for (int i = 0; i < 40; ++i) {
+        {
+            std::lock_guard<std::mutex> state(vsyncMutex);
+            if (!vsyncWaiting) break;
+        }
+        usleep(1000);
+    }
+    if (wasWaiting) usleep(15000);
+}
+void ResumeVsyncAfterModeset()
+{
+    std::lock_guard<std::mutex> state(vsyncMutex);
+    vsyncPowerOn = true;
 }
 void *VsyncLoop(void *)
 {
@@ -274,7 +607,8 @@ void *VsyncLoop(void *)
         {
             std::lock_guard<std::mutex> state(vsyncMutex);
             if (quit) break;
-            enabled = vsyncEnabled;
+            enabled = vsyncEnabled && vsyncPowerOn;
+            if (enabled) vsyncWaiting = true;
         }
         if (!enabled) { previous = 0; hardwareSequenceKnown = false; usleep(5000); continue; }
         // Only the vblank worker waits here: never hold the commit mutex.
@@ -285,6 +619,11 @@ void *VsyncLoop(void *)
         wait.request.sequence = 1;
         int rc;
         do { rc = drmWaitVBlank(drm, &wait); } while (rc < 0 && errno == EINTR);
+        {
+            std::lock_guard<std::mutex> state(vsyncMutex);
+            vsyncWaiting = false;
+            pthread_cond_broadcast(&vsyncCond);
+        }
         if (rc) {
             if (++errors <= 4) Ace5Log("hardware vsync wait failed errno=%d", errno);
             usleep(20000); continue;
@@ -296,7 +635,7 @@ void *VsyncLoop(void *)
         {
             std::lock_guard<std::mutex> state(vsyncMutex);
             if (quit) break;
-            callback = vsyncEnabled ? vsyncCallback : nullptr; data = vsyncData;
+            callback = (vsyncEnabled && vsyncPowerOn) ? vsyncCallback : nullptr; data = vsyncData;
             period = vsyncPeriod; currentGeneration = modeGeneration;
         }
         // 按内核时间戳统计周期，切换后的首个间隔不参与统计
@@ -422,11 +761,18 @@ bool ScanoutProperties(drmModeAtomicReqPtr request, uint32_t fb,
     PROP(connector, DRM_MODE_OBJECT_CONNECTOR, "CRTC_ID", crtc);
     PROP(crtc, DRM_MODE_OBJECT_CRTC, "MODE_ID", modeBlob);
     PROP(crtc, DRM_MODE_OBJECT_CRTC, "ACTIVE", 1);
+    if (lpPropId && needsModeset) {
+        (void)drmModeAtomicAddProperty(request, connector, lpPropId, currentLpMode);
+    }
+    if (pccPropId && (pccDirty || needsModeset)) {
+        (void)drmModeAtomicAddProperty(request, crtc, pccPropId, pccBlob);
+    }
     if (retireFence) PROP(connector, DRM_MODE_OBJECT_CONNECTOR, "RETIRE_FENCE",
         reinterpret_cast<uintptr_t>(retireFence));
     // 层释放使用 CRTC 原生 fence，不复用连接器呈现 fence
     if (releaseFence) PROP(crtc, DRM_MODE_OBJECT_CRTC, "output_fence",
         reinterpret_cast<uintptr_t>(releaseFence));
+#if HMOS_SPLIT_SCANOUT
     // Partition the source exactly; no gap or duplicated column at the seam.
     const int leftSourceWidth = crop.w / 2;
     for (unsigned half = 0; half < 2; ++half) {
@@ -447,6 +793,20 @@ bool ScanoutProperties(drmModeAtomicReqPtr request, uint32_t fb,
         PROP(target, DRM_MODE_OBJECT_PLANE, "color_fill", 0);
         if (opaque || planeRulesApplied) valid &= PlaneBlendProperties(request, half, opaque);
     }
+#else
+    PROP(plane, DRM_MODE_OBJECT_PLANE, "FB_ID", fb);
+    PROP(plane, DRM_MODE_OBJECT_PLANE, "CRTC_ID", crtc);
+    PROP(plane, DRM_MODE_OBJECT_PLANE, "SRC_X", uint64_t(crop.x) << 16);
+    PROP(plane, DRM_MODE_OBJECT_PLANE, "SRC_Y", uint64_t(crop.y) << 16);
+    PROP(plane, DRM_MODE_OBJECT_PLANE, "SRC_W", uint64_t(crop.w) << 16);
+    PROP(plane, DRM_MODE_OBJECT_PLANE, "SRC_H", uint64_t(crop.h) << 16);
+    PROP(plane, DRM_MODE_OBJECT_PLANE, "CRTC_X", 0);
+    PROP(plane, DRM_MODE_OBJECT_PLANE, "CRTC_Y", 0);
+    PROP(plane, DRM_MODE_OBJECT_PLANE, "CRTC_W", mode.hdisplay);
+    PROP(plane, DRM_MODE_OBJECT_PLANE, "CRTC_H", mode.vdisplay);
+    PROP(plane, DRM_MODE_OBJECT_PLANE, "color_fill", 0);
+    if (opaque || planeRulesApplied) valid &= PlaneBlendProperties(request, 0, opaque);
+#endif
 #undef PROP
     return valid;
 }
@@ -465,7 +825,11 @@ const char *SingleLayerReason(const Layer &layer)
     const auto &b = layer.buffer.value;
     if (!requestedPowerOn) return "power_off";
     if (layer.composition != V::COMPOSITION_DEVICE) return "composition";
+#if HMOS_SPLIT_SCANOUT
     if (!plane || !secondPlane || plane == secondPlane || (mode.hdisplay & 1)) return "planes";
+#else
+    if (!plane) return "planes";
+#endif
     if (!Linear(b)) return "layout";
     if (b.width != mode.hdisplay || b.height != mode.vdisplay) return "buffer_size";
     if (!FullScreen(layer.region) || !FullScreen(layer.crop)) return "rect";
@@ -685,7 +1049,8 @@ struct SubmitMetrics {
         Metric("SUBMIT_PACING frames=%llu pairs=%llu entry_avg_us=%llu entry_min_us=%llu entry_max_us=%llu "
             "previous_service_avg_us=%llu previous_service_max_us=%llu outside_avg_us=%llu outside_max_us=%llu "
             "chain_breaks=%llu clock_errors=%llu fence_missing=%llu fence_ready=%llu fence_pending=%llu fence_error=%llu "
-            "probe_samples=%llu probe_avg_ns=%llu probe_max_ns=%llu route=%s atomic_total=%llu atomic_end_ns=%llu",
+            "probe_samples=%llu probe_avg_ns=%llu probe_max_ns=%llu route=%s atomic_total=%llu atomic_end_ns=%llu "
+            "nonblock=%llu ebusy=%llu fallback=%llu",
             (unsigned long long)frames, (unsigned long long)pairs,
             (unsigned long long)(pairs ? entrySum / pairs / 1000 : 0),
             (unsigned long long)(entryMin / 1000), (unsigned long long)(entryMax / 1000),
@@ -701,7 +1066,9 @@ struct SubmitMetrics {
             (unsigned long long)probes,
             (unsigned long long)(probes ? probeSum / probes : 0), (unsigned long long)probeMax,
             directRoute ? "DIRECT" : "CLIENT", (unsigned long long)frameAtomicTotal,
-            (unsigned long long)frameAtomicEnd);
+            (unsigned long long)frameAtomicEnd,
+            (unsigned long long)nonblockCommits, (unsigned long long)nonblockEbusy,
+            (unsigned long long)nonblockFallback);
         RecordSingleLayerDiagnostic(t[5]);
         uint64_t previousLast = last, previousEntry = lastEntry, previousReturn = lastReturn;
         bool previousRoute = directRoute;
@@ -710,6 +1077,31 @@ struct SubmitMetrics {
         routeKnown = true; directRoute = previousRoute;
     }
 } submitMetrics;
+// Physical panel diagnostic only. The startup script creates this marker on
+// userdata; while it exists the pre-client power-on frame carries colour bars
+// instead of black, so a suspected dead panel can be told apart from an empty
+// composition without changing what the renderer draws.
+static bool PanelBarsRequested()
+{
+    const int fd = open("/data/local/tmp/panel-bars", O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) return false;
+    close(fd);
+    return true;
+}
+static void FillPanelBars(void *map, uint32_t pitch, uint32_t width, uint32_t height)
+{
+    static const uint8_t bars[8][4] = {
+        {255, 255, 255, 0}, {255, 255, 0, 0}, {0, 255, 255, 0}, {0, 255, 0, 0},
+        {255, 0, 255, 0}, {255, 0, 0, 0}, {0, 0, 255, 0}, {0, 0, 0, 0}};
+    auto *base = static_cast<uint8_t *>(map);
+    for (uint32_t x = 0; x < width; ++x) {
+        const uint8_t *colour = bars[size_t(x) * 8 / width];
+        for (uint32_t y = 0; y < height; ++y) {
+            uint8_t *pixel = base + size_t(y) * pitch + size_t(x) * 4;
+            pixel[0] = colour[0]; pixel[1] = colour[1]; pixel[2] = colour[2]; pixel[3] = colour[3];
+        }
+    }
+}
 int Submit(bool testOnly, int32_t *presentFence = nullptr)
 {
     if (presentFence) *presentFence = -1;
@@ -736,6 +1128,41 @@ int Submit(bool testOnly, int32_t *presentFence = nullptr)
         if (rc <= 0 || !(p.revents & POLLIN)) return FAIL;
     }
     timing[1] = MonotonicNs();
+    // Diagnostic only: paint the pending client buffer so the panel shows colour
+    // bars instead of the renderer's empty composition. The marker is created on
+    // userdata by the operator; production frames are untouched without it.
+    if (!testOnly && PanelBarsRequested()) {
+        int barFd = dup(b.fd);
+        if (barFd >= 0) {
+            // 客户端给出的 size 只是句柄声明值：以 dma-buf 实际长度为上限，
+            // 避免诊断绘制越过真实分配末尾（SIGBUS 或写坏相邻对象）。
+            uint64_t usable = uint64_t(b.size);
+            struct stat barStat{};
+            if (fstat(barFd, &barStat) == 0 && barStat.st_size > 0 &&
+                uint64_t(barStat.st_size) < usable) {
+                Ace5Log("PANEL_BARS_SIZE_CLAMP handle=%llu dmabuf=%llu",
+                    (unsigned long long)usable, (unsigned long long)barStat.st_size);
+                usable = uint64_t(barStat.st_size);
+            }
+            if (uint64_t(b.stride) * uint64_t(b.height) > usable) {
+                Ace5Log("PANEL_BARS_SIZE_REJECT stride=%d height=%d usable=%llu",
+                    b.stride, b.height, (unsigned long long)usable);
+                close(barFd);
+            } else {
+                void *barMap = mmap(nullptr, size_t(usable), PROT_READ | PROT_WRITE, MAP_SHARED, barFd, 0);
+                if (barMap != MAP_FAILED) {
+                    dma_buf_sync barSync{DMA_BUF_SYNC_START | DMA_BUF_SYNC_WRITE};
+                    ioctl(barFd, DMA_BUF_IOCTL_SYNC, &barSync);
+                    FillPanelBars(barMap, uint32_t(b.stride), uint32_t(b.width), uint32_t(b.height));
+                    barSync.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_WRITE;
+                    ioctl(barFd, DMA_BUF_IOCTL_SYNC, &barSync);
+                    munmap(barMap, size_t(usable));
+                    Ace5Log("panel bars painted into client frame %dx%d", b.width, b.height);
+                }
+                close(barFd);
+            }
+        }
+    }
     uint32_t handle = 0, fb = 0;
     if (drmPrimeFDToHandle(drm, b.fd, &handle)) { Log("prime import failed"); return FAIL; }
     uint32_t handles[4]{handle}, pitches[4]{uint32_t(b.stride)}, offsets[4]{};
@@ -748,24 +1175,111 @@ int Submit(bool testOnly, int32_t *presentFence = nullptr)
     uint64_t retireFence = UINT64_MAX;
     bool valid = ScanoutProperties(request, fb, clientCrop, testOnly ? nullptr : &retireFence);
     timing[3] = MonotonicNs();
+#if !HMOS_NONBLOCK_COMMIT
+    if (!testOnly) lastPresentFence.Reset();
     rc = valid ? drmModeAtomicCommit(drm, request,
         DRM_MODE_ATOMIC_ALLOW_MODESET | (testOnly ? DRM_MODE_ATOMIC_TEST_ONLY : 0), nullptr) : -1;
+#else
+    bool wantNonblock = !testOnly && !needsModeset && currentFb != 0;
+#if !HMOS_SPLIT_SCANOUT && !defined(ACE5_DIRECT_TEST)
+    if (!panelColdReinitDone) wantNonblock = false;
+#endif
+    uint32_t commitFlags = testOnly
+        ? (DRM_MODE_ATOMIC_ALLOW_MODESET | DRM_MODE_ATOMIC_TEST_ONLY)
+        : (wantNonblock ? DRM_MODE_ATOMIC_NONBLOCK : DRM_MODE_ATOMIC_ALLOW_MODESET);
+    rc = valid ? drmModeAtomicCommit(drm, request, commitFlags, nullptr) : -1;
+    if (valid && wantNonblock && rc != 0) {
+        if (errno == EBUSY) {
+            ++nonblockEbusy;
+            int prevFence = lastPresentFence.Borrow();
+            if (prevFence >= 0) {
+                pollfd wp{prevFence, POLLIN, 0};
+                int prc;
+                do { prc = poll(&wp, 1, 50); } while (prc < 0 && errno == EINTR);
+            }
+            if (retireFence <= INT_MAX) { close(int(retireFence)); retireFence = UINT64_MAX; }
+            rc = drmModeAtomicCommit(drm, request, DRM_MODE_ATOMIC_NONBLOCK, nullptr);
+            if (rc != 0 && errno == EBUSY) {
+                ++nonblockFallback;
+                if (retireFence <= INT_MAX) { close(int(retireFence)); retireFence = UINT64_MAX; }
+                rc = drmModeAtomicCommit(drm, request, 0, nullptr);
+            }
+        }
+        if (rc != 0 && (errno == EINVAL || errno == EPERM)) {
+            ++nonblockFallback;
+            if (retireFence <= INT_MAX) { close(int(retireFence)); retireFence = UINT64_MAX; }
+            rc = drmModeAtomicCommit(drm, request, DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr);
+        }
+    }
+    if (!rc && wantNonblock) ++nonblockCommits;
+#endif
     timing[4] = MonotonicNs();
-    if (!rc && !testOnly) { ++frameAtomicTotal; frameAtomicEnd = timing[4]; }
+    if (!rc && !testOnly) { ++frameAtomicTotal; frameAtomicEnd = timing[4]; needsModeset = false; pccDirty = false; }
     drmModeAtomicFree(request);
     // 失败提交也可能已创建 fence，未移交的描述符由作用域释放
     OwnedFence present(retireFence <= INT_MAX ? int(retireFence) : -1);
     if (present.fd >= 0) fcntl(present.fd, F_SETFD, FD_CLOEXEC);
+#if !HMOS_SPLIT_SCANOUT && !defined(ACE5_SUBMIT_TEST) && !defined(ACE5_DIRECT_TEST)
+    if (!rc && !testOnly && !panelColdReinitDone) {
+        // On single-DSI Qualcomm targets (marble), bootloader cont_splash proxy
+        // regulators drop before composer_host starts, while the first ACTIVE=1
+        // commit sees is_cont_splash_enabled==true and skips panel power-on
+        // before clearing is_cont_splash_enabled=false. One clean OFF->ON cycle
+        // right after that first commit runs full cold panel power-on.
+        panelColdReinitDone = true;
+        PauseVsyncForModeset();
+        int offRc = FAIL, onRc = FAIL;
+        if (auto *offReq = drmModeAtomicAlloc()) {
+            bool offValid = true;
+            offValid &= Property(offReq, plane, DRM_MODE_OBJECT_PLANE, "FB_ID", 0) >= 0;
+            offValid &= Property(offReq, plane, DRM_MODE_OBJECT_PLANE, "CRTC_ID", 0) >= 0;
+            offValid &= Property(offReq, connector, DRM_MODE_OBJECT_CONNECTOR, "CRTC_ID", 0) >= 0;
+            offValid &= Property(offReq, crtc, DRM_MODE_OBJECT_CRTC, "ACTIVE", 0) >= 0;
+            offValid &= Property(offReq, crtc, DRM_MODE_OBJECT_CRTC, "MODE_ID", 0) >= 0;
+            offRc = offValid ? drmModeAtomicCommit(drm, offReq, DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr) : FAIL;
+            drmModeAtomicFree(offReq);
+        }
+        if (!offRc) {
+            if (auto *onReq = drmModeAtomicAlloc()) {
+                uint64_t reinitFence = UINT64_MAX;
+                if (pccPropId && pccBlob) pccDirty = true;
+                bool onValid = ScanoutProperties(onReq, fb, clientCrop, &reinitFence);
+                onRc = onValid ? drmModeAtomicCommit(drm, onReq, DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr) : FAIL;
+                drmModeAtomicFree(onReq);
+                OwnedFence replacement(reinitFence <= INT_MAX ? int(reinitFence) : -1);
+                if (replacement.fd >= 0) fcntl(replacement.fd, F_SETFD, FD_CLOEXEC);
+                if (!onRc) {
+                    if (present.fd >= 0) close(present.fd);
+                    present.fd = replacement.Take();
+                    ++frameAtomicTotal;
+                    frameAtomicEnd = MonotonicNs();
+                    pccDirty = false;
+                }
+            }
+        }
+        ResumeVsyncAfterModeset();
+        Metric("PANEL_COLD_REINIT off_rc=%d on_rc=%d", offRc, onRc);
+        Ace5Log("panel cold reinit off_rc=%d on_rc=%d", offRc, onRc);
+        if (offRc || onRc) rc = -1;
+    }
+#endif
     if (rc || testOnly) drmModeRmFB(drm, fb);
+#if HMOS_NONBLOCK_COMMIT
+    else { if (retiringFb) drmModeRmFB(drm, retiringFb); retiringFb = currentFb; currentFb = fb; }
+#else
     else { if (currentFb) drmModeRmFB(drm, currentFb); currentFb = fb; }
+#endif
     timing[5] = MonotonicNs();
     FenceObservation observation;
     if (!rc && !testOnly) observation = ObserveFence(present.fd);
     if (!rc && !testOnly && presentFence) {
-        *presentFence = present.Take();
+        int outFd = present.Take();
+        lastPresentFence.Adopt(outFd);
+        *presentFence = outFd;
         static bool reported = false;
         if (!reported) {
-            Metric("PRESENT_FENCE first_fd=%d blocking_commit=1", *presentFence);
+            Metric("PRESENT_FENCE first_fd=%d blocking_commit=%d nonblock_cap=%d",
+                *presentFence, HMOS_NONBLOCK_COMMIT ? 0 : 1, HMOS_NONBLOCK_COMMIT);
             reported = true;
         }
     }
@@ -818,10 +1332,36 @@ int SubmitDirect(uint32_t layerId, const Layer &layer, int32_t &presentFence)
     uint64_t presentSlot = UINT64_MAX, releaseSlot = UINT64_MAX;
     bool valid = ScanoutProperties(request, fb, layer.crop, &presentSlot, &releaseSlot, true);
     timing[3] = MonotonicNs();
+#if !HMOS_NONBLOCK_COMMIT
+    lastPresentFence.Reset();
     rc = valid ? drmModeAtomicCommit(drm, request, DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr) : FAIL;
+#else
+    bool wantNonblock = !needsModeset && currentFb != 0;
+    rc = valid ? drmModeAtomicCommit(drm, request,
+        wantNonblock ? DRM_MODE_ATOMIC_NONBLOCK : DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr) : FAIL;
+    if (valid && wantNonblock && rc != 0 && errno == EBUSY) {
+        ++nonblockEbusy;
+        int prevFence = lastPresentFence.Borrow();
+        if (prevFence >= 0) {
+            pollfd wp{prevFence, POLLIN, 0};
+            int prc;
+            do { prc = poll(&wp, 1, 50); } while (prc < 0 && errno == EINTR);
+        }
+        if (presentSlot <= INT_MAX) { close(int(presentSlot)); presentSlot = UINT64_MAX; }
+        if (releaseSlot <= INT_MAX) { close(int(releaseSlot)); releaseSlot = UINT64_MAX; }
+        rc = drmModeAtomicCommit(drm, request, DRM_MODE_ATOMIC_NONBLOCK, nullptr);
+    }
+    if (valid && wantNonblock && rc != 0 && (errno == EBUSY || errno == EINVAL || errno == EPERM)) {
+        ++nonblockFallback;
+        if (presentSlot <= INT_MAX) { close(int(presentSlot)); presentSlot = UINT64_MAX; }
+        if (releaseSlot <= INT_MAX) { close(int(releaseSlot)); releaseSlot = UINT64_MAX; }
+        rc = drmModeAtomicCommit(drm, request, DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr);
+    }
+    if (!rc && wantNonblock) ++nonblockCommits;
+#endif
     error = errno;
     timing[4] = MonotonicNs();
-    if (!rc) { ++frameAtomicTotal; frameAtomicEnd = timing[4]; }
+    if (!rc) { ++frameAtomicTotal; frameAtomicEnd = timing[4]; needsModeset = false; pccDirty = false; }
     drmModeAtomicFree(request);
     OwnedFence present(presentSlot <= INT_MAX ? int(presentSlot) : -1);
     OwnedFence release(releaseSlot <= INT_MAX ? int(releaseSlot) : -1);
@@ -832,8 +1372,14 @@ int SubmitDirect(uint32_t layerId, const Layer &layer, int32_t &presentFence)
         errno = error; return FAIL;
     }
     // 已应用的提交必须保留新 framebuffer，不能按提交失败回收
+#if HMOS_NONBLOCK_COMMIT
+    if (retiringFb && drmModeRmFB(drm, retiringFb)) singleLayerCleanupError = errno;
+    retiringFb = currentFb;
+    currentFb = fb; planeRulesApplied = true;
+#else
     if (currentFb && drmModeRmFB(drm, currentFb)) singleLayerCleanupError = errno;
     currentFb = fb; planeRulesApplied = true;
+#endif
     timing[5] = MonotonicNs();
     if (release.fd < 0) {
         directAppliedError = true; directReleaseUnavailable = true; directRelease.Reset();
@@ -843,7 +1389,9 @@ int SubmitDirect(uint32_t layerId, const Layer &layer, int32_t &presentFence)
         return FAIL;
     }
     directRelease.Adopt(layerId, release.Take());
-    presentFence = present.Take();
+    int outFd = present.Take();
+    lastPresentFence.Adopt(outFd);
+    presentFence = outFd;
     ++directFrames;
     FenceObservation observation = ObserveFence(presentFence);
     submitMetrics.Record(timing, previous, observation);
@@ -898,6 +1446,8 @@ int CommitFrame(int32_t &fence)
 }
 int BlackPowerOn()
 {
+    const bool bars = PanelBarsRequested();
+    Ace5Log("black power-on frame bars=%d", int(bars));
     int heap = open("/dev/dma_heap/system", O_RDONLY | O_CLOEXEC);
     if (heap < 0) return FAIL;
     uint32_t pitch = (uint32_t(mode.hdisplay) * 4 + 255) & ~255U;
@@ -911,7 +1461,8 @@ int BlackPowerOn()
     dma_buf_sync sync{DMA_BUF_SYNC_START | DMA_BUF_SYNC_WRITE};
     result = ioctl(alloc.fd, DMA_BUF_IOCTL_SYNC, &sync);
     if (!result) {
-        memset(map, 0, alloc.len);
+        if (bars) FillPanelBars(map, pitch, mode.hdisplay, mode.vdisplay);
+        else memset(map, 0, alloc.len);
         sync.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_WRITE;
         result = ioctl(alloc.fd, DMA_BUF_IOCTL_SYNC, &sync);
     }
@@ -940,7 +1491,19 @@ int ChangeMode(uint32_t modeId)
     int result = Property(request, crtc, DRM_MODE_OBJECT_CRTC, "MODE_ID", candidateBlob) < 0 ? FAIL : OK;
     if (!result) result = drmModeAtomicCommit(drm, request,
         DRM_MODE_ATOMIC_ALLOW_MODESET | DRM_MODE_ATOMIC_TEST_ONLY, nullptr);
-    if (!result) result = drmModeAtomicCommit(drm, request, DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr);
+    if (!result) {
+#if HMOS_NONBLOCK_COMMIT
+        int prevFence = lastPresentFence.Borrow();
+        if (prevFence >= 0) {
+            pollfd wp{prevFence, POLLIN, 0};
+            int prc;
+            do { prc = poll(&wp, 1, 50); } while (prc < 0 && errno == EINTR);
+        }
+#endif
+        PauseVsyncForModeset();
+        result = drmModeAtomicCommit(drm, request, DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr);
+        ResumeVsyncAfterModeset();
+    }
     int saved = errno;
     drmModeAtomicFree(request);
     if (result) {
@@ -988,6 +1551,21 @@ extern "C" int32_t GetDisplayCapability(uint32_t id, DisplayCapability &info)
     info.phyWidth = mmWidth; info.phyHeight = mmHeight; info.supportLayers = 64;
     return OK;
 }
+#if !HMOS_SPLIT_SCANOUT
+extern "C" int32_t GetDisplayConnectionType(uint32_t id, V1_4::DisplayConnectionType &type)
+{
+    DEVICE_LOCK(id);
+    // Initialize exposes only the selected, connected DSI panel as device 0.
+    // This is the conductor's connection type, not GetDisplayCapability's interface enum.
+    type = V1_4::DisplayConnectionType::INTERNAL;
+    static bool reported = false;
+    if (!reported) {
+        Metric("DISPLAY_CONNECTION_TYPE id=%u connector=%u type=0", id, connector);
+        reported = true;
+    }
+    return OK;
+}
+#endif
 extern "C" int32_t GetDisplaySupportedModes(uint32_t id, std::vector<DisplayModeInfo> &modes)
 {
     DEVICE_LOCK(id); modes.clear();
@@ -1025,9 +1603,42 @@ extern "C" int32_t SetDisplayModeAsync(uint32_t id, uint32_t modeId, ModeCallbac
     cb(modeId, period, data);
     return OK;
 }
+extern "C" __attribute__((visibility("default"))) int32_t MarbleSetPccMatrix(bool enable, const int32_t xcc12[12])
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    if (enable) {
+        if (!xcc12) return INVALID;
+        if (pccXccEnabled && memcmp(pccXccMatrix, xcc12, sizeof(pccXccMatrix)) == 0) return OK;
+        memcpy(pccXccMatrix, xcc12, sizeof(pccXccMatrix));
+        pccXccEnabled = true;
+    } else {
+        if (!pccXccEnabled) return OK;
+        pccXccEnabled = false;
+    }
+    return RebuildAndApplyPccLocked(true);
+}
+extern "C" __attribute__((visibility("default"))) int32_t MarbleSetColorModeMatrix(bool enable, const int32_t mat3x3[9])
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    if (enable) {
+        if (!mat3x3) return INVALID;
+        if (pccColorModeEnabled && memcmp(pccColorModeMatrix, mat3x3, sizeof(pccColorModeMatrix)) == 0) return OK;
+        memcpy(pccColorModeMatrix, mat3x3, sizeof(pccColorModeMatrix));
+        pccColorModeEnabled = true;
+    } else {
+        if (!pccColorModeEnabled) return OK;
+        pccColorModeEnabled = false;
+    }
+    return RebuildAndApplyPccLocked(true);
+}
 extern "C" int32_t GetDisplayPowerStatus(uint32_t id, V::DispPowerStatus &status)
 {
-    DEVICE_LOCK(id); bool active;
+    DEVICE_LOCK(id);
+    if (powerStatusKnown) {
+        status = static_cast<V::DispPowerStatus>(currentPowerStatus);
+        return OK;
+    }
+    bool active;
     if (Active(active)) return FAIL;
     status = active ? V::POWER_STATUS_ON : V::POWER_STATUS_OFF;
     return OK;
@@ -1035,47 +1646,135 @@ extern "C" int32_t GetDisplayPowerStatus(uint32_t id, V::DispPowerStatus &status
 extern "C" int32_t SetDisplayPowerStatus(uint32_t id, V::DispPowerStatus status)
 {
     DEVICE_LOCK(id);
-    if (status != V::POWER_STATUS_ON && status != V::POWER_STATUS_OFF) return UNSUPPORTED;
+    constexpr const char *kDozeBrightnessPath = "/sys/class/mi_display/disp-DSI-0/doze_brightness";
+    const int32_t rawStatus = static_cast<int32_t>(status);
+    if (rawStatus == kPowerPreOn || rawStatus == kPowerPreOff || rawStatus == kPowerOffFake) {
+        currentPowerStatus = rawStatus;
+        powerStatusKnown = true;
+        Ace5Log("power requested=%d result=0 latched_on=%d", rawStatus, requestedPowerOn);
+        return OK;
+    }
+    if (rawStatus != kPowerOn && rawStatus != kPowerOff && rawStatus != kPowerDoze &&
+        rawStatus != kPowerSuspend && rawStatus != kPowerDozeSuspend && rawStatus != kPowerStandby) {
+        return UNSUPPORTED;
+    }
     bool active;
     if (Active(active)) return FAIL;
-    bool wanted = status == V::POWER_STATUS_ON;
-    if (active == wanted) {
-        requestedPowerOn = wanted;
+    if (rawStatus == kPowerDoze || rawStatus == kPowerSuspend || rawStatus == kPowerStandby) {
+        if (!active) {
+            const bool previousRequest = requestedPowerOn;
+            requestedPowerOn = true;
+            needsModeset = true;
+            currentLpMode = lpValLp1;
+            int result = client.value.fd >= 0 ? Submit(false) : BlackPowerOn();
+            if (result) {
+                requestedPowerOn = previousRequest;
+                Ace5Log("power requested=%d (AOD/LP1 wake) result=%d", rawStatus, result);
+                return FAIL;
+            }
+        } else {
+            CommitConnectorLpLocked(lpValLp1);
+        }
+        WriteSysfsBestEffort(kDozeBrightnessPath, "1");
+        requestedPowerOn = true;
         loggedOffSubmission = false;
-        if (!wanted) { directRelease.Reset(); preparedDirectLayer = 0; directReleaseUnavailable = false; }
+        currentPowerStatus = rawStatus;
+        powerStatusKnown = true;
+        ResumeVsyncAfterModeset();
+        Ace5Log("power requested=%d (AOD/LP1) result=0 latched_on=1", rawStatus);
+        return OK;
+    }
+    if (rawStatus == kPowerDozeSuspend) {
+        PauseVsyncForModeset();
+        if (active) {
+            CommitConnectorLpLocked(lpValLp2);
+            WriteSysfsBestEffort(kDozeBrightnessPath, "2");
+        }
+        requestedPowerOn = active;
+        loggedOffSubmission = false;
+        currentPowerStatus = kPowerDozeSuspend;
+        powerStatusKnown = true;
+        Ace5Log("power requested=%d (AOD/LP2) active=%d result=0", rawStatus, int(active));
+        return OK;
+    }
+    if (rawStatus == kPowerOn) {
+        WriteSysfsBestEffort(kDozeBrightnessPath, "0");
+        if (active) {
+            CommitConnectorLpLocked(lpValOn);
+            requestedPowerOn = true;
+            loggedOffSubmission = false;
+            currentPowerStatus = kPowerOn;
+            powerStatusKnown = true;
+            ResumeVsyncAfterModeset();
+            Ace5Log("power requested=0 (ON from active) result=0 latched_on=1");
+            return OK;
+        }
+        const bool previousRequest = requestedPowerOn;
+        // ON must be able to submit the retained client buffer. Restore the prior
+        // request if the atomic power transition fails, instead of claiming success.
+        requestedPowerOn = true;
+        needsModeset = true;
+        currentLpMode = lpValOn;
+        int result = client.value.fd >= 0 ? Submit(false) : BlackPowerOn();
+        if (!result) {
+            requestedPowerOn = true;
+            loggedOffSubmission = false;
+            currentPowerStatus = kPowerOn;
+            powerStatusKnown = true;
+            ResumeVsyncAfterModeset();
+        } else {
+            requestedPowerOn = previousRequest;
+        }
+        Ace5Log("power requested=%d result=%d latched_on=%d", rawStatus, result, requestedPowerOn);
+        return result == 0 ? OK : FAIL;
+    }
+    // POWER_STATUS_OFF (3): preserve full teardown behavior completely.
+    if (!active) {
+        requestedPowerOn = false;
+        loggedOffSubmission = false;
+        currentPowerStatus = kPowerOff;
+        powerStatusKnown = true;
+        currentLpMode = lpValOn;
+        directRelease.Reset(); preparedDirectLayer = 0; directReleaseUnavailable = false;
         return OK;
     }
     const bool previousRequest = requestedPowerOn;
-    // ON must be able to submit the retained client buffer. Restore the prior
-    // request if the atomic power transition fails, instead of claiming success.
-    if (wanted) requestedPowerOn = true;
-    int result;
-    if (wanted) result = client.value.fd >= 0 ? Submit(false) : BlackPowerOn();
-    else {
-        auto *request = drmModeAtomicAlloc();
-        if (!request) return FAIL;
-        // HMOS_FULL_POWER_OFF_V1: detach all objects, so reactivation
-        // rebuilds the complete routing state instead of retaining a mode.
-        bool valid = true;
-        for (uint32_t target : {plane, secondPlane}) {
-            valid &= Property(request, target, DRM_MODE_OBJECT_PLANE, "FB_ID", 0) >= 0;
-            valid &= Property(request, target, DRM_MODE_OBJECT_PLANE, "CRTC_ID", 0) >= 0;
-        }
-        valid &= Property(request, connector, DRM_MODE_OBJECT_CONNECTOR, "CRTC_ID", 0) >= 0;
-        valid &= Property(request, crtc, DRM_MODE_OBJECT_CRTC, "ACTIVE", 0) >= 0;
-        valid &= Property(request, crtc, DRM_MODE_OBJECT_CRTC, "MODE_ID", 0) >= 0;
-        result = valid ? drmModeAtomicCommit(drm, request, DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr) : FAIL;
-        drmModeAtomicFree(request);
-        if (!result && currentFb) { drmModeRmFB(drm, currentFb); currentFb = 0; }
+    PauseVsyncForModeset();
+    auto *request = drmModeAtomicAlloc();
+    if (!request) { ResumeVsyncAfterModeset(); return FAIL; }
+    // HMOS_FULL_POWER_OFF_V1: detach all objects, so reactivation
+    // rebuilds the complete routing state instead of retaining a mode.
+    bool valid = true;
+#if HMOS_SPLIT_SCANOUT
+    for (uint32_t target : {plane, secondPlane}) {
+        valid &= Property(request, target, DRM_MODE_OBJECT_PLANE, "FB_ID", 0) >= 0;
+        valid &= Property(request, target, DRM_MODE_OBJECT_PLANE, "CRTC_ID", 0) >= 0;
     }
+#else
+    valid &= Property(request, plane, DRM_MODE_OBJECT_PLANE, "FB_ID", 0) >= 0;
+    valid &= Property(request, plane, DRM_MODE_OBJECT_PLANE, "CRTC_ID", 0) >= 0;
+#endif
+    valid &= Property(request, connector, DRM_MODE_OBJECT_CONNECTOR, "CRTC_ID", 0) >= 0;
+    valid &= Property(request, crtc, DRM_MODE_OBJECT_CRTC, "ACTIVE", 0) >= 0;
+    valid &= Property(request, crtc, DRM_MODE_OBJECT_CRTC, "MODE_ID", 0) >= 0;
+    int result = valid ? drmModeAtomicCommit(drm, request, DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr) : FAIL;
+    drmModeAtomicFree(request);
     if (!result) {
-        requestedPowerOn = wanted;
+        if (currentFb) { drmModeRmFB(drm, currentFb); currentFb = 0; }
+        if (retiringFb) { drmModeRmFB(drm, retiringFb); retiringFb = 0; }
+        lastPresentFence.Reset();
+        needsModeset = true;
+        requestedPowerOn = false;
         loggedOffSubmission = false;
-        if (!wanted) { directRelease.Reset(); preparedDirectLayer = 0; directReleaseUnavailable = false; }
+        currentPowerStatus = kPowerOff;
+        powerStatusKnown = true;
+        currentLpMode = lpValOn;
+        directRelease.Reset(); preparedDirectLayer = 0; directReleaseUnavailable = false;
     } else {
+        ResumeVsyncAfterModeset();
         requestedPowerOn = previousRequest;
     }
-    Ace5Log("power requested=%d result=%d latched_on=%d", int(status), result, requestedPowerOn);
+    Ace5Log("power requested=%d result=%d latched_on=%d", rawStatus, result, requestedPowerOn);
     return result == 0 ? OK : FAIL;
 }
 // Donor UI is 0..255; its display pipeline sends a distinct 0..65535 HDI unit.
@@ -1110,6 +1809,13 @@ extern "C" int32_t SetDisplayBacklight(uint32_t id, uint32_t level)
 }
 extern "C" int32_t GetDisplayVBlankPeriod(uint32_t id, uint64_t &period)
 { DEVICE_LOCK(id); period = Period(); return OK; }
+extern "C" int32_t GetDisplayClientTargetProperty(uint32_t id, int32_t &pixelFormat, int32_t &dataspace)
+{
+    DEVICE_LOCK(id);
+    pixelFormat = V::PIXEL_FMT_RGBA_8888;
+    dataspace = V::COLOR_GAMUT_SRGB;
+    return OK;
+}
 extern "C" int32_t RegDisplayVBlankCallback(uint32_t id, VBlankCallback cb, void *data)
 {
     DEVICE_LOCK(id); std::lock_guard<std::mutex> state(vsyncMutex);
@@ -1165,7 +1871,14 @@ extern "C" int32_t GetDisplayReleaseFence(uint32_t id, std::vector<uint32_t> &id
     DEVICE_LOCK(id); ids.clear(); fences.clear();
     if (directReleaseUnavailable) return FAIL;
     uint32_t layerId = 0;
-    int fd = directRelease.Borrow(layerId);
+    // 交付前校验：调用方可能已 close 该描述符，编号可能已被无关文件复用
+    int fd = directRelease.Acquire(layerId);
+    // 释放失步计数只在变化时上报，避免每帧刷屏
+    static unsigned reportedLost = 0;
+    if (directRelease.Lost() != reportedLost) {
+        reportedLost = directRelease.Lost();
+        Ace5Log("RELEASE_FENCE_LOST count=%u", reportedLost);
+    }
     // 逐层返回释放项，避免直扫缓存使客户端合成层漏归还
     for (const auto &entry : layers) {
         ids.push_back(entry.first);
@@ -1293,6 +2006,51 @@ extern "C" void Ace5DirectStateForTest(uint32_t &prepared, uint32_t &fb,
     prepared = preparedDirectLayer; fb = currentFb;
     rulesApplied = planeRulesApplied; clientRequired = requireClientFrame;
     cleanupError = singleLayerCleanupError; appliedError = directAppliedError;
+}
+}
+#endif
+
+#ifdef MARBLE_PCC_HOST_TEST
+namespace OHOS::HDI::Display::Composer {
+extern "C" void MarbleInitPccAodForTest(uint32_t pccProp, uint32_t lpProp)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    if (drm < 0) drm = open("/dev/null", O_RDWR);
+    connector = 88; crtc = 176; plane = 90; secondPlane = 133; modeBlob = 1;
+    currentFb = 501; needsModeset = false; requestedPowerOn = true;
+    currentPowerStatus = kPowerOn; powerStatusKnown = false;
+    pccPropId = pccProp; pccBlob = 0; pccDirty = false;
+    pccXccEnabled = false; pccColorModeEnabled = false;
+    lpPropId = lpProp; lpValOn = 0; lpValLp1 = 1; lpValLp2 = 2; currentLpMode = 0;
+    propertyIds[{connector, "CRTC_ID"}] = 102;
+    propertyIds[{crtc, "MODE_ID"}] = 101;
+    propertyIds[{crtc, "ACTIVE"}] = 103;
+    propertyIds[{plane, "FB_ID"}] = 200;
+    propertyIds[{plane, "CRTC_ID"}] = 201;
+    propertyIds[{secondPlane, "FB_ID"}] = 202;
+    propertyIds[{secondPlane, "CRTC_ID"}] = 203;
+    {
+        std::lock_guard<std::mutex> vlock(vsyncMutex);
+        vsyncPowerOn = true;
+    }
+}
+extern "C" void MarbleSetIdleFrameStateForTest(bool powerOn, uint32_t fb, bool needModeset)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    requestedPowerOn = powerOn;
+    currentFb = fb;
+    needsModeset = needModeset;
+}
+extern "C" void MarbleGetPccAodStateForTest(uint32_t &outPccBlob, bool &outPccDirty,
+    bool &outVsyncPowerOn, uint64_t &outLpMode, bool &outRequestedPowerOn)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    outPccBlob = pccBlob;
+    outPccDirty = pccDirty;
+    outLpMode = currentLpMode;
+    outRequestedPowerOn = requestedPowerOn;
+    std::lock_guard<std::mutex> vlock(vsyncMutex);
+    outVsyncPowerOn = vsyncPowerOn;
 }
 }
 #endif

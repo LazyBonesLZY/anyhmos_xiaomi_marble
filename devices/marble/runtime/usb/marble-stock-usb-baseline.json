@@ -1,0 +1,95 @@
+{
+  "source": {
+    "url": "https://gitea.com/fiqri19102002/marble-dump/raw/branch/missi-user-15-AQ3.250226.002-OS3.0.3.0.VMRMIXM-release-keys/vendor/etc/init/hw/init.qcom.usb.rc",
+    "branch": "missi-user-15-AQ3.250226.002-OS3.0.3.0.VMRMIXM-release-keys",
+    "path_in_dump": "vendor/etc/init/hw/init.qcom.usb.rc",
+    "sha256": "7e8f652cd1798691a2ec8f64106794cc5c0bdf0f257ac8a1b81f43f25dbd1815",
+    "bytes": 112474,
+    "local_mirror": "work/marble-stock-vendor/marble-stock-vendor.tar.gz!vendor/etc/init/hw/init.qcom.usb.rc",
+    "note": "Local stock vendor tarball copy is byte-identical to the gitea dump file (same sha256)."
+  },
+  "gadget": {
+    "configfs_mount": "/config",
+    "name": "g1",
+    "config": "b.1",
+    "bcdUSB": "0x0200",
+    "max_power_ma": 900,
+    "os_desc": {
+      "use": "1",
+      "b_vendor_code": "0x1",
+      "qw_sign": "MSFT100"
+    },
+    "udc_node": "dwc3@a600000",
+    "udc_name": "a600000.dwc3",
+    "udc_evidence": "work/marble-kernel-work/dt_base/ukee.dtb (ssusb@a600000/dwc3@a600000, compatible snps,dwc3, dr_mode=otg, maximum-speed=high-speed)",
+    "serial_source_prop": "ro.serialno",
+    "video_id_vendor_default": "0x2717"
+  },
+  "functions": {
+    "ffs_mtp": "ffs.mtp",
+    "ffs_ptp": "ffs.ptp",
+    "ffs_adb": "ffs.adb",
+    "mtp": "mtp.gs0",
+    "ptp": "ptp.gs1",
+    "mass_storage": "mass_storage.0",
+    "functionfs_mtp_mount": "mount functionfs mtp /dev/usb-ffs/mtp rmode=0770,fmode=0660,uid=1024,gid=1024,no_disconnect=1",
+    "functionfs_adb_mount": "mount functionfs adb /dev/usb-ffs/adb uid=2000,gid=1000,rmode=0770,fmode=0660"
+  },
+  "compositions": {
+    "mtp": {
+      "vid": "0x2717",
+      "pid": "0xff40"
+    },
+    "mtp,adb": {
+      "vid": "0x2717",
+      "pid": "0xff48"
+    },
+    "ptp": {
+      "vid": "0x2717",
+      "pid": "0xff10"
+    },
+    "ptp,adb": {
+      "vid": "0x2717",
+      "pid": "0xff18"
+    },
+    "rndis": {
+      "vid": "0x2717",
+      "pid": "0xff80"
+    },
+    "rndis,adb": {
+      "vid": "0x2717",
+      "pid": "0xff88"
+    },
+    "adb": {
+      "vid": "0x18d1",
+      "pid": "0x4ee7"
+    },
+    "diag,adb": {
+      "vid": "0x05C6",
+      "pid": "0x901D"
+    },
+    "mass_storage,adb": {
+      "vid": "0x05C6",
+      "pid": "0x9015"
+    }
+  },
+  "vendor_ids": [
+    "0x2717",
+    "0x18d1",
+    "0x05C6"
+  ],
+  "product_ids": [
+    "0xff40",
+    "0xff48",
+    "0xff10",
+    "0xff18",
+    "0xff80",
+    "0xff88",
+    "0x4ee7",
+    "0x901D",
+    "0x9015",
+    "0xF000",
+    "0x2d00",
+    "0x2d01"
+  ]
+}

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<RoundCornerDisplay>
+    <LCDModel Name="default">
+        <SurfaceConfig>
+            <TopSurface Support="false" DisplayMode="0" />
+            <BottomSurface Support="false" DisplayMode="0" />
+        </SurfaceConfig>
+        <HardwareComposerConfig>
+            <HardwareComposer Support="false" />
+        </HardwareComposerConfig>
+    </LCDModel>
+</RoundCornerDisplay>

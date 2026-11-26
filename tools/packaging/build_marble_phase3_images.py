@@ -69,9 +69,18 @@ PHASE3_DONOR_RECIPES = [
     'libaudio_policy_client.z.so.json',
     'libaudio_policy_service.z.so.json',
     'libnet_tether_manager_if.z.so.json',
-    'libsensor_client.z.so.json',
+    # ADY's original sensor client already selects the timeout overload (0x78).
+    # The sheng-derived relocation selected the callback overload and crashed callers.
     'libsps_privacy_indicator_service_intf.z.so.json',
     'libdevicestatus_service.z.so.json',
+]
+
+
+# Database-key donor recipes enabled automatically when libdbkeys.so is staged.
+PHASE3_DBKEY_RECIPES = [
+    'librelational_store_crypt.z.so.json',
+    'libkv_store_crypt.z.so.json',
+    'libdistributeddatasvcfwk.z.so.json',
 ]
 
 
@@ -137,6 +146,8 @@ def generate_phase3_donor_patch_script(recipes_dir: Path, recipe_names: list[str
     for recipe_name in names:
         recipe_path = recipes_dir / recipe_name
         spec = json.loads(recipe_path.read_text(encoding='utf-8'))
+        if reason := spec.get('retired_reason'):
+            raise ValueError(f'Retired donor recipe {recipe_name}: {reason}')
         rel = spec['path']
         if not rel.startswith('/'):
             raise ValueError(f'Expected absolute donor path in {recipe_path}: {rel}')
@@ -289,6 +300,7 @@ def build_phase3_images(
     busybox: Path,
     out_dir: Path,
     *,
+    compat_libs_dir: Path | None = None,
     skip_super: bool = False,
     super_bytes: int = MARBLE_SUPER_BYTES,
     cc: str = 'aarch64-linux-gnu-gcc',
@@ -338,8 +350,20 @@ def build_phase3_images(
     if len(init_cfg_bytes) >= 32768:
         raise ValueError(f'hmos-init-phase3.cfg exceeds 32768-byte probe buffer: {len(init_cfg_bytes)}')
 
+    # Determine optional compiled OpenHarmony compat shims (libhmos_account_hmac.so, libdbkeys.so).
+    staged_compat_libs: dict[str, Path] = {}
+    if compat_libs_dir is not None and compat_libs_dir.is_dir():
+        for lib_name in ('libhmos_account_hmac.so', 'libdbkeys.so'):
+            candidate = compat_libs_dir / lib_name
+            if candidate.is_file():
+                staged_compat_libs[lib_name] = candidate
+
+    selected_recipes = list(PHASE3_DONOR_RECIPES)
+    if 'libdbkeys.so' in staged_compat_libs:
+        selected_recipes.extend(PHASE3_DBKEY_RECIPES)
+
     # Generate and syntax-check guarded donor patch script.
-    patch_script = generate_phase3_donor_patch_script(recipes_dir)
+    patch_script = generate_phase3_donor_patch_script(recipes_dir, selected_recipes)
     patch_script_path = work / 'apply-donor-patches-phase3.sh'
     patch_script_path.write_text(patch_script, encoding='utf-8', newline='\n')
     subprocess.run(['bash', '-n', str(patch_script_path)], check=True)
@@ -483,6 +507,8 @@ def build_phase3_images(
         'graphics/apply-donor-patches-phase3.sh': (patch_script_path.read_bytes(), 0o755),
         'graphics/hdf_default_minimal.hcb': (minimal_hcb, 0o644),
     }
+    for lib_name, lib_path in sorted(staged_compat_libs.items()):
+        payload_files[f'graphics/{lib_name}'] = (lib_path.read_bytes(), 0o644)
     if original_init_blob is not None:
         payload_files['init.android.original'] = (original_init_blob, 0o755)
 
@@ -563,7 +589,8 @@ def build_phase3_images(
             'avb_footer_updated': vb_avb_updated,
             'sha256': sha256_file(vb_out),
         },
-        'phase3_donor_recipes': PHASE3_DONOR_RECIPES,
+        'phase3_donor_recipes': selected_recipes,
+        'staged_compat_libs': sorted(staged_compat_libs),
         'compat_manifest': manifest,
         'roundtrip_verified': True,
     }
@@ -581,6 +608,7 @@ def main(argv=None):
     parser.add_argument('--donor', type=Path, default=ROOT / 'work/donor-rom/ADY-AL10-207.0.0.111-SP10')
     parser.add_argument('--recipes', type=Path, default=ROOT / 'patches/donor/ady-al10-111-sp10')
     parser.add_argument('--busybox', type=Path, default=ROOT / 'work/marble-backup/stock/busybox-aarch64')
+    parser.add_argument('--compat-libs-dir', type=Path, default=ROOT / 'work/marble-compat-libs')
     parser.add_argument('--out', type=Path, default=ROOT / 'work/marble-phase3-out')
     parser.add_argument('--skip-super', action='store_true', help='Skip building 9 GiB super.img')
     parser.add_argument('--cc', default='aarch64-linux-gnu-gcc')
@@ -593,6 +621,7 @@ def main(argv=None):
         recipes_dir=args.recipes,
         busybox=args.busybox,
         out_dir=args.out,
+        compat_libs_dir=args.compat_libs_dir,
         skip_super=args.skip_super,
         cc=args.cc,
     )

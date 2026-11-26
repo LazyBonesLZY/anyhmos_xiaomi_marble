@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Configs>
+  <dpi>440</dpi>
+  <defaultDeviceRotationOffset>0</defaultDeviceRotationOffset>
+  <cutoutArea>508 18 65 67</cutoutArea>
+  <defaultDisplayCutoutPath>M508 18 L573 18 v 67 h -65 Z</defaultDisplayCutoutPath>
+  <rotationPolicy>11</rotationPolicy>
+  <supportRotateWithSensor enable="true"/>
+  <externalScreenDefaultMode>mirror</externalScreenDefaultMode>
+  <castBundleName>com.huawei.hmos.huaweicast</castBundleName>
+  <castAbilityName>CastSourceServiceAbility</castAbilityName>
+</Configs>

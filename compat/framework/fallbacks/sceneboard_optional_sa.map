@@ -1,0 +1,8 @@
+1.0 {
+  global:
+    _ZN4OHOS25SystemAbilityManagerProxy18CheckSystemAbilityEiRbRi;
+    _ZN4OHOS25SystemAbilityManagerProxy17LoadSystemAbilityEii;
+    _ZN4OHOS25SystemAbilityManagerProxy17LoadSystemAbilityEiRKNS_4sptrINS_26ISystemAbilityLoadCallbackEEE;
+  local:
+    *;
+};
