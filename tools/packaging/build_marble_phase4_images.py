@@ -806,6 +806,33 @@ def _phase4_pin_auth_host() -> bytes:
     ])
 
 
+def _phase4_motion_host() -> bytes:
+    """Build marble clean-room motion_host HCB node (host index 18) hosting motion_interface_service v1.1."""
+    motion_dev0 = _hcb_node('device0', [
+        _hcb_term('policy', 'u8', 2),
+        _hcb_term('priority', 'u8', 100),
+        _hcb_term('preload', 'u8', 0),
+        _hcb_term('moduleName', 'str', 'libmotion_driver.z.so'),
+        _hcb_term('serviceName', 'str', 'motion_interface_service'),
+        _hcb_term('permission', 'u16', 436),
+        _hcb_term('deviceMatchAttr', 'str', ''),
+    ])
+    return _hcb_node('motion', [
+        _hcb_term('hostName', 'str', 'motion_host'),
+        _hcb_term('priority', 'u8', 50),
+        _hcb_term('uid', 'str', 'motion_host'),
+        _hcb_term('gid', 'arr', [
+            ('str', 'motion_host'),
+            ('str', 'composer_host'),
+            ('str', 'dev_lcd_backlight'),
+            ('str', 'sensor_host'),
+            ('str', 'system'),
+        ]),
+        _hcb_term('caps', 'arr', [('str', 'DAC_OVERRIDE'), ('str', 'DAC_READ_SEARCH')]),
+        _hcb_node('motion_device', [motion_dev0]),
+    ])
+
+
 def build_phase4_hdf_hcb(*, wifi_chip_donor: Path | None = None,
                          wpa_on_demand_donor: Path | None = None,
                          a2dp_donor: Path | None = None,
@@ -823,7 +850,8 @@ def build_phase4_hdf_hcb(*, wifi_chip_donor: Path | None = None,
                          memorytracker_host: bool = False,
                          vibrator_host: bool = False,
                          hostapd_donor: Path | None = None,
-                         pin_auth_host: bool = False) -> bytes:
+                         pin_auth_host: bool = False,
+                         motion_host: bool = False) -> bytes:
     """Build marble Phase 4 OpenHarmony HCB v0.7 with 5..15 hosts:
       0: allocator_host     (liballocator_driver_1.0.z.so -> allocator_service)
       1: composer_host      (libdisplay_composer_driver_1.0.z.so [+ opt-in displayengine_device])
@@ -969,6 +997,8 @@ def build_phase4_hdf_hcb(*, wifi_chip_donor: Path | None = None,
         raise ValueError('hostapd_donor requires vibrator_host=True so hostapd_host is host index 16')
     if pin_auth_host and hostapd_donor is None:
         raise ValueError('pin_auth_host=True requires hostapd_donor so pin_auth_host is host index 17')
+    if motion_host and not pin_auth_host:
+        raise ValueError('motion_host=True requires pin_auth_host=True so motion_host is host index 18')
     device_info = _hcb_node('device_info', [
         _hcb_term('match_attr', 'str', 'hdf_manager'),
         allocator_host,
@@ -989,6 +1019,7 @@ def build_phase4_hdf_hcb(*, wifi_chip_donor: Path | None = None,
         *([_phase4_vibrator_host()] if vibrator_host else []),
         *([_phase4_hostapd_host(hostapd_donor)] if hostapd_donor is not None else []),
         *([_phase4_pin_auth_host()] if pin_auth_host else []),
+        *([_phase4_motion_host()] if motion_host else []),
     ])
     root_node = _hcb_node('root', [
         device_info,

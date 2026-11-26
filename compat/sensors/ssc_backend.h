@@ -24,6 +24,7 @@ enum SscSensorKind {
     SSC_PEDOMETER = 266,
     SSC_GEOMAGNETIC_ROTATION_VECTOR = 277,
     SSC_DEVICE_ORIENTATION = 279,
+    SSC_TILT_TO_WAKE = 280,
 };
 
 enum SscResult {

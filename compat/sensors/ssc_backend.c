@@ -244,6 +244,7 @@ static const char *SscTypeString(uint32_t kind)
     case SSC_PEDOMETER: return "oem_step_counter";
     case SSC_GEOMAGNETIC_ROTATION_VECTOR: return "geomag_rv";
     case SSC_DEVICE_ORIENTATION: return "device_orient";
+    case SSC_TILT_TO_WAKE: return "tilt_to_wake";
     default: return NULL;
     }
 }
@@ -255,7 +256,8 @@ static bool IsOnChangeSensor(uint32_t kind, const struct SscSensorInfo *info)
     }
     return kind == SSC_AMBIENT_LIGHT || kind == SSC_PROXIMITY ||
            kind == SSC_SIGNIFICANT_MOTION || kind == SSC_PEDOMETER_DETECTION ||
-           kind == SSC_PEDOMETER || kind == SSC_DEVICE_ORIENTATION;
+           kind == SSC_PEDOMETER || kind == SSC_DEVICE_ORIENTATION ||
+           kind == SSC_TILT_TO_WAKE;
 }
 
 static float ClampStreamingRate(float requested, const struct SscSensorInfo *info)

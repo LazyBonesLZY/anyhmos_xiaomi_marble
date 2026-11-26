@@ -10,6 +10,7 @@
 #include <iproxy_broker.h>
 #include <map>
 #include <mutex>
+#include <pthread.h>
 #include <set>
 #include <time.h>
 
@@ -100,6 +101,9 @@ struct SensorInterfaceService::Impl {
         bool discovered = false;
         bool running = false;
         float rate = 0.0f;
+        HdfSensorEvents lastEvent{};
+        bool hasLastEvent = false;
+        int64_t lastSampleMonoNs = 0;
         std::atomic<int32_t> lastError{SSC_OK};
     };
 
@@ -118,6 +122,10 @@ struct SensorInterfaceService::Impl {
     bool timeReady = false;
     std::atomic<int64_t> nextTimeRefresh{0};
     std::atomic<bool> stopped{false};
+    pthread_t alsKeepaliveThread{};
+    bool alsKeepaliveRunning = false;
+    std::atomic<bool> alsKeepaliveStop{false};
+    Stream *alsStream = nullptr;
 
     Impl()
     {
@@ -132,6 +140,7 @@ struct SensorInterfaceService::Impl {
 
     ~Impl()
     {
+        StopAlsKeepalive();
         for (auto &stream : streams) {
             if (stream.backend != nullptr) {
                 SscBackendDestroy(stream.backend);
@@ -140,6 +149,95 @@ struct SensorInterfaceService::Impl {
         if (timeReady) {
             SscTimeDestroy(&time);
         }
+    }
+
+    static int64_t MonoNowNs()
+    {
+        timespec ts{};
+        if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+            return 0;
+        }
+        return static_cast<int64_t>(ts.tv_sec) * INT64_C(1000000000) + ts.tv_nsec;
+    }
+
+    static int64_t BootNowNs()
+    {
+        timespec ts{};
+        if (clock_gettime(CLOCK_BOOTTIME, &ts) != 0) {
+            return MonoNowNs();
+        }
+        return static_cast<int64_t>(ts.tv_sec) * INT64_C(1000000000) + ts.tv_nsec;
+    }
+
+    static void *AlsKeepaliveMain(void *arg)
+    {
+        auto &owner = *static_cast<Impl *>(arg);
+        while (!owner.alsKeepaliveStop.load(std::memory_order_acquire) &&
+               !owner.stopped.load(std::memory_order_acquire)) {
+            for (int tick = 0; tick < 4; ++tick) {
+                if (owner.alsKeepaliveStop.load(std::memory_order_acquire) ||
+                    owner.stopped.load(std::memory_order_acquire)) {
+                    return nullptr;
+                }
+                timespec req{0, 50000000};
+                nanosleep(&req, nullptr);
+            }
+            HdfSensorEvents ev{};
+            std::vector<Client> recipients;
+            const int64_t nowMono = MonoNowNs();
+            {
+                std::lock_guard<std::mutex> lock(owner.callbackMutex);
+                Stream *s = owner.alsStream;
+                if (s == nullptr || !s->hasLastEvent) {
+                    continue;
+                }
+                if (nowMono > 0 && s->lastSampleMonoNs > 0 &&
+                    (nowMono - s->lastSampleMonoNs) < INT64_C(180000000)) {
+                    continue;
+                }
+                ev = s->lastEvent;
+                ev.timestamp = BootNowNs();
+                for (const auto &[id, client] : owner.clients) {
+                    (void)id;
+                    if (client.enabled.count(SSC_AMBIENT_LIGHT)) {
+                        recipients.push_back(client);
+                    }
+                }
+            }
+            for (const auto &client : recipients) {
+                if (client.callback == nullptr) {
+                    continue;
+                }
+                if (client.asynchronous) {
+                    client.callback->OnDataEventAsync({ev});
+                } else {
+                    client.callback->OnDataEvent(ev);
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    void StartAlsKeepalive(Stream &stream)
+    {
+        if (alsKeepaliveRunning) {
+            return;
+        }
+        alsStream = &stream;
+        alsKeepaliveStop.store(false, std::memory_order_release);
+        if (pthread_create(&alsKeepaliveThread, nullptr, AlsKeepaliveMain, this) == 0) {
+            alsKeepaliveRunning = true;
+        }
+    }
+
+    void StopAlsKeepalive()
+    {
+        if (!alsKeepaliveRunning) {
+            return;
+        }
+        alsKeepaliveStop.store(true, std::memory_order_release);
+        pthread_join(alsKeepaliveThread, nullptr);
+        alsKeepaliveRunning = false;
     }
 
     Stream *Find(const DeviceSensorInfo &identity)
@@ -202,7 +300,7 @@ struct SensorInterfaceService::Impl {
         event.version = 0;
         event.timestamp = timestamp;
         event.option = static_cast<uint32_t>(sample->status);
-        event.mode = 1;
+        event.mode = (stream.kind != SSC_AMBIENT_LIGHT && IsOnChangeKind(stream.kind, stream.info)) ? 2 : 1;
         size_t floatCount = OutputFloatCount(stream.kind);
         float packed[4] = {0.0f, 0.0f, 0.0f, 0.0f};
         if (stream.kind == SSC_AMBIENT_LIGHT) {
@@ -224,6 +322,9 @@ struct SensorInterfaceService::Impl {
         std::vector<Client> recipients;
         {
             std::lock_guard<std::mutex> lock(owner.callbackMutex);
+            stream.lastEvent = event;
+            stream.hasLastEvent = true;
+            stream.lastSampleMonoNs = MonoNowNs();
             for (const auto &[id, client] : owner.clients) {
                 (void)id;
                 if (client.enabled.count(stream.kind)) {
@@ -250,69 +351,117 @@ struct SensorInterfaceService::Impl {
                 ? DEFAULT_INTERVAL_NS : iterator->second;
             rate = std::max(rate, static_cast<float>(1000000000.0 / interval));
         }
-        if (stream.running && rate == stream.rate) {
+        const bool onChange = IsOnChangeKind(stream.kind, stream.info);
+        if (stream.running && rate > 0.0f && (rate == stream.rate || onChange)) {
             uint32_t state;
             SscBackendError error{};
             if (SscBackendGetState(stream.backend, &state, &error) == SSC_OK && state == SSC_RUNNING) {
+                stream.rate = rate;
                 return HDF_SUCCESS;
             }
         }
         if (stream.running) {
+            if (stream.kind == SSC_AMBIENT_LIGHT) {
+                StopAlsKeepalive();
+            }
             int32_t stopped = SscBackendStop(stream.backend);
             stream.running = false;
+            {
+                std::lock_guard<std::mutex> callbacks(callbackMutex);
+                stream.hasLastEvent = false;
+                stream.lastSampleMonoNs = 0;
+                stream.lastEvent = HdfSensorEvents{};
+            }
             if (stopped != SSC_OK) {
                 return HDF_FAILURE;
             }
         }
         stream.rate = rate;
         if (rate == 0.0f) {
+            if (stream.kind == SSC_AMBIENT_LIGHT) {
+                StopAlsKeepalive();
+            }
+            std::lock_guard<std::mutex> callbacks(callbackMutex);
+            stream.hasLastEvent = false;
+            stream.lastSampleMonoNs = 0;
+            stream.lastEvent = HdfSensorEvents{};
             return HDF_SUCCESS;
         }
         SscBackendConfig config{rate};
         stream.lastError.store(SSC_OK);
         int32_t result = SscBackendStart(stream.backend, &config, OnSample, OnError, &stream);
         stream.running = result == SSC_OK;
+        if (stream.running && stream.kind == SSC_AMBIENT_LIGHT) {
+            StartAlsKeepalive(stream);
+        }
         return Result(result);
     }
 
     int32_t Enable(const DeviceSensorInfo &identity, uint64_t id, bool enabled)
     {
-        std::lock_guard<std::mutex> lock(operationMutex);
-        auto *stream = Find(identity);
-        if (stream == nullptr || !timeReady || Discover(*stream) != HDF_SUCCESS) {
-            return HDF_ERR_INVALID_PARAM;
-        }
-        const auto previous = stream->enabled;
+        HdfSensorEvents cachedEvent{};
+        Client cachedClient{};
+        bool replay = false;
+        int32_t result = HDF_SUCCESS;
         {
-            std::lock_guard<std::mutex> callbacks(callbackMutex);
-            auto client = clients.find(id);
-            if (client == clients.end()) {
-                return HDF_ERR_INVALID_OBJECT;
+            std::lock_guard<std::mutex> lock(operationMutex);
+            auto *stream = Find(identity);
+            if (stream == nullptr || !timeReady || Discover(*stream) != HDF_SUCCESS) {
+                return HDF_ERR_INVALID_PARAM;
             }
-            if (enabled) {
-                client->second.enabled.insert(stream->kind);
-            } else {
-                client->second.enabled.erase(stream->kind);
-            }
-        }
-        if (enabled) {
-            stream->enabled.insert(id);
-        } else {
-            stream->enabled.erase(id);
-        }
-        int32_t result = Apply(*stream);
-        if (result != HDF_SUCCESS) {
-            // 请求变更失败时恢复原订阅，再恢复原采样配置
-            stream->enabled = previous;
+            const bool wasRunning = stream->running;
+            const auto previous = stream->enabled;
             {
                 std::lock_guard<std::mutex> callbacks(callbackMutex);
-                if (previous.count(id)) {
-                    clients[id].enabled.insert(stream->kind);
+                auto client = clients.find(id);
+                if (client == clients.end()) {
+                    return HDF_ERR_INVALID_OBJECT;
+                }
+                if (enabled) {
+                    client->second.enabled.insert(stream->kind);
                 } else {
-                    clients[id].enabled.erase(stream->kind);
+                    client->second.enabled.erase(stream->kind);
                 }
             }
-            Apply(*stream);
+            if (enabled) {
+                stream->enabled.insert(id);
+            } else {
+                stream->enabled.erase(id);
+            }
+            result = Apply(*stream);
+            if (result != HDF_SUCCESS) {
+                // 请求变更失败时恢复原订阅，再恢复原采样配置
+                stream->enabled = previous;
+                {
+                    std::lock_guard<std::mutex> callbacks(callbackMutex);
+                    auto client = clients.find(id);
+                    if (client != clients.end()) {
+                        if (previous.count(id)) {
+                            client->second.enabled.insert(stream->kind);
+                        } else {
+                            client->second.enabled.erase(stream->kind);
+                        }
+                    }
+                }
+                Apply(*stream);
+                return result;
+            }
+            if (enabled && wasRunning && IsOnChangeKind(stream->kind, stream->info)) {
+                std::lock_guard<std::mutex> callbacks(callbackMutex);
+                auto client = clients.find(id);
+                if (stream->hasLastEvent && client != clients.end() && client->second.callback != nullptr) {
+                    cachedEvent = stream->lastEvent;
+                    cachedClient = client->second;
+                    replay = true;
+                }
+            }
+        }
+        if (replay) {
+            if (cachedClient.asynchronous) {
+                cachedClient.callback->OnDataEventAsync({cachedEvent});
+            } else {
+                cachedClient.callback->OnDataEvent(cachedEvent);
+            }
         }
         return result;
     }
@@ -407,6 +556,7 @@ int32_t SensorInterfaceService::Shutdown()
 {
     std::lock_guard<std::mutex> lock(impl_->operationMutex);
     impl_->stopped.store(true);
+    impl_->StopAlsKeepalive();
     {
         std::lock_guard<std::mutex> callbacks(impl_->callbackMutex);
         impl_->clients.clear();
@@ -419,6 +569,12 @@ int32_t SensorInterfaceService::Shutdown()
             result = HDF_FAILURE;
         }
         stream.running = false;
+        {
+            std::lock_guard<std::mutex> callbacks(impl_->callbackMutex);
+            stream.hasLastEvent = false;
+            stream.lastSampleMonoNs = 0;
+            stream.lastEvent = HdfSensorEvents{};
+        }
     }
     return result;
 }
@@ -455,14 +611,18 @@ int32_t SensorInterfaceService::GetAllSensorInfo(std::vector<HdfSensorInformatio
         } else {
             sensor.accuracy = stream.kind == SSC_PROXIMITY ? 5.0f : (stream.kind == SSC_AMBIENT_LIGHT ? 0.1f : 0.01f);
         }
-        if ((native.present & SSC_INFO_RATES) && native.rate_count > 0) {
+        if (stream.kind == SSC_AMBIENT_LIGHT) {
+            // Donor libbrightness_wrapper expects periodic ALS updates (100ms-200ms) for 1000ms debounce timers.
+            sensor.minDelay = 20000000;
+            sensor.maxDelay = 200000000;
+        } else if (IsOnChangeKind(stream.kind, native)) {
+            sensor.minDelay = 0;
+            sensor.maxDelay = 0;
+        } else if ((native.present & SSC_INFO_RATES) && native.rate_count > 0) {
             auto rates = std::minmax_element(native.rates_hz, native.rates_hz + native.rate_count);
             // 供体SensorService直接按纳秒接收HDI采样间隔
             sensor.minDelay = *rates.second > 0.0f ? static_cast<int64_t>(1000000000.0 / *rates.second) : 0;
             sensor.maxDelay = *rates.first > 0.0f ? static_cast<int64_t>(1000000000.0 / *rates.first) : 0;
-        } else if (IsOnChangeKind(stream.kind, native)) {
-            sensor.minDelay = 0;
-            sensor.maxDelay = 0;
         } else {
             sensor.minDelay = 10000000;
             sensor.maxDelay = 200000000;
@@ -543,7 +703,7 @@ int32_t SensorInterfaceService::UnregisterWithCallbackId(int32_t group, const sp
 
 int32_t SensorInterfaceService::SetMode(const DeviceSensorInfo &info, int32_t mode)
 {
-    return impl_->Find(info) != nullptr && (mode == 0 || mode == 1) ? HDF_SUCCESS : HDF_ERR_NOT_SUPPORT;
+    return impl_->Find(info) != nullptr && (mode == 0 || mode == 1 || mode == 2) ? HDF_SUCCESS : HDF_ERR_NOT_SUPPORT;
 }
 
 int32_t SensorInterfaceService::SetOption(const DeviceSensorInfo &info, uint32_t option)
