@@ -284,7 +284,8 @@ def validate_inputs() -> None:
                 require(svcs['motion_host']['path'][2] == '18', 'motion_host must use host index -i 18')
             elif rel.endswith('init-m4-anco-marble.cfg'):
                 svcs = {s['name']: s for s in doc['services']}
-                require('updater_sa' in svcs and 'broker' in svcs, 'init-m4-anco-marble.cfg missing updater_sa/broker')
+                require('updater_sa' in svcs and 'broker' in svcs and 'bms_broker' in svcs,
+                        'init-m4-anco-marble.cfg missing updater_sa/broker/bms_broker')
         elif rel.endswith('.sh'):
             require(b'\r' not in raw, f'CR byte in {rel}')
             subprocess.run(['sh', '-n'], input=raw, check=True)

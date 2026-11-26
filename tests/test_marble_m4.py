@@ -58,7 +58,10 @@ class TestMarbleM4(unittest.TestCase):
         svcs = {s['name']: s for s in cfg['services']}
         self.assertIn('updater_sa', svcs)
         self.assertIn('broker', svcs)
+        self.assertIn('bms_broker', svcs)
         self.assertTrue(svcs['updater_sa'].get('ondemand'))
+        self.assertTrue(svcs['bms_broker'].get('ondemand'))
+        self.assertNotIn('disabled', svcs['bms_broker'])
         self.assertNotIn('disabled', svcs['rgm_manager'])
         self.assertNotIn('disabled', svcs['rgm_engine_plugin'])
         self.assertNotIn('disabled', svcs['virt_device'])

@@ -354,10 +354,11 @@ sa3006=$(check_sa 3006)
 sa65601=$(check_sa 65601)
 sa65604=$(check_sa 65604)
 sa65610=$(check_sa 65610)
+sa66816=$(check_sa 66816)
 sa66818=$(check_sa 66818)
 sa66854=$(check_sa 66854)
 
-say "ANCO_M4_SA sa3006=$sa3006 sa65601=$sa65601 sa65604=$sa65604 sa65610=$sa65610 sa66818=$sa66818 sa66854=$sa66854"
-say "ANCO_M4_PROCS updater_sa=$(pid_of 'updater_sa\.json') broker=$(pid_of '/system/bin/anco_service_broker') rgm_manager=$(pid_of 'rgm_manager\.json') rgm_engine_plugin=$(pid_of 'rgm_engine_plugin\.json') virt_device=$(pid_of 'virt_device\.json') hmos_fusion_manager=$(pid_of 'hmos_fusion_manager\.json') start_anco_audio=$(pid_of '/system/bin/anco_audio') rgm_engine=$(pid_of 'isulad')"
+say "ANCO_M4_SA sa3006=$sa3006 sa65601=$sa65601 sa65604=$sa65604 sa65610=$sa65610 sa66816=$sa66816 sa66818=$sa66818 sa66854=$sa66854"
+say "ANCO_M4_PROCS updater_sa=$(pid_of 'updater_sa\.json') bms_broker=$(pid_of 'bms_broker\.json') broker=$(pid_of '/system/bin/anco_service_broker') rgm_manager=$(pid_of 'rgm_manager\.json') rgm_engine_plugin=$(pid_of 'rgm_engine_plugin\.json') virt_device=$(pid_of 'virt_device\.json') hmos_fusion_manager=$(pid_of 'hmos_fusion_manager\.json') start_anco_audio=$(pid_of '/system/bin/anco_audio') rgm_engine=$(pid_of 'isulad')"
 say "ANCO_M4_DONE=1"
 exit 0
