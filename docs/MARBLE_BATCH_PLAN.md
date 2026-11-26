@@ -972,6 +972,24 @@ H11实验镜像 `aa247d8d7b97e0020f728f136a2ebb441a60011b7ca83f2dfb9750d238af2ee
   - 修复与实测：新增 `aod_service`（`SA 65840`）并在 `foundation` 启用 `SA 3204`（`run-on-create: true`）；实机 `SA_3203/3204/65840=UP`，`SceneBoard` 加载 `SA 65840` 耗时 `0ms`，`HILOG_AOD_TO=0`、`HILOG_REM_FAIL=0`、`HILOG_LV_TO=0`。
 - **零回归与冷启动基线**：`BOOT_ID=f93f2eb6-4e82-49d9-ae5d-92fbd94b289b`、`vendor_boot_a=c4b6a64f…`、`BOOT_COMPLETED=true`、`WLAN0_CARRIER=1`、`DMESG_OOPS=0`；回退 M4c `dcd8797f` 使用 `/mnt/e/marble-tmp/flash-h20-m5-control.sh`。
 
+## 批次 M6 原生内核代码签名与 fs-verity 完整闭环里程碑（2026-11-27 更新：`boot_h20_m6_codesign_f80fe1b1.img` + `vendor_boot_h20_m6_codesign_577e5a5e.img`）
+
+解决真实签名 HAP 在 `bm install` 阶段因原 Android 5.10.274 内核缺失 OpenHarmony `code_sign` 与 `fs-verity` 扩展导致的 `code:9568404` 安装失败问题；全程严格遵循零安全绕过原则，完成内核级代码签名子系统移植、KABI 零破坏审计、无损 ext4 `verity` 升级与真机正/负控验收（打包脚本 [build_marble_h20_m6_codesign.py](../tools/packaging/build_marble_h20_m6_codesign.py)，单测 [test_marble_m6.py](../tests/test_marble_m6.py) 5/5 通过）：
+
+- **1. Linux 5.10.274 内核 `code_sign` + `fs-verity` + ECDSA 移植（[marble-codesign.patch](../devices/marble/kernel/marble-codesign.patch)、[marble-codesign/](../devices/marble/kernel/marble-codesign/fs/code_sign/code_sign_ioctl.c)、[build_marble_kernel.sh](../tools/build/build_marble_kernel.sh)）**：
+  - 移植 OpenHarmony 官方 `fs/code_sign/`（`/dev/code_sign` 5 项 ioctl：`ADD_CERT_CHAIN`/`REMOVE_CERT_CHAIN`/`ADD_ENTERPRISE_CERT`/`REMOVE_ENTERPRISE_CERT`/`ACTIVATE_CERT`，强制 `euid==0`/`3060` 权限检查与 `BUILD_BUG_ON(sizeof(struct cert_chain_info)==64)`）、`FS_IOC_ENABLE_CODE_SIGN` (`0x408066c8`，同时接入 `fs/ext4/ioctl.c` 与 `fs/f2fs/file.c`)、`code_sign_descriptor` + `fs-verity` `validate_fsverity_descriptor()` 校验及 `/proc/sys/fs/verity/developer_mode`。
+  - 移植 `crypto/ecdsa.c` + NIST P-384 曲线与 `OID_id_ansip384r1`/`OID_id_ecdsa_with_sha{224..512}`/`OID_ownerid`，支持供体 `Huawei CBG Root CA G2`（P-384）及 AGC 调试叶证书（P-256）完整 PKCS#7 验签。
+  - 在 ThinLTO + Clang CFI 下零告警构建 `5.10.274-Bouquet-anyhmos #4`；离线 KABI 审计遍历 `vendor_boot`（303 个）+ `vendor_dlkm`（354 个）共 **657 个 `.ko` 模块、31,941 条 `vmlinux` 符号链接**，**`crc_mismatches=0`、`vermagic_mismatches=0`**。
+- **2. 移除旧 Phase 3 `libcode_sign_utils.z.so` 旁路并补齐 `key_enable` + `local_code_sign`（[init-m6-codesign-marble.cfg](../devices/marble/runtime/codesign/init-m6-codesign-marble.cfg)）**：
+  - 从 `apply-donor-patches-phase4.sh` 移除历史遗留的 `libcode_sign_utils.z.so` `FS_VERITY_FL` 旁路补丁，恢复 100% 原厂未修改供体库（`sha256=2dd39556…`）；按需启动供体 `key_enable` 与 `local_code_sign`（`SA 3507`），并在 `start-phase4-marble.sh` 同步 `/proc/sys/fs/verity/{require_signatures,developer_mode}`。
+- **3. 无损离线 ext4 `RO_COMPAT_VERITY` 升级（[marble_ext4_verity_enable.c](../compat/services/marble_ext4_verity_enable.c)）**：
+  - 等效于 `tune2fs -O verity`，离线单测与 `tune2fs` + `e2fsck -fn` 逐字节一致（含 `metadata_csum` 与 `^metadata_csum` 两种模式）；遇脏日志（`INCOMPAT_RECOVER=0x4`）时安全返回 `rc=20`，由 `init-userdata-ext4.sh` 先触发内核 `jbd2` 回放并干净卸载后再原子置位 `0x8000`，确保重启后永久生效且 `userdata` 零损失。
+- **4. 真机冷启动正/负控验收（`BOOT_ID=52d5c34b-ba82-46a6-8679-2b1099e2e688`）**：
+  - `userdata` `s_feature_ro_compat=0x0000807b`、`/dev/code_sign` (`10:127`)、`.fs-verity` 已载入 `fs_verity_key0`（`X509.ecdsa-nist-p384`）、`key_enable` 成功激活并注入 9 条供体证书路径、`local_code_sign` 按需运行与退出正常。
+  - 官方 `hap-sign-tool.jar` + AGC 调试凭证签名的 `deviceinfox`（`com.lazzyy.test`）经 `bm install` 返回 **`install bundle successfully.`** 并加入桌面（`PACKAGE_ADDED`）；`dmesg` 记录主包 `entry.hap` 与全部 9 个 `libs/arm64/*.so` 均经 `sha256-ce` + `code_sign_verify_certchain` 验签，`lsattr` 显示 **10/10 文件均带 `V`（`FS_VERITY_FL`）**，全页读回零错误，写操作返回 `Operation not permitted`。
+  - 负控：未签名包被拒（`code:9568320 error: no signature file.`），1 字节篡改已签名包被拒（`code:9568324 error: signature verification failed due to out of integrity.`）。
+  - 零回归：`BOOT_COMPLETED=true`、`LSMOD_COUNT=242`、`MOD_ERRORS=0`、核心 SA 与 `wlan0` 正常；双分区回退 M5（`c83a8468`/`c4b6a64f`）使用 `/mnt/e/marble-tmp/flash-h20-m6-control.sh`。
+
 <a id="marble-store-attestation"></a>
 ## 应用商店与主题商店：设备证明核查（2026-11-25）
 

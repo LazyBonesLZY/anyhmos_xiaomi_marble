@@ -21,9 +21,9 @@
 | `external/` | 上游源码版本记录（`upstream-sources.json`）、依赖构建记录及完整上游许可证（`licenses/`）。 |
 | `archive/sheng/` | 原 `sheng` 历史归档（旧版 README、v146 `RELEASE.json`/`SOURCE-SELECTION.json`、历史验收报告 `analysis/`/`evidence/`、被替代的旧版 donor/Mesa 补丁）。 |
 
-## `marble` 移植状态（2026-11-26 · Batch M5 实机基线）
+## `marble` 移植状态（2026-11-27 · Batch M6 实机基线）
 
-当前已完成 **Phase 0 ~ Phase 6** 主线移植与 **Batch A ~ M5** 分批功能适配，真机 A 槽当前装机基线为 **Batch M5**（`vendor_boot_a = c4b6a64f…`、`boot_a = c83a8468…`，保留 `userdata` 及原厂底层分区，`libhmos_ram_no_tee.so` 保持 EL2 用户数据不加密，19 个 HDF 宿主常驻）：
+当前已完成 **Phase 0 ~ Phase 6** 主线移植与 **Batch A ~ M6** 分批功能适配，真机 A 槽当前装机基线为 **Batch M6**（`boot_a = f80fe1b1…`、`vendor_boot_a = 577e5a5e…`，保留 `userdata` 及原厂底层分区，`libhmos_ram_no_tee.so` 保持 EL2 用户数据不加密，19 个 HDF 宿主常驻）：
 
 - [x] 导入 `sheng` 参考基线并完成多机型分层重构（`compat/` 与 `devices/marble/` 解耦）
 - [x] Phase 0：在真机运行 [collect-marble-baseline.sh](devices/marble/scripts/collect-marble-baseline.sh) 并回填 [devices/marble/device.json](devices/marble/device.json)
@@ -32,12 +32,13 @@
 - [x] Phase 3：9 GiB `super`（手机 Donor `ADY-AL10 207.0.0.111(SP10)`）+ ext4 `userdata` + OHOS 核心服务拉起
 - [x] Phase 4：单 DSI 1080×2400 OLED（`120Hz` + 挖孔/色彩/护眼）+ Adreno 725 Turnip + Goodix 原生触控 + 桌面与开机动画
 - [x] Phase 5：QCA6490 Wi-Fi/SoftAP、蓝牙（HCI/A2DP）、ADSP PAL 音频与通话语音、67W 快充信息与 `mi_thermald` 温控
-- [x] Phase 6：SLPI/SSC 传感器（含自动亮度与抬起亮屏）、5G/4G 蜂窝数据/VoLTE/VoNR/IMS 短信、4 颗物理相机与手电筒、Venus 硬编解码、NFC、线性马达震动、双击亮屏、纯用户态锁屏密码（64B/96B）与 AOD/实况窗服务
+- [x] Phase 6：SLPI/SSC 传感器（含自动亮度与抬起亮屏）、5G/4G 蜂窝数据/VoLTE/VoNR/IMS 短信、4 颗物理相机与手电筒、Venus 硬编解码、NFC、线性马达震动、双击亮屏、纯用户态锁屏密码（64B/96B）、AOD/实况窗服务，以及 **Linux 5.10.274 原生内核 `code_sign` + `fs-verity` + ECDSA（NIST P-256/P-384）代码签名与真机 HAP 完整验签安装（Batch M6）**
 
 ### 功能实机状态一览（如实区分已实测、需交互确认与硬件/安全边界）
 
-| 子系统 | 当前状态（Batch M5 · `c4b6a64f`） | 说明与边界 |
+| 子系统 | 当前状态（Batch M6 · `f80fe1b1` / `577e5a5e`） | 说明与边界 |
 | --- | --- | --- |
+| 内核代码签名 / HAP 安装 | **已实机验证（无绕过）** | 移植 OpenHarmony 内核 `fs/code_sign/`（`/dev/code_sign` 5 项 ioctl）、`FS_IOC_ENABLE_CODE_SIGN`（ext4 + f2fs）、ECDSA NIST P-256/P-384 与 PKCS#7 `OID_ownerid`；657 个厂商模块 KABI CRC/vermagic 0 冲突；移除旧 Phase 3 `libcode_sign_utils.z.so` 旁路并无损启用 `userdata` ext4 `RO_COMPAT_VERITY`（`0x807b`）。AGC 调试签名 HAP 真机 `bm install` 通过，主包与全部 9 个 `.so` 均带 `lsattr` `V`（`FS_VERITY_FL`）且只读不可篡改；未签名与 1 字节篡改负控均被严格拒绝。 |
 | 显示 / GPU / 桌面 | **已实机验证** | 1080×2400 单 DSI 120Hz、Adreno 725 Turnip、挖孔居中对齐、`SDE_DSPP_PCC_V4` 色温/护眼、无卡顿异步提交。 |
 | 蜂窝网络 / 5G / 流量 | **已实机验证** | MPSS + IPA v5.0 / QMAPv5（`rmnet0` 锁定 `llp=2, ul=5, dl=9`），5G NR SA / 4G LTE 注网、上网与状态栏信号/网速正常。 |
 | 短信（IMS SMS） | **已实机验证** | `hmos_ims_core_service` 修正 `QMI_WMS_BIND_SUBSCRIPTION (0x004c)` 及 3GPP `SMS-SUBMIT` (`tech=1`) 路由，实机首包 `fmt=0x06 ims=1 rc=0 qerr=0x0 ok=1 ref=193` 经运营商网络受理。 |

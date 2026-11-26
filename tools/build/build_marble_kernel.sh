@@ -79,6 +79,10 @@ cp "$repo/devices/marble/kernel/marble-exports/drivers/android/hmos_ipc_api_v1.h
 	"$kernel_dir/drivers/android/"
 git -C "$kernel_dir" apply "$repo/devices/marble/kernel/marble-exports.patch"
 
+stage=apply-codesign
+cp -a "$repo/devices/marble/kernel/marble-codesign/." "$kernel_dir/"
+git -C "$kernel_dir" apply "$repo/devices/marble/kernel/marble-codesign.patch"
+
 stage=kernel-config
 export KBUILD_BUILD_USER=anyhmos
 export KBUILD_BUILD_HOST=marble
@@ -96,6 +100,8 @@ make -C "$kernel_dir" "${make_flags[@]}" KCFLAGS="$make_kcflags" \
 	KBUILD_LDFLAGS="$make_kbuild_ldflags" "$defconfig"
 # Disable Android-only uname spoofing so HarmonyOS and IPC contract tests see exact kernel release.
 "$kernel_dir/scripts/config" --file "$output/.config" -d UNAME_OVERRIDE
+# Enable genuine OpenHarmony kernel code_sign + ECDSA (NIST P-256/P-384) fs-verity verification.
+"$kernel_dir/scripts/config" --file "$output/.config" -e CRYPTO_ECDSA -e SECURITY_CODE_SIGN
 make -C "$kernel_dir" "${make_flags[@]}" KCFLAGS="$make_kcflags" \
 	KBUILD_LDFLAGS="$make_kbuild_ldflags" olddefconfig
 cp "$output/.config" "$artifacts/audit/kernel.config"

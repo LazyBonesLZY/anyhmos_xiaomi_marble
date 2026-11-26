@@ -2,9 +2,26 @@
 
 > **授权更新（2026-11-24）**：boot_a 与 vendor_boot_a 均可按适配需要修改和刷写；每批按实际目标及读回指纹核验。精简工件规则见[分批计划](MARBLE_BATCH_PLAN.md)。
 
+<a id="current-marble-m6"></a>
+
+## 当前装机：Batch M6 内核代码签名与 fs-verity（2026-11-27）
+
+冷启动验收 boot：`52d5c34b-ba82-46a6-8679-2b1099e2e688`，槽位 `a`。写入 `boot_a` + `vendor_boot_a` 并执行 `set_active a`；`super`、`userdata`（仅无损置位 `RO_COMPAT_VERITY` `0x8000`）及原厂底层分区均保持完整。
+
+| 对象 | 真机读回 / 构建 SHA-256 |
+| --- | --- |
+| `boot_a`（含 Linux 5.10.274 `code_sign` + ECDSA 内核） | `f80fe1b1e47dcae5c759beb7f8005279beb79804b6414da40f3379aea423ee6a` |
+| 内核 `Image`（`5.10.274-Bouquet-anyhmos #4`） | `8ec4532ffbb14891892abaed53f17fc06140b8464b217689c78e36e5691bd2e1` |
+| `vendor_boot_a` | `577e5a5eecf784580d64960757f5d7a271d186dac27f63358eb7d5c14281bc45` |
+| `/system/lib64/libcode_sign_utils.z.so`（原版供体，无旁路） | `2dd39556056de2d5eb2d8d2696316c616a8645c71c3a26702b0c0b351dd86158` |
+| `/compat/etc/init-m6-codesign-marble.cfg` | `d0ba98356d1a3492105d5d2b5751a8482e316cd3ba2b721845f703b125fd0642` |
+| `/graphics/marble_ext4_verity_enable` | `9330c72a19de5d0a5f9091c94552044faddf1f0ed8f2858f3e61c4747c1b0a58` |
+
+实机关键回执：`BOOT_COMPLETED=true`、`LSMOD_COUNT=242`、`MOD_ERRORS=0`（657 个模块 KABI `crc_mismatches=0`）、`userdata` `s_feature_ro_compat=0x0000807b`、`/dev/code_sign` (`10:127 0:3060 0660`)、`/proc/sys/fs/verity/{require_signatures,developer_mode}=1`、`.fs-verity` 密钥环已载入 `fs_verity_key0`（`X509.ecdsa-nist-p384`）、AGC 签名 HAP 真机 `bm install` 返回 `install bundle successfully.`、10/10 文件带 `lsattr` `V` 且写保护拒绝、未签名（`code:9568320`）与 1 字节篡改（`code:9568324`）负控均严格拒绝。直接双分区回退 M5 基线为 `boot_a=c83a8468…` + `vendor_boot_a=c4b6a64f…`。
+
 <a id="current-marble-m5"></a>
 
-## 当前装机：Batch M5 综合缺陷修复（2026-11-26）
+## 历史装机：Batch M5 综合缺陷修复（2026-11-26）
 
 冷启动验收 boot：`f93f2eb6-4e82-49d9-ae5d-92fbd94b289b`，槽位 `a`。仅写 `vendor_boot_a`，`boot_a`、`super`、`userdata` 及原厂底层分区均保持不变。
 

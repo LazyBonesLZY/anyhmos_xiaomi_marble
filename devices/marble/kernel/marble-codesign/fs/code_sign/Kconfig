@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (c) 2023 Huawei Device Co., Ltd.
+#
+config SECURITY_CODE_SIGN
+	bool "OpenHarmony code signing features based on FS Verity"
+	depends on FS_VERITY && FS_VERITY_BUILTIN_SIGNATURES
+	select CRYPTO_ECDSA
+	default n
+	help
+	  This option enables OpenHarmony code signing features based
+	  on fs-verity, including /dev/code_sign cert-path management,
+	  FS_IOC_ENABLE_CODE_SIGN (in-file Merkle tree and extended
+	  code_sign_descriptor), and PKCS#7 certificate chain validation.
+
+	  If unsure, say N.

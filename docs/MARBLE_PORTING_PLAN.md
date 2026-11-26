@@ -26,7 +26,7 @@
 - `compat/graphics/dmabuf_sync/kernel/hmos_dmabuf_sync.c`（`hmos_dmabuf_sync.ko`）：
   - `dma_resv_get_fences()` → `< 5.14` 使用 `dma_resv_get_fences_rcu()`
 
-## 3. 分阶段 Bring-up 路线图（均已上机推进至 Batch M5）
+## 3. 分阶段 Bring-up 路线图（均已上机推进至 Batch M6）
 
 - **Phase 0（基线与备份）— 已完成**：备份 `boot`/`vendor_boot`/`dtbo`/`vbmeta*`/`recovery`/`persist`，运行 [collect-marble-baseline.sh](../devices/marble/scripts/collect-marble-baseline.sh) 采集完整实机档案并回填 [devices/marble/device.json](../devices/marble/device.json)。
 - **Phase 1（5.10 内核导出 + IPC）— 已完成**：基于 `Pzqqt/android_kernel_xiaomi_marble`（Linux 5.10.274）编译 `Image`、`hmos_ipc.ko`、`hmos_dmabuf_sync.ko`、配套厂商模块与静态 AArch64 IPC 契约测试，全量通过 CFI/CRC 审计。
@@ -34,4 +34,4 @@
 - **Phase 3（9 GiB `super` + Userdata + OHOS Init）— 已完成**：已直接迁移至手机 Donor `ADY-AL10 207.0.0.111(SP10)`，挂载只读逻辑分区与未加密 ext4 `userdata`（`libhmos_ram_no_tee.so`），拉起 `hilogd` → `samgr` → `hdf_devmgr`（19 个 HDF host）→ `foundation` / `SceneBoard`。
 - **Phase 4（单 DSI 显示 + Adreno 725 + 原生触控）— 已完成**：单 DSI 1080×2400 @ 120Hz OLED、Adreno 725 Turnip、Goodix 原生 `evdev` 触控、挖孔居中、色彩/护眼（`SDE_DSPP_PCC_V4`）、开机动画及双击亮屏（`marble_touch_wakeup`）均已上机。
 - **Phase 5（无线 + 音频 + 电池充电 + 蜂窝通信）— 已完成**：QCA6490 Wi-Fi/SoftAP、蓝牙、ADSP PAL 音频与通话语音、67W 充电信息、MPSS/IPA v5.0 5G/4G 数据、VoLTE/VoNR `ImsCallInterface` 与 IMS 短信（`fmt=0x06 ims=1`）均已闭环。
-- **Phase 6（传感器 + 相机 + NFC + 震动 + 温控 + 密码 + 实况窗）— 已完成（Batch M5）**：SLPI/SSC 自动亮度与抬起亮屏、4 颗物理相机（主摄 OV64B40 全视场 4:3 `4624x3472` + 4 线程直转 NV21 + GT9764 CDAF）、手电筒、Venus 硬编解码、NXP SN110T NFC、线性马达震动、`mi_thermald` 温控、纯用户态 64B/96B 锁屏密码及 AOD（`SA 65840`）/ Reminder（`SA 3204`）实况窗刷新均已实机闭环。剩余已知边界（COM9 救援口与 HDC 互斥、指纹 TrustZone/SPI 限制、卓易通/应用商店华为设备证明与容器镜像缺失）详见 [MARBLE_HANDOFF.md](MARBLE_HANDOFF.md) 与 [MARBLE_BATCH_PLAN.md](MARBLE_BATCH_PLAN.md)。
+- **Phase 6（传感器 + 相机 + NFC + 震动 + 温控 + 密码 + 实况窗 + 内核代码签名）— 已完成（Batch M6）**：SLPI/SSC 自动亮度与抬起亮屏、4 颗物理相机（主摄 OV64B40 全视场 4:3 `4624x3472` + 4 线程直转 NV21 + GT9764 CDAF）、手电筒、Venus 硬编解码、NXP SN110T NFC、线性马达震动、`mi_thermald` 温控、纯用户态 64B/96B 锁屏密码、AOD（`SA 65840`）/ Reminder（`SA 3204`）实况窗刷新，以及 **Batch M6 原生内核 `code_sign`（`/dev/code_sign` + `FS_IOC_ENABLE_CODE_SIGN` + `fs-verity` + ECDSA P-256/P-384 + 无损 ext4 `RO_COMPAT_VERITY` + 原版未修改 `libcode_sign_utils.z.so`）真机完整签名 HAP 安装与负控验收**均已闭环。剩余已知边界（COM9 救援口与 HDC 互斥、指纹 TrustZone/SPI 限制、卓易通/应用商店华为设备证明与容器镜像缺失）详见 [MARBLE_HANDOFF.md](MARBLE_HANDOFF.md) 与 [MARBLE_BATCH_PLAN.md](MARBLE_BATCH_PLAN.md)。

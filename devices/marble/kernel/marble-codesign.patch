@@ -1,0 +1,2004 @@
+diff --git a/crypto/Kconfig b/crypto/Kconfig
+index a7b2aa661..13f7c27a3 100644
+--- a/crypto/Kconfig
++++ b/crypto/Kconfig
+@@ -277,6 +277,15 @@ config CRYPTO_ECDH
+ 	help
+ 	  Generic implementation of the ECDH algorithm
+ 
++config CRYPTO_ECDSA
++	tristate "ECDSA (NIST P192, P256, P384) algorithm"
++	select CRYPTO_ECC
++	select CRYPTO_AKCIPHER
++	select ASN1
++	help
++	  Elliptic Curve Digital Signature Algorithm (NIST P192, P256, P384).
++	  Only signature verification is implemented.
++
+ config CRYPTO_ECRDSA
+ 	tristate "EC-RDSA (GOST 34.10) algorithm"
+ 	select CRYPTO_ECC
+diff --git a/crypto/Makefile b/crypto/Makefile
+index 00dd4f033..6b89fba5d 100644
+--- a/crypto/Makefile
++++ b/crypto/Makefile
+@@ -50,6 +50,12 @@ sm2_generic-y += sm2.o
+ 
+ obj-$(CONFIG_CRYPTO_SM2) += sm2_generic.o
+ 
++$(obj)/ecdsasignature.asn1.o: $(obj)/ecdsasignature.asn1.c $(obj)/ecdsasignature.asn1.h
++$(obj)/ecdsa.o: $(obj)/ecdsasignature.asn1.h
++ecdsa_generic-y += ecdsa.o
++ecdsa_generic-y += ecdsasignature.asn1.o
++obj-$(CONFIG_CRYPTO_ECDSA) += ecdsa_generic.o
++
+ crypto_acompress-y := acompress.o
+ crypto_acompress-y += scompress.o
+ obj-$(CONFIG_CRYPTO_ACOMP2) += crypto_acompress.o
+diff --git a/crypto/asymmetric_keys/pkcs7_parser.c b/crypto/asymmetric_keys/pkcs7_parser.c
+index 967329e0a..2a2b14d1c 100644
+--- a/crypto/asymmetric_keys/pkcs7_parser.c
++++ b/crypto/asymmetric_keys/pkcs7_parser.c
+@@ -269,6 +269,14 @@ int pkcs7_sig_note_pkey_algo(void *context, size_t hdrlen,
+ 		ctx->sinfo->sig->pkey_algo = "rsa";
+ 		ctx->sinfo->sig->encoding = "pkcs1";
+ 		break;
++	case OID_id_ecdsa_with_sha1:
++	case OID_id_ecdsa_with_sha224:
++	case OID_id_ecdsa_with_sha256:
++	case OID_id_ecdsa_with_sha384:
++	case OID_id_ecdsa_with_sha512:
++		ctx->sinfo->sig->pkey_algo = "ecdsa";
++		ctx->sinfo->sig->encoding = "x962";
++		break;
+ 	default:
+ 		printk("Unsupported pkey algo: %u\n", ctx->last_oid);
+ 		return -ENOPKG;
+@@ -518,6 +526,17 @@ int pkcs7_sig_note_authenticated_attr(void *context, size_t hdrlen,
+ 		}
+ 		return 0;
+ 
++#ifdef CONFIG_SECURITY_CODE_SIGN
++	case OID_ownerid:
++		if (__test_and_set_bit(sinfo_has_owner_identifier, &sinfo->aa_set))
++			goto repeated;
++		if (tag != ASN1_UTF8STR)
++			return -EBADMSG;
++		sinfo->ownerid = value;
++		sinfo->ownerid_len = vlen;
++		return 0;
++#endif /* CONFIG_SECURITY_CODE_SIGN */
++
+ 		/* Microsoft SpOpusInfo seems to be contain cont[0] 16-bit BE
+ 		 * char URLs and cont[1] 8-bit char URLs.
+ 		 *
+diff --git a/crypto/asymmetric_keys/pkcs7_parser.h b/crypto/asymmetric_keys/pkcs7_parser.h
+index 6565fdc2d..c0d089c1a 100644
+--- a/crypto/asymmetric_keys/pkcs7_parser.h
++++ b/crypto/asymmetric_keys/pkcs7_parser.h
+@@ -35,8 +35,14 @@ struct pkcs7_signed_info {
+ #define sinfo_has_smime_caps		3
+ #define	sinfo_has_ms_opus_info		4
+ #define	sinfo_has_ms_statement_type	5
++#define sinfo_has_owner_identifier	6
+ 	time64_t	signing_time;
+ 
++#ifdef CONFIG_SECURITY_CODE_SIGN
++	const char *ownerid;
++	unsigned int ownerid_len;
++#endif /* CONFIG_SECURITY_CODE_SIGN */
++
+ 	/* Message signature.
+ 	 *
+ 	 * This contains the generated digest of _either_ the Content Data or
+diff --git a/crypto/asymmetric_keys/pkcs7_verify.c b/crypto/asymmetric_keys/pkcs7_verify.c
+index 01e54450c..eed7ff084 100644
+--- a/crypto/asymmetric_keys/pkcs7_verify.c
++++ b/crypto/asymmetric_keys/pkcs7_verify.c
+@@ -175,12 +175,6 @@ static int pkcs7_find_key(struct pkcs7_message *pkcs7,
+ 		pr_devel("Sig %u: Found cert serial match X.509[%u]\n",
+ 			 sinfo->index, certix);
+ 
+-		if (strcmp(x509->pub->pkey_algo, sinfo->sig->pkey_algo) != 0) {
+-			pr_warn("Sig %u: X.509 algo and PKCS#7 sig algo don't match\n",
+-				sinfo->index);
+-			continue;
+-		}
+-
+ 		sinfo->signer = x509;
+ 		return 0;
+ 	}
+diff --git a/crypto/asymmetric_keys/public_key.c b/crypto/asymmetric_keys/public_key.c
+index bd713a214..7ba56c8cf 100644
+--- a/crypto/asymmetric_keys/public_key.c
++++ b/crypto/asymmetric_keys/public_key.c
+@@ -14,6 +14,7 @@
+ #include <linux/slab.h>
+ #include <linux/seq_file.h>
+ #include <linux/scatterlist.h>
++#include <linux/asn1.h>
+ #include <keys/asymmetric-subtype.h>
+ #include <crypto/public_key.h>
+ #include <crypto/akcipher.h>
+@@ -59,38 +60,68 @@ static void public_key_destroy(void *payload0, void *payload3)
+ }
+ 
+ /*
+- * Determine the crypto algorithm name.
++ * Given a public_key, and an encoding and hash_algo to be used for signing
++ * and/or verification with that key, determine the name of the corresponding
++ * akcipher algorithm.  Also check that encoding and hash_algo are allowed.
+  */
+-static
+-int software_key_determine_akcipher(const char *encoding,
+-				    const char *hash_algo,
+-				    const struct public_key *pkey,
+-				    char alg_name[CRYPTO_MAX_ALG_NAME])
++static int
++software_key_determine_akcipher(const struct public_key *pkey,
++				const char *encoding, const char *hash_algo,
++				char alg_name[CRYPTO_MAX_ALG_NAME])
+ {
+ 	int n;
+ 
+-	if (strcmp(encoding, "pkcs1") == 0) {
+-		/* The data wangled by the RSA algorithm is typically padded
+-		 * and encoded in some manner, such as EMSA-PKCS1-1_5 [RFC3447
+-		 * sec 8.2].
+-		 */
+-		if (!hash_algo)
+-			n = snprintf(alg_name, CRYPTO_MAX_ALG_NAME,
+-				     "pkcs1pad(%s)",
+-				     pkey->pkey_algo);
+-		else
+-			n = snprintf(alg_name, CRYPTO_MAX_ALG_NAME,
+-				     "pkcs1pad(%s,%s)",
+-				     pkey->pkey_algo, hash_algo);
+-		return n >= CRYPTO_MAX_ALG_NAME ? -EINVAL : 0;
+-	}
++	if (!encoding)
++		return -EINVAL;
+ 
+-	if (strcmp(encoding, "raw") == 0) {
+-		strcpy(alg_name, pkey->pkey_algo);
+-		return 0;
++	if (strcmp(pkey->pkey_algo, "rsa") == 0) {
++		if (strcmp(encoding, "pkcs1") == 0) {
++			if (!hash_algo)
++				n = snprintf(alg_name, CRYPTO_MAX_ALG_NAME,
++					     "pkcs1pad(%s)",
++					     pkey->pkey_algo);
++			else
++				n = snprintf(alg_name, CRYPTO_MAX_ALG_NAME,
++					     "pkcs1pad(%s,%s)",
++					     pkey->pkey_algo, hash_algo);
++			return n >= CRYPTO_MAX_ALG_NAME ? -EINVAL : 0;
++		}
++		if (strcmp(encoding, "raw") != 0)
++			return -EINVAL;
++		if (hash_algo)
++			return -EINVAL;
++	} else if (strncmp(pkey->pkey_algo, "ecdsa", 5) == 0) {
++		if (strcmp(encoding, "x962") != 0)
++			return -EINVAL;
++		if (!hash_algo)
++			return -EINVAL;
++		if (strcmp(hash_algo, "sha1") != 0 &&
++		    strcmp(hash_algo, "sha224") != 0 &&
++		    strcmp(hash_algo, "sha256") != 0 &&
++		    strcmp(hash_algo, "sha384") != 0 &&
++		    strcmp(hash_algo, "sha512") != 0)
++			return -EINVAL;
++	} else if (strcmp(pkey->pkey_algo, "sm2") == 0) {
++		if (strcmp(encoding, "raw") != 0)
++			return -EINVAL;
++		if (!hash_algo)
++			return -EINVAL;
++		if (strcmp(hash_algo, "sm3") != 0)
++			return -EINVAL;
++	} else if (strcmp(pkey->pkey_algo, "ecrdsa") == 0) {
++		if (strcmp(encoding, "raw") != 0)
++			return -EINVAL;
++		if (!hash_algo)
++			return -EINVAL;
++		if (strcmp(hash_algo, "streebog256") != 0 &&
++		    strcmp(hash_algo, "streebog512") != 0)
++			return -EINVAL;
++	} else {
++		return -ENOPKG;
+ 	}
+-
+-	return -ENOPKG;
++	if (strscpy(alg_name, pkey->pkey_algo, CRYPTO_MAX_ALG_NAME) < 0)
++		return -EINVAL;
++	return 0;
+ }
+ 
+ static u8 *pkey_pack_u32(u8 *dst, u32 val)
+@@ -111,9 +142,8 @@ static int software_key_query(const struct kernel_pkey_params *params,
+ 	u8 *key, *ptr;
+ 	int ret, len;
+ 
+-	ret = software_key_determine_akcipher(params->encoding,
+-					      params->hash_algo,
+-					      pkey, alg_name);
++	ret = software_key_determine_akcipher(pkey, params->encoding,
++					      params->hash_algo, alg_name);
+ 	if (ret < 0)
+ 		return ret;
+ 
+@@ -177,9 +207,8 @@ static int software_key_eds_op(struct kernel_pkey_params *params,
+ 
+ 	pr_devel("==>%s()\n", __func__);
+ 
+-	ret = software_key_determine_akcipher(params->encoding,
+-					      params->hash_algo,
+-					      pkey, alg_name);
++	ret = software_key_determine_akcipher(pkey, params->encoding,
++					      params->hash_algo, alg_name);
+ 	if (ret < 0)
+ 		return ret;
+ 
+@@ -328,9 +357,15 @@ int public_key_verify_signature(const struct public_key *pkey,
+ 	BUG_ON(!sig);
+ 	BUG_ON(!sig->s);
+ 
+-	ret = software_key_determine_akcipher(sig->encoding,
+-					      sig->hash_algo,
+-					      pkey, alg_name);
++	if (sig->pkey_algo) {
++		if (strcmp(pkey->pkey_algo, sig->pkey_algo) != 0 &&
++		    (strncmp(pkey->pkey_algo, "ecdsa-", 6) != 0 ||
++		     strcmp(sig->pkey_algo, "ecdsa") != 0))
++			return -EKEYREJECTED;
++	}
++
++	ret = software_key_determine_akcipher(pkey, sig->encoding,
++					      sig->hash_algo, alg_name);
+ 	if (ret < 0)
+ 		return ret;
+ 
+diff --git a/crypto/asymmetric_keys/x509_cert_parser.c b/crypto/asymmetric_keys/x509_cert_parser.c
+index 52c9b455f..6d003096b 100644
+--- a/crypto/asymmetric_keys/x509_cert_parser.c
++++ b/crypto/asymmetric_keys/x509_cert_parser.c
+@@ -227,6 +227,26 @@ int x509_note_pkey_algo(void *context, size_t hdrlen,
+ 		ctx->cert->sig->hash_algo = "sha224";
+ 		goto rsa_pkcs1;
+ 
++	case OID_id_ecdsa_with_sha1:
++		ctx->cert->sig->hash_algo = "sha1";
++		goto ecdsa;
++
++	case OID_id_ecdsa_with_sha224:
++		ctx->cert->sig->hash_algo = "sha224";
++		goto ecdsa;
++
++	case OID_id_ecdsa_with_sha256:
++		ctx->cert->sig->hash_algo = "sha256";
++		goto ecdsa;
++
++	case OID_id_ecdsa_with_sha384:
++		ctx->cert->sig->hash_algo = "sha384";
++		goto ecdsa;
++
++	case OID_id_ecdsa_with_sha512:
++		ctx->cert->sig->hash_algo = "sha512";
++		goto ecdsa;
++
+ 	case OID_gost2012Signature256:
+ 		ctx->cert->sig->hash_algo = "streebog256";
+ 		goto ecrdsa;
+@@ -255,6 +275,11 @@ int x509_note_pkey_algo(void *context, size_t hdrlen,
+ 	ctx->cert->sig->encoding = "raw";
+ 	ctx->algo_oid = ctx->last_oid;
+ 	return 0;
++ecdsa:
++	ctx->cert->sig->pkey_algo = "ecdsa";
++	ctx->cert->sig->encoding = "x962";
++	ctx->algo_oid = ctx->last_oid;
++	return 0;
+ }
+ 
+ /*
+@@ -276,7 +301,8 @@ int x509_note_signature(void *context, size_t hdrlen,
+ 
+ 	if (strcmp(ctx->cert->sig->pkey_algo, "rsa") == 0 ||
+ 	    strcmp(ctx->cert->sig->pkey_algo, "ecrdsa") == 0 ||
+-	    strcmp(ctx->cert->sig->pkey_algo, "sm2") == 0) {
++	    strcmp(ctx->cert->sig->pkey_algo, "sm2") == 0 ||
++	    strcmp(ctx->cert->sig->pkey_algo, "ecdsa") == 0) {
+ 		/* Discard the BIT STRING metadata */
+ 		if (vlen < 1 || *(const u8 *)value != 0)
+ 			return -EBADMSG;
+@@ -459,6 +485,7 @@ int x509_extract_key_data(void *context, size_t hdrlen,
+ 			  const void *value, size_t vlen)
+ {
+ 	struct x509_parse_context *ctx = context;
++	enum OID oid;
+ 
+ 	ctx->key_algo = ctx->last_oid;
+ 	switch (ctx->last_oid) {
+@@ -470,7 +497,25 @@ int x509_extract_key_data(void *context, size_t hdrlen,
+ 		ctx->cert->pub->pkey_algo = "ecrdsa";
+ 		break;
+ 	case OID_id_ecPublicKey:
+-		ctx->cert->pub->pkey_algo = "sm2";
++		if (parse_OID(ctx->params, ctx->params_size, &oid) != 0)
++			return -EBADMSG;
++
++		switch (oid) {
++		case OID_sm2:
++			ctx->cert->pub->pkey_algo = "sm2";
++			break;
++		case OID_id_prime192v1:
++			ctx->cert->pub->pkey_algo = "ecdsa-nist-p192";
++			break;
++		case OID_id_prime256v1:
++			ctx->cert->pub->pkey_algo = "ecdsa-nist-p256";
++			break;
++		case OID_id_ansip384r1:
++			ctx->cert->pub->pkey_algo = "ecdsa-nist-p384";
++			break;
++		default:
++			return -ENOPKG;
++		}
+ 		break;
+ 	default:
+ 		return -ENOPKG;
+diff --git a/crypto/asymmetric_keys/x509_public_key.c b/crypto/asymmetric_keys/x509_public_key.c
+index b8135c38f..99fe28663 100644
+--- a/crypto/asymmetric_keys/x509_public_key.c
++++ b/crypto/asymmetric_keys/x509_public_key.c
+@@ -128,10 +128,6 @@ int x509_check_for_self_signed(struct x509_certificate *cert)
+ 			goto out;
+ 	}
+ 
+-	ret = -EKEYREJECTED;
+-	if (strcmp(cert->pub->pkey_algo, cert->sig->pkey_algo) != 0)
+-		goto out;
+-
+ 	if (cert->unsupported_sig) {
+ 		ret = 0;
+ 		goto out;
+diff --git a/crypto/ecc.c b/crypto/ecc.c
+index 09067e4b3..3dcd5d7ba 100644
+--- a/crypto/ecc.c
++++ b/crypto/ecc.c
+@@ -42,7 +42,7 @@ typedef struct {
+ 	u64 m_high;
+ } uint128_t;
+ 
+-static inline const struct ecc_curve *ecc_get_curve(unsigned int curve_id)
++const struct ecc_curve *ecc_get_curve(unsigned int curve_id)
+ {
+ 	switch (curve_id) {
+ 	/* In FIPS mode only allow P256 and higher */
+@@ -50,10 +50,13 @@ static inline const struct ecc_curve *ecc_get_curve(unsigned int curve_id)
+ 		return fips_enabled ? NULL : &nist_p192;
+ 	case ECC_CURVE_NIST_P256:
+ 		return &nist_p256;
++	case ECC_CURVE_NIST_P384:
++		return &nist_p384;
+ 	default:
+ 		return NULL;
+ 	}
+ }
++EXPORT_SYMBOL(ecc_get_curve);
+ 
+ static u64 *ecc_alloc_digits_space(unsigned int ndigits)
+ {
+@@ -784,18 +787,132 @@ static void vli_mmod_fast_256(u64 *result, const u64 *product,
+ 	}
+ }
+ 
++#define SL32OR32(x32, y32) (((u64)x32 << 32) | y32)
++#define AND64H(x64)  (x64 & 0xffFFffFF00000000ull)
++#define AND64L(x64)  (x64 & 0x00000000ffFFffFFull)
++
++/* Computes result = product % curve_prime
++ * from "Mathematical routines for the NIST prime elliptic curves"
++ */
++static void vli_mmod_fast_384(u64 *result, const u64 *product,
++			      const u64 *curve_prime, u64 *tmp)
++{
++	int carry;
++	const unsigned int ndigits = 6;
++
++	/* t */
++	vli_set(result, product, ndigits);
++
++	/* s1 */
++	tmp[0] = 0;
++	tmp[1] = 0;
++	tmp[2] = SL32OR32(product[11], (product[10] >> 32));
++	tmp[3] = product[11] >> 32;
++	tmp[4] = 0;
++	tmp[5] = 0;
++	carry = vli_lshift(tmp, tmp, 1, ndigits);
++	carry += vli_add(result, result, tmp, ndigits);
++
++	/* s2 */
++	tmp[0] = product[6];
++	tmp[1] = product[7];
++	tmp[2] = product[8];
++	tmp[3] = product[9];
++	tmp[4] = product[10];
++	tmp[5] = product[11];
++	carry += vli_add(result, result, tmp, ndigits);
++
++	/* s3 */
++	tmp[0] = SL32OR32(product[11], (product[10] >> 32));
++	tmp[1] = SL32OR32(product[6], (product[11] >> 32));
++	tmp[2] = SL32OR32(product[7], (product[6]) >> 32);
++	tmp[3] = SL32OR32(product[8], (product[7] >> 32));
++	tmp[4] = SL32OR32(product[9], (product[8] >> 32));
++	tmp[5] = SL32OR32(product[10], (product[9] >> 32));
++	carry += vli_add(result, result, tmp, ndigits);
++
++	/* s4 */
++	tmp[0] = AND64H(product[11]);
++	tmp[1] = (product[10] << 32);
++	tmp[2] = product[6];
++	tmp[3] = product[7];
++	tmp[4] = product[8];
++	tmp[5] = product[9];
++	carry += vli_add(result, result, tmp, ndigits);
++
++	/* s5 */
++	tmp[0] = 0;
++	tmp[1] = 0;
++	tmp[2] = product[10];
++	tmp[3] = product[11];
++	tmp[4] = 0;
++	tmp[5] = 0;
++	carry += vli_add(result, result, tmp, ndigits);
++
++	/* s6 */
++	tmp[0] = AND64L(product[10]);
++	tmp[1] = AND64H(product[10]);
++	tmp[2] = product[11];
++	tmp[3] = 0;
++	tmp[4] = 0;
++	tmp[5] = 0;
++	carry += vli_add(result, result, tmp, ndigits);
++
++	/* d1 */
++	tmp[0] = SL32OR32(product[6], (product[11] >> 32));
++	tmp[1] = SL32OR32(product[7], (product[6] >> 32));
++	tmp[2] = SL32OR32(product[8], (product[7] >> 32));
++	tmp[3] = SL32OR32(product[9], (product[8] >> 32));
++	tmp[4] = SL32OR32(product[10], (product[9] >> 32));
++	tmp[5] = SL32OR32(product[11], (product[10] >> 32));
++	carry -= vli_sub(result, result, tmp, ndigits);
++
++	/* d2 */
++	tmp[0] = (product[10] << 32);
++	tmp[1] = SL32OR32(product[11], (product[10] >> 32));
++	tmp[2] = (product[11] >> 32);
++	tmp[3] = 0;
++	tmp[4] = 0;
++	tmp[5] = 0;
++	carry -= vli_sub(result, result, tmp, ndigits);
++
++	/* d3 */
++	tmp[0] = 0;
++	tmp[1] = AND64H(product[11]);
++	tmp[2] = product[11] >> 32;
++	tmp[3] = 0;
++	tmp[4] = 0;
++	tmp[5] = 0;
++	carry -= vli_sub(result, result, tmp, ndigits);
++
++	if (carry < 0) {
++		do {
++			carry += vli_add(result, result, curve_prime, ndigits);
++		} while (carry < 0);
++	} else {
++		while (carry || vli_cmp(curve_prime, result, ndigits) != 1)
++			carry -= vli_sub(result, result, curve_prime, ndigits);
++	}
++}
++
++#undef SL32OR32
++#undef AND64H
++#undef AND64L
++
+ /* Computes result = product % curve_prime for different curve_primes.
+  *
+  * Note that curve_primes are distinguished just by heuristic check and
+  * not by complete conformance check.
+  */
+ static bool vli_mmod_fast(u64 *result, u64 *product,
+-			  const u64 *curve_prime, unsigned int ndigits)
++			  const struct ecc_curve *curve)
+ {
+ 	u64 tmp[2 * ECC_MAX_DIGITS];
++	const u64 *curve_prime = curve->p;
++	const unsigned int ndigits = curve->g.ndigits;
+ 
+-	/* Currently, both NIST primes have -1 in lowest qword. */
+-	if (curve_prime[0] != -1ull) {
++	/* All NIST curves have name prefix 'nist_' */
++	if (strncmp(curve->name, "nist_", 5) != 0) {
+ 		/* Try to handle Pseudo-Marsenne primes. */
+ 		if (curve_prime[ndigits - 1] == -1ull) {
+ 			vli_mmod_special(result, product, curve_prime,
+@@ -818,6 +935,9 @@ static bool vli_mmod_fast(u64 *result, u64 *product,
+ 	case 4:
+ 		vli_mmod_fast_256(result, product, curve_prime, tmp);
+ 		break;
++	case 6:
++		vli_mmod_fast_384(result, product, curve_prime, tmp);
++		break;
+ 	default:
+ 		pr_err_ratelimited("ecc: unsupported digits size!\n");
+ 		return false;
+@@ -841,22 +961,22 @@ EXPORT_SYMBOL(vli_mod_mult_slow);
+ 
+ /* Computes result = (left * right) % curve_prime. */
+ static void vli_mod_mult_fast(u64 *result, const u64 *left, const u64 *right,
+-			      const u64 *curve_prime, unsigned int ndigits)
++			      const struct ecc_curve *curve)
+ {
+ 	u64 product[2 * ECC_MAX_DIGITS];
+ 
+-	vli_mult(product, left, right, ndigits);
+-	vli_mmod_fast(result, product, curve_prime, ndigits);
++	vli_mult(product, left, right, curve->g.ndigits);
++	vli_mmod_fast(result, product, curve);
+ }
+ 
+ /* Computes result = left^2 % curve_prime. */
+ static void vli_mod_square_fast(u64 *result, const u64 *left,
+-				const u64 *curve_prime, unsigned int ndigits)
++				const struct ecc_curve *curve)
+ {
+ 	u64 product[2 * ECC_MAX_DIGITS];
+ 
+-	vli_square(product, left, ndigits);
+-	vli_mmod_fast(result, product, curve_prime, ndigits);
++	vli_square(product, left, curve->g.ndigits);
++	vli_mmod_fast(result, product, curve);
+ }
+ 
+ #define EVEN(vli) (!(vli[0] & 1))
+@@ -954,25 +1074,27 @@ static bool ecc_point_is_zero(const struct ecc_point *point)
+ 
+ /* Double in place */
+ static void ecc_point_double_jacobian(u64 *x1, u64 *y1, u64 *z1,
+-				      u64 *curve_prime, unsigned int ndigits)
++				      const struct ecc_curve *curve)
+ {
+ 	/* t1 = x, t2 = y, t3 = z */
+ 	u64 t4[ECC_MAX_DIGITS];
+ 	u64 t5[ECC_MAX_DIGITS];
++	const u64 *curve_prime = curve->p;
++	const unsigned int ndigits = curve->g.ndigits;
+ 
+ 	if (vli_is_zero(z1, ndigits))
+ 		return;
+ 
+ 	/* t4 = y1^2 */
+-	vli_mod_square_fast(t4, y1, curve_prime, ndigits);
++	vli_mod_square_fast(t4, y1, curve);
+ 	/* t5 = x1*y1^2 = A */
+-	vli_mod_mult_fast(t5, x1, t4, curve_prime, ndigits);
++	vli_mod_mult_fast(t5, x1, t4, curve);
+ 	/* t4 = y1^4 */
+-	vli_mod_square_fast(t4, t4, curve_prime, ndigits);
++	vli_mod_square_fast(t4, t4, curve);
+ 	/* t2 = y1*z1 = z3 */
+-	vli_mod_mult_fast(y1, y1, z1, curve_prime, ndigits);
++	vli_mod_mult_fast(y1, y1, z1, curve);
+ 	/* t3 = z1^2 */
+-	vli_mod_square_fast(z1, z1, curve_prime, ndigits);
++	vli_mod_square_fast(z1, z1, curve);
+ 
+ 	/* t1 = x1 + z1^2 */
+ 	vli_mod_add(x1, x1, z1, curve_prime, ndigits);
+@@ -981,7 +1103,7 @@ static void ecc_point_double_jacobian(u64 *x1, u64 *y1, u64 *z1,
+ 	/* t3 = x1 - z1^2 */
+ 	vli_mod_sub(z1, x1, z1, curve_prime, ndigits);
+ 	/* t1 = x1^2 - z1^4 */
+-	vli_mod_mult_fast(x1, x1, z1, curve_prime, ndigits);
++	vli_mod_mult_fast(x1, x1, z1, curve);
+ 
+ 	/* t3 = 2*(x1^2 - z1^4) */
+ 	vli_mod_add(z1, x1, x1, curve_prime, ndigits);
+@@ -998,7 +1120,7 @@ static void ecc_point_double_jacobian(u64 *x1, u64 *y1, u64 *z1,
+ 	/* t1 = 3/2*(x1^2 - z1^4) = B */
+ 
+ 	/* t3 = B^2 */
+-	vli_mod_square_fast(z1, x1, curve_prime, ndigits);
++	vli_mod_square_fast(z1, x1, curve);
+ 	/* t3 = B^2 - A */
+ 	vli_mod_sub(z1, z1, t5, curve_prime, ndigits);
+ 	/* t3 = B^2 - 2A = x3 */
+@@ -1006,7 +1128,7 @@ static void ecc_point_double_jacobian(u64 *x1, u64 *y1, u64 *z1,
+ 	/* t5 = A - x3 */
+ 	vli_mod_sub(t5, t5, z1, curve_prime, ndigits);
+ 	/* t1 = B * (A - x3) */
+-	vli_mod_mult_fast(x1, x1, t5, curve_prime, ndigits);
++	vli_mod_mult_fast(x1, x1, t5, curve);
+ 	/* t4 = B * (A - x3) - y1^4 = y3 */
+ 	vli_mod_sub(t4, x1, t4, curve_prime, ndigits);
+ 
+@@ -1016,23 +1138,22 @@ static void ecc_point_double_jacobian(u64 *x1, u64 *y1, u64 *z1,
+ }
+ 
+ /* Modify (x1, y1) => (x1 * z^2, y1 * z^3) */
+-static void apply_z(u64 *x1, u64 *y1, u64 *z, u64 *curve_prime,
+-		    unsigned int ndigits)
++static void apply_z(u64 *x1, u64 *y1, u64 *z, const struct ecc_curve *curve)
+ {
+ 	u64 t1[ECC_MAX_DIGITS];
+ 
+-	vli_mod_square_fast(t1, z, curve_prime, ndigits);    /* z^2 */
+-	vli_mod_mult_fast(x1, x1, t1, curve_prime, ndigits); /* x1 * z^2 */
+-	vli_mod_mult_fast(t1, t1, z, curve_prime, ndigits);  /* z^3 */
+-	vli_mod_mult_fast(y1, y1, t1, curve_prime, ndigits); /* y1 * z^3 */
++	vli_mod_square_fast(t1, z, curve);    /* z^2 */
++	vli_mod_mult_fast(x1, x1, t1, curve); /* x1 * z^2 */
++	vli_mod_mult_fast(t1, t1, z, curve);  /* z^3 */
++	vli_mod_mult_fast(y1, y1, t1, curve); /* y1 * z^3 */
+ }
+ 
+ /* P = (x1, y1) => 2P, (x2, y2) => P' */
+ static void xycz_initial_double(u64 *x1, u64 *y1, u64 *x2, u64 *y2,
+-				u64 *p_initial_z, u64 *curve_prime,
+-				unsigned int ndigits)
++				u64 *p_initial_z, const struct ecc_curve *curve)
+ {
+ 	u64 z[ECC_MAX_DIGITS];
++	const unsigned int ndigits = curve->g.ndigits;
+ 
+ 	vli_set(x2, x1, ndigits);
+ 	vli_set(y2, y1, ndigits);
+@@ -1043,35 +1164,37 @@ static void xycz_initial_double(u64 *x1, u64 *y1, u64 *x2, u64 *y2,
+ 	if (p_initial_z)
+ 		vli_set(z, p_initial_z, ndigits);
+ 
+-	apply_z(x1, y1, z, curve_prime, ndigits);
++	apply_z(x1, y1, z, curve);
+ 
+-	ecc_point_double_jacobian(x1, y1, z, curve_prime, ndigits);
++	ecc_point_double_jacobian(x1, y1, z, curve);
+ 
+-	apply_z(x2, y2, z, curve_prime, ndigits);
++	apply_z(x2, y2, z, curve);
+ }
+ 
+ /* Input P = (x1, y1, Z), Q = (x2, y2, Z)
+  * Output P' = (x1', y1', Z3), P + Q = (x3, y3, Z3)
+  * or P => P', Q => P + Q
+  */
+-static void xycz_add(u64 *x1, u64 *y1, u64 *x2, u64 *y2, u64 *curve_prime,
+-		     unsigned int ndigits)
++static void xycz_add(u64 *x1, u64 *y1, u64 *x2, u64 *y2,
++		     const struct ecc_curve *curve)
+ {
+ 	/* t1 = X1, t2 = Y1, t3 = X2, t4 = Y2 */
+ 	u64 t5[ECC_MAX_DIGITS];
++	const u64 *curve_prime = curve->p;
++	const unsigned int ndigits = curve->g.ndigits;
+ 
+ 	/* t5 = x2 - x1 */
+ 	vli_mod_sub(t5, x2, x1, curve_prime, ndigits);
+ 	/* t5 = (x2 - x1)^2 = A */
+-	vli_mod_square_fast(t5, t5, curve_prime, ndigits);
++	vli_mod_square_fast(t5, t5, curve);
+ 	/* t1 = x1*A = B */
+-	vli_mod_mult_fast(x1, x1, t5, curve_prime, ndigits);
++	vli_mod_mult_fast(x1, x1, t5, curve);
+ 	/* t3 = x2*A = C */
+-	vli_mod_mult_fast(x2, x2, t5, curve_prime, ndigits);
++	vli_mod_mult_fast(x2, x2, t5, curve);
+ 	/* t4 = y2 - y1 */
+ 	vli_mod_sub(y2, y2, y1, curve_prime, ndigits);
+ 	/* t5 = (y2 - y1)^2 = D */
+-	vli_mod_square_fast(t5, y2, curve_prime, ndigits);
++	vli_mod_square_fast(t5, y2, curve);
+ 
+ 	/* t5 = D - B */
+ 	vli_mod_sub(t5, t5, x1, curve_prime, ndigits);
+@@ -1080,11 +1203,11 @@ static void xycz_add(u64 *x1, u64 *y1, u64 *x2, u64 *y2, u64 *curve_prime,
+ 	/* t3 = C - B */
+ 	vli_mod_sub(x2, x2, x1, curve_prime, ndigits);
+ 	/* t2 = y1*(C - B) */
+-	vli_mod_mult_fast(y1, y1, x2, curve_prime, ndigits);
++	vli_mod_mult_fast(y1, y1, x2, curve);
+ 	/* t3 = B - x3 */
+ 	vli_mod_sub(x2, x1, t5, curve_prime, ndigits);
+ 	/* t4 = (y2 - y1)*(B - x3) */
+-	vli_mod_mult_fast(y2, y2, x2, curve_prime, ndigits);
++	vli_mod_mult_fast(y2, y2, x2, curve);
+ 	/* t4 = y3 */
+ 	vli_mod_sub(y2, y2, y1, curve_prime, ndigits);
+ 
+@@ -1095,22 +1218,24 @@ static void xycz_add(u64 *x1, u64 *y1, u64 *x2, u64 *y2, u64 *curve_prime,
+  * Output P + Q = (x3, y3, Z3), P - Q = (x3', y3', Z3)
+  * or P => P - Q, Q => P + Q
+  */
+-static void xycz_add_c(u64 *x1, u64 *y1, u64 *x2, u64 *y2, u64 *curve_prime,
+-		       unsigned int ndigits)
++static void xycz_add_c(u64 *x1, u64 *y1, u64 *x2, u64 *y2,
++		       const struct ecc_curve *curve)
+ {
+ 	/* t1 = X1, t2 = Y1, t3 = X2, t4 = Y2 */
+ 	u64 t5[ECC_MAX_DIGITS];
+ 	u64 t6[ECC_MAX_DIGITS];
+ 	u64 t7[ECC_MAX_DIGITS];
++	const u64 *curve_prime = curve->p;
++	const unsigned int ndigits = curve->g.ndigits;
+ 
+ 	/* t5 = x2 - x1 */
+ 	vli_mod_sub(t5, x2, x1, curve_prime, ndigits);
+ 	/* t5 = (x2 - x1)^2 = A */
+-	vli_mod_square_fast(t5, t5, curve_prime, ndigits);
++	vli_mod_square_fast(t5, t5, curve);
+ 	/* t1 = x1*A = B */
+-	vli_mod_mult_fast(x1, x1, t5, curve_prime, ndigits);
++	vli_mod_mult_fast(x1, x1, t5, curve);
+ 	/* t3 = x2*A = C */
+-	vli_mod_mult_fast(x2, x2, t5, curve_prime, ndigits);
++	vli_mod_mult_fast(x2, x2, t5, curve);
+ 	/* t4 = y2 + y1 */
+ 	vli_mod_add(t5, y2, y1, curve_prime, ndigits);
+ 	/* t4 = y2 - y1 */
+@@ -1119,29 +1244,29 @@ static void xycz_add_c(u64 *x1, u64 *y1, u64 *x2, u64 *y2, u64 *curve_prime,
+ 	/* t6 = C - B */
+ 	vli_mod_sub(t6, x2, x1, curve_prime, ndigits);
+ 	/* t2 = y1 * (C - B) */
+-	vli_mod_mult_fast(y1, y1, t6, curve_prime, ndigits);
++	vli_mod_mult_fast(y1, y1, t6, curve);
+ 	/* t6 = B + C */
+ 	vli_mod_add(t6, x1, x2, curve_prime, ndigits);
+ 	/* t3 = (y2 - y1)^2 */
+-	vli_mod_square_fast(x2, y2, curve_prime, ndigits);
++	vli_mod_square_fast(x2, y2, curve);
+ 	/* t3 = x3 */
+ 	vli_mod_sub(x2, x2, t6, curve_prime, ndigits);
+ 
+ 	/* t7 = B - x3 */
+ 	vli_mod_sub(t7, x1, x2, curve_prime, ndigits);
+ 	/* t4 = (y2 - y1)*(B - x3) */
+-	vli_mod_mult_fast(y2, y2, t7, curve_prime, ndigits);
++	vli_mod_mult_fast(y2, y2, t7, curve);
+ 	/* t4 = y3 */
+ 	vli_mod_sub(y2, y2, y1, curve_prime, ndigits);
+ 
+ 	/* t7 = (y2 + y1)^2 = F */
+-	vli_mod_square_fast(t7, t5, curve_prime, ndigits);
++	vli_mod_square_fast(t7, t5, curve);
+ 	/* t7 = x3' */
+ 	vli_mod_sub(t7, t7, t6, curve_prime, ndigits);
+ 	/* t6 = x3' - B */
+ 	vli_mod_sub(t6, t7, x1, curve_prime, ndigits);
+ 	/* t6 = (y2 + y1)*(x3' - B) */
+-	vli_mod_mult_fast(t6, t6, t5, curve_prime, ndigits);
++	vli_mod_mult_fast(t6, t6, t5, curve);
+ 	/* t2 = y3' */
+ 	vli_mod_sub(y1, t6, y1, curve_prime, ndigits);
+ 
+@@ -1171,41 +1296,37 @@ static void ecc_point_mult(struct ecc_point *result,
+ 	vli_set(rx[1], point->x, ndigits);
+ 	vli_set(ry[1], point->y, ndigits);
+ 
+-	xycz_initial_double(rx[1], ry[1], rx[0], ry[0], initial_z, curve_prime,
+-			    ndigits);
++	xycz_initial_double(rx[1], ry[1], rx[0], ry[0], initial_z, curve);
+ 
+ 	for (i = num_bits - 2; i > 0; i--) {
+ 		nb = !vli_test_bit(scalar, i);
+-		xycz_add_c(rx[1 - nb], ry[1 - nb], rx[nb], ry[nb], curve_prime,
+-			   ndigits);
+-		xycz_add(rx[nb], ry[nb], rx[1 - nb], ry[1 - nb], curve_prime,
+-			 ndigits);
++		xycz_add_c(rx[1 - nb], ry[1 - nb], rx[nb], ry[nb], curve);
++		xycz_add(rx[nb], ry[nb], rx[1 - nb], ry[1 - nb], curve);
+ 	}
+ 
+ 	nb = !vli_test_bit(scalar, 0);
+-	xycz_add_c(rx[1 - nb], ry[1 - nb], rx[nb], ry[nb], curve_prime,
+-		   ndigits);
++	xycz_add_c(rx[1 - nb], ry[1 - nb], rx[nb], ry[nb], curve);
+ 
+ 	/* Find final 1/Z value. */
+ 	/* X1 - X0 */
+ 	vli_mod_sub(z, rx[1], rx[0], curve_prime, ndigits);
+ 	/* Yb * (X1 - X0) */
+-	vli_mod_mult_fast(z, z, ry[1 - nb], curve_prime, ndigits);
++	vli_mod_mult_fast(z, z, ry[1 - nb], curve);
+ 	/* xP * Yb * (X1 - X0) */
+-	vli_mod_mult_fast(z, z, point->x, curve_prime, ndigits);
++	vli_mod_mult_fast(z, z, point->x, curve);
+ 
+ 	/* 1 / (xP * Yb * (X1 - X0)) */
+ 	vli_mod_inv(z, z, curve_prime, point->ndigits);
+ 
+ 	/* yP / (xP * Yb * (X1 - X0)) */
+-	vli_mod_mult_fast(z, z, point->y, curve_prime, ndigits);
++	vli_mod_mult_fast(z, z, point->y, curve);
+ 	/* Xb * yP / (xP * Yb * (X1 - X0)) */
+-	vli_mod_mult_fast(z, z, rx[1 - nb], curve_prime, ndigits);
++	vli_mod_mult_fast(z, z, rx[1 - nb], curve);
+ 	/* End 1/Z calculation */
+ 
+-	xycz_add(rx[nb], ry[nb], rx[1 - nb], ry[1 - nb], curve_prime, ndigits);
++	xycz_add(rx[nb], ry[nb], rx[1 - nb], ry[1 - nb], curve);
+ 
+-	apply_z(rx[0], ry[0], z, curve_prime, ndigits);
++	apply_z(rx[0], ry[0], z, curve);
+ 
+ 	vli_set(result->x, rx[0], ndigits);
+ 	vli_set(result->y, ry[0], ndigits);
+@@ -1226,9 +1347,9 @@ static void ecc_point_add(const struct ecc_point *result,
+ 	vli_mod_sub(z, result->x, p->x, curve->p, ndigits);
+ 	vli_set(px, p->x, ndigits);
+ 	vli_set(py, p->y, ndigits);
+-	xycz_add(px, py, result->x, result->y, curve->p, ndigits);
++	xycz_add(px, py, result->x, result->y, curve);
+ 	vli_mod_inv(z, z, curve->p, ndigits);
+-	apply_z(result->x, result->y, z, curve->p, ndigits);
++	apply_z(result->x, result->y, z, curve);
+ }
+ 
+ /* Computes R = u1P + u2Q mod p using Shamir's trick.
+@@ -1269,7 +1390,7 @@ void ecc_point_mult_shamir(const struct ecc_point *result,
+ 	z[0] = 1;
+ 
+ 	for (--i; i >= 0; i--) {
+-		ecc_point_double_jacobian(rx, ry, z, curve->p, ndigits);
++		ecc_point_double_jacobian(rx, ry, z, curve);
+ 		idx = (!!vli_test_bit(u1, i)) | ((!!vli_test_bit(u2, i)) << 1);
+ 		point = points[idx];
+ 		if (point) {
+@@ -1279,27 +1400,17 @@ void ecc_point_mult_shamir(const struct ecc_point *result,
+ 
+ 			vli_set(tx, point->x, ndigits);
+ 			vli_set(ty, point->y, ndigits);
+-			apply_z(tx, ty, z, curve->p, ndigits);
++			apply_z(tx, ty, z, curve);
+ 			vli_mod_sub(tz, rx, tx, curve->p, ndigits);
+-			xycz_add(tx, ty, rx, ry, curve->p, ndigits);
+-			vli_mod_mult_fast(z, z, tz, curve->p, ndigits);
++			xycz_add(tx, ty, rx, ry, curve);
++			vli_mod_mult_fast(z, z, tz, curve);
+ 		}
+ 	}
+ 	vli_mod_inv(z, z, curve->p, ndigits);
+-	apply_z(rx, ry, z, curve->p, ndigits);
++	apply_z(rx, ry, z, curve);
+ }
+ EXPORT_SYMBOL(ecc_point_mult_shamir);
+ 
+-static inline void ecc_swap_digits(const u64 *in, u64 *out,
+-				   unsigned int ndigits)
+-{
+-	const __be64 *src = (__force __be64 *)in;
+-	int i;
+-
+-	for (i = 0; i < ndigits; i++)
+-		out[i] = be64_to_cpu(src[ndigits - 1 - i]);
+-}
+-
+ static int __ecc_is_key_valid(const struct ecc_curve *curve,
+ 			      const u64 *private_key, unsigned int ndigits)
+ {
+@@ -1450,10 +1561,10 @@ int ecc_is_pubkey_valid_partial(const struct ecc_curve *curve,
+ 		return -EINVAL;
+ 
+ 	/* Check 3: Verify that y^2 == (x^3 + a·x + b) mod p */
+-	vli_mod_square_fast(yy, pk->y, curve->p, pk->ndigits); /* y^2 */
+-	vli_mod_square_fast(xxx, pk->x, curve->p, pk->ndigits); /* x^2 */
+-	vli_mod_mult_fast(xxx, xxx, pk->x, curve->p, pk->ndigits); /* x^3 */
+-	vli_mod_mult_fast(w, curve->a, pk->x, curve->p, pk->ndigits); /* a·x */
++	vli_mod_square_fast(yy, pk->y, curve); /* y^2 */
++	vli_mod_square_fast(xxx, pk->x, curve); /* x^2 */
++	vli_mod_mult_fast(xxx, xxx, pk->x, curve); /* x^3 */
++	vli_mod_mult_fast(w, curve->a, pk->x, curve); /* a·x */
+ 	vli_mod_add(w, w, curve->b, curve->p, pk->ndigits); /* a·x + b */
+ 	vli_mod_add(w, w, xxx, curve->p, pk->ndigits); /* x^3 + a·x + b */
+ 	if (vli_cmp(yy, w, pk->ndigits) != 0) /* Equation */
+diff --git a/crypto/ecc.h b/crypto/ecc.h
+index d4e546b9a..3bee655d4 100644
+--- a/crypto/ecc.h
++++ b/crypto/ecc.h
+@@ -29,10 +29,13 @@
+ /* One digit is u64 qword. */
+ #define ECC_CURVE_NIST_P192_DIGITS  3
+ #define ECC_CURVE_NIST_P256_DIGITS  4
+-#define ECC_MAX_DIGITS             (512 / 64)
++#define ECC_CURVE_NIST_P384_DIGITS  6
++#define ECC_MAX_DIGITS              (512 / 64) /* due to ecrdsa */
+ 
+ #define ECC_DIGITS_TO_BYTES_SHIFT 3
+ 
++#define ECC_MAX_BYTES (ECC_MAX_DIGITS << ECC_DIGITS_TO_BYTES_SHIFT)
++
+ /**
+  * struct ecc_point - elliptic curve point in affine coordinates
+  *
+@@ -70,6 +73,29 @@ struct ecc_curve {
+ 	u64 *b;
+ };
+ 
++/**
++ * ecc_swap_digits() - Copy ndigits from big endian array to native array
++ * @in:       Input array
++ * @out:      Output array
++ * @ndigits:  Number of digits to copy
++ */
++static inline void ecc_swap_digits(const u64 *in, u64 *out, unsigned int ndigits)
++{
++	const __be64 *src = (__force __be64 *)in;
++	int i;
++
++	for (i = 0; i < ndigits; i++)
++		out[i] = be64_to_cpu(src[ndigits - 1 - i]);
++}
++
++/**
++ * ecc_get_curve()  - Get a curve given its curve_id
++ * @curve_id:  Id of the curve
++ *
++ * Returns pointer to the curve data, NULL if curve is not available
++ */
++const struct ecc_curve *ecc_get_curve(unsigned int curve_id);
++
+ /**
+  * ecc_is_key_valid() - Validate a given ECDH private key
+  *
+diff --git a/crypto/ecc_curve_defs.h b/crypto/ecc_curve_defs.h
+index 69be6c7d2..b327732f6 100644
+--- a/crypto/ecc_curve_defs.h
++++ b/crypto/ecc_curve_defs.h
+@@ -54,4 +54,36 @@ static struct ecc_curve nist_p256 = {
+ 	.b = nist_p256_b
+ };
+ 
++/* NIST P-384 */
++static u64 nist_p384_g_x[] = { 0x3A545E3872760AB7ull, 0x5502F25DBF55296Cull,
++				0x59F741E082542A38ull, 0x6E1D3B628BA79B98ull,
++				0x8Eb1C71EF320AD74ull, 0xAA87CA22BE8B0537ull };
++static u64 nist_p384_g_y[] = { 0x7A431D7C90EA0E5Full, 0x0A60B1CE1D7E819Dull,
++				0xE9DA3113B5F0B8C0ull, 0xF8F41DBD289A147Cull,
++				0x5D9E98BF9292DC29ull, 0x3617DE4A96262C6Full };
++static u64 nist_p384_p[] = { 0x00000000FFFFFFFFull, 0xFFFFFFFF00000000ull,
++				0xFFFFFFFFFFFFFFFEull, 0xFFFFFFFFFFFFFFFFull,
++				0xFFFFFFFFFFFFFFFFull, 0xFFFFFFFFFFFFFFFFull };
++static u64 nist_p384_n[] = { 0xECEC196ACCC52973ull, 0x581A0DB248B0A77Aull,
++				0xC7634D81F4372DDFull, 0xFFFFFFFFFFFFFFFFull,
++				0xFFFFFFFFFFFFFFFFull, 0xFFFFFFFFFFFFFFFFull };
++static u64 nist_p384_a[] = { 0x00000000FFFFFFFCull, 0xFFFFFFFF00000000ull,
++				0xFFFFFFFFFFFFFFFEull, 0xFFFFFFFFFFFFFFFFull,
++				0xFFFFFFFFFFFFFFFFull, 0xFFFFFFFFFFFFFFFFull };
++static u64 nist_p384_b[] = { 0x2a85c8edd3ec2aefull, 0xc656398d8a2ed19dull,
++				0x0314088f5013875aull, 0x181d9c6efe814112ull,
++				0x988e056be3f82d19ull, 0xb3312fa7e23ee7e4ull };
++static struct ecc_curve nist_p384 = {
++	.name = "nist_384",
++	.g = {
++		.x = nist_p384_g_x,
++		.y = nist_p384_g_y,
++		.ndigits = 6,
++	},
++	.p = nist_p384_p,
++	.n = nist_p384_n,
++	.a = nist_p384_a,
++	.b = nist_p384_b
++};
++
+ #endif
+diff --git a/fs/Kconfig b/fs/Kconfig
+index 2d618f235..5a0bb9e9a 100644
+--- a/fs/Kconfig
++++ b/fs/Kconfig
+@@ -114,6 +114,7 @@ config MANDATORY_FILE_LOCKING
+ source "fs/crypto/Kconfig"
+ 
+ source "fs/verity/Kconfig"
++source "fs/code_sign/Kconfig"
+ 
+ source "fs/notify/Kconfig"
+ 
+diff --git a/fs/Makefile b/fs/Makefile
+index c5620135f..06e7c0654 100644
+--- a/fs/Makefile
++++ b/fs/Makefile
+@@ -138,3 +138,4 @@ obj-$(CONFIG_EFIVAR_FS)		+= efivarfs/
+ obj-$(CONFIG_EROFS_FS)		+= erofs/
+ obj-$(CONFIG_VBOXSF_FS)		+= vboxsf/
+ obj-$(CONFIG_ZONEFS_FS)		+= zonefs/
++obj-$(CONFIG_SECURITY_CODE_SIGN) += code_sign/
+diff --git a/fs/ext4/ioctl.c b/fs/ext4/ioctl.c
+index 335a02346..a5ff8aafa 100644
+--- a/fs/ext4/ioctl.c
++++ b/fs/ext4/ioctl.c
+@@ -1325,6 +1325,11 @@ static long __ext4_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+ 			return -EOPNOTSUPP;
+ 		return fsverity_ioctl_enable(filp, (const void __user *)arg);
+ 
++	case FS_IOC_ENABLE_CODE_SIGN:
++		if (!ext4_has_feature_verity(sb))
++			return -EOPNOTSUPP;
++		return fsverity_ioctl_enable_code_sign(filp, (const void __user *)arg);
++
+ 	case FS_IOC_MEASURE_VERITY:
+ 		if (!ext4_has_feature_verity(sb))
+ 			return -EOPNOTSUPP;
+@@ -1411,6 +1416,7 @@ long ext4_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+ 	case EXT4_IOC_SHUTDOWN:
+ 	case FS_IOC_GETFSMAP:
+ 	case FS_IOC_ENABLE_VERITY:
++	case FS_IOC_ENABLE_CODE_SIGN:
+ 	case FS_IOC_MEASURE_VERITY:
+ 	case FS_IOC_READ_VERITY_METADATA:
+ 	case EXT4_IOC_CLEAR_ES_CACHE:
+diff --git a/fs/f2fs/file.c b/fs/f2fs/file.c
+index cc857e86d..b93110d9f 100644
+--- a/fs/f2fs/file.c
++++ b/fs/f2fs/file.c
+@@ -3446,6 +3446,22 @@ static int f2fs_ioc_enable_verity(struct file *filp, unsigned long arg)
+ 	return fsverity_ioctl_enable(filp, (const void __user *)arg);
+ }
+ 
++static int f2fs_ioc_enable_code_sign(struct file *filp, unsigned long arg)
++{
++	struct inode *inode = file_inode(filp);
++
++	f2fs_update_time(F2FS_I_SB(inode), REQ_TIME);
++
++	if (!f2fs_sb_has_verity(F2FS_I_SB(inode))) {
++		f2fs_warn(F2FS_I_SB(inode),
++			  "Can't enable fs-verity on inode %lu: the verity feature is not enabled on this filesystem",
++			  inode->i_ino);
++		return -EOPNOTSUPP;
++	}
++
++	return fsverity_ioctl_enable_code_sign(filp, (const void __user *)arg);
++}
++
+ static int f2fs_ioc_measure_verity(struct file *filp, unsigned long arg)
+ {
+ 	if (!f2fs_sb_has_verity(F2FS_I_SB(file_inode(filp))))
+@@ -4393,6 +4409,8 @@ static long __f2fs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+ 		return f2fs_ioc_resize_fs(filp, arg);
+ 	case FS_IOC_ENABLE_VERITY:
+ 		return f2fs_ioc_enable_verity(filp, arg);
++	case FS_IOC_ENABLE_CODE_SIGN:
++		return f2fs_ioc_enable_code_sign(filp, arg);
+ 	case FS_IOC_MEASURE_VERITY:
+ 		return f2fs_ioc_measure_verity(filp, arg);
+ 	case FS_IOC_READ_VERITY_METADATA:
+@@ -4663,6 +4681,7 @@ long f2fs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+ 	case F2FS_IOC_PRECACHE_EXTENTS:
+ 	case F2FS_IOC_RESIZE_FS:
+ 	case FS_IOC_ENABLE_VERITY:
++	case FS_IOC_ENABLE_CODE_SIGN:
+ 	case FS_IOC_MEASURE_VERITY:
+ 	case FS_IOC_READ_VERITY_METADATA:
+ 	case FS_IOC_GETFSLABEL:
+diff --git a/fs/verity/enable.c b/fs/verity/enable.c
+index dbabea77e..0c5b392b6 100644
+--- a/fs/verity/enable.c
++++ b/fs/verity/enable.c
+@@ -13,6 +13,31 @@
+ #include <linux/pagemap.h>
+ #include <linux/sched/signal.h>
+ #include <linux/uaccess.h>
++#include <linux/highmem.h>
++
++static int check_file_and_enable_verity(struct file *filp,
++					const struct fsverity_enable_arg *arg);
++
++#ifdef CONFIG_SECURITY_CODE_SIGN
++static int code_sign_init_descriptor(struct inode *inode,
++				     const struct fsverity_enable_arg *_arg,
++				     struct fsverity_descriptor *_desc);
++static int code_sign_copy_merkle_tree(struct file *filp, const void *_desc,
++				      const struct merkle_tree_params *params);
++#else
++static inline int code_sign_init_descriptor(struct inode *inode,
++					    const struct fsverity_enable_arg *_arg,
++					    struct fsverity_descriptor *_desc)
++{
++	return 0;
++}
++static inline int code_sign_copy_merkle_tree(struct file *filp,
++					     const void *_desc,
++					     const struct merkle_tree_params *params)
++{
++	return 0;
++}
++#endif
+ 
+ /*
+  * Read a file data page for Merkle tree construction.  Do aggressive readahead,
+@@ -150,16 +175,16 @@ static int build_merkle_tree_level(struct file *filp, unsigned int level,
+  */
+ static int build_merkle_tree(struct file *filp,
+ 			     const struct merkle_tree_params *params,
+-			     u8 *root_hash)
++			     u8 *root_hash,
++			     u64 data_size)
+ {
+-	struct inode *inode = file_inode(filp);
+ 	u8 *pending_hashes;
+ 	struct ahash_request *req;
+ 	u64 blocks;
+ 	unsigned int level;
+ 	int err = -ENOMEM;
+ 
+-	if (inode->i_size == 0) {
++	if (data_size == 0) {
+ 		/* Empty file is a special case; root hash is all 0's */
+ 		memset(root_hash, 0, params->digest_size);
+ 		return 0;
+@@ -177,7 +202,7 @@ static int build_merkle_tree(struct file *filp,
+ 	 * (level 0) and ascending to the root node (level 'num_levels - 1').
+ 	 * Then at the end (level 'num_levels'), calculate the root hash.
+ 	 */
+-	blocks = ((u64)inode->i_size + params->block_size - 1) >>
++	blocks = (data_size + params->block_size - 1) >>
+ 		 params->log_blocksize;
+ 	for (level = 0; level <= params->num_levels; level++) {
+ 		err = build_merkle_tree_level(filp, level, blocks, params,
+@@ -199,11 +224,8 @@ static int enable_verity(struct file *filp,
+ 			 const struct fsverity_enable_arg *arg)
+ {
+ 	struct inode *inode = file_inode(filp);
+-	const struct fsverity_operations *vops = inode->i_sb->s_vop;
+-	struct merkle_tree_params params = { };
+ 	struct fsverity_descriptor *desc;
+ 	size_t desc_size = sizeof(*desc) + arg->sig_size;
+-	struct fsverity_info *vi;
+ 	int err;
+ 
+ 	/* Start initializing the fsverity_descriptor */
+@@ -234,11 +256,42 @@ static int enable_verity(struct file *filp,
+ 
+ 	desc->data_size = cpu_to_le64(inode->i_size);
+ 
++	err = code_sign_init_descriptor(inode, arg, desc);
++	if (err) {
++		fsverity_err(inode, "Init code sign descriptor err: %d", err);
++		goto out;
++	}
++
++	err = fsverity_enable_with_descriptor(filp, (void *)desc, desc_size);
++out:
++	kfree(desc);
++	return err;
++}
++
++int fsverity_enable_with_descriptor(struct file *filp,
++				    void *_desc, size_t desc_size)
++{
++	struct inode *inode = file_inode(filp);
++	const struct fsverity_operations *vops = inode->i_sb->s_vop;
++	struct merkle_tree_params params = { };
++	struct fsverity_descriptor *desc = (struct fsverity_descriptor *)_desc;
++	struct fsverity_info *vi;
++	u64 data_size;
++	int err;
++
++	if (!vops) {
++		fsverity_err(inode, "current filesystem doesn't support fs-verity");
++		return -ENOTTY;
++	}
++
++	data_size = le64_to_cpu(desc->data_size);
++
+ 	/* Prepare the Merkle tree parameters */
+ 	err = fsverity_init_merkle_tree_params(&params, inode,
+-					       arg->hash_algorithm,
++					       desc->hash_algorithm,
+ 					       desc->log_blocksize,
+-					       desc->salt, desc->salt_size);
++					       desc->salt, desc->salt_size,
++					       data_size);
+ 	if (err)
+ 		goto out;
+ 
+@@ -255,46 +308,39 @@ static int enable_verity(struct file *filp,
+ 	if (err)
+ 		goto out;
+ 
++	err = code_sign_copy_merkle_tree(filp, _desc, &params);
++	if (err < 0) {
++		fsverity_err(inode, "Error %d copying Merkle tree", err);
++		goto rollback;
++	} else if (err == 1) {
++		goto skip_build;
++	}
++
+ 	/*
+-	 * Build the Merkle tree.  Don't hold the inode lock during this, since
+-	 * on huge files this may take a very long time and we don't want to
+-	 * force unrelated syscalls like chown() to block forever.  We don't
+-	 * need the inode lock here because deny_write_access() already prevents
+-	 * the file from being written to or truncated, and we still serialize
+-	 * ->begin_enable_verity() and ->end_enable_verity() using the inode
+-	 * lock and only allow one process to be here at a time on a given file.
++	 * Build the Merkle tree.
+ 	 */
+ 	pr_debug("Building Merkle tree...\n");
+ 	BUILD_BUG_ON(sizeof(desc->root_hash) < FS_VERITY_MAX_DIGEST_SIZE);
+-	err = build_merkle_tree(filp, &params, desc->root_hash);
++	err = build_merkle_tree(filp, &params, desc->root_hash, data_size);
+ 	if (err) {
+ 		fsverity_err(inode, "Error %d building Merkle tree", err);
+ 		goto rollback;
+ 	}
++
++skip_build:
+ 	pr_debug("Done building Merkle tree.  Root hash is %s:%*phN\n",
+ 		 params.hash_alg->name, params.digest_size, desc->root_hash);
+ 
+-	/*
+-	 * Create the fsverity_info.  Don't bother trying to save work by
+-	 * reusing the merkle_tree_params from above.  Instead, just create the
+-	 * fsverity_info from the fsverity_descriptor as if it were just loaded
+-	 * from disk.  This is simpler, and it serves as an extra check that the
+-	 * metadata we're writing is valid before actually enabling verity.
+-	 */
+ 	vi = fsverity_create_info(inode, desc, desc_size);
+ 	if (IS_ERR(vi)) {
+ 		err = PTR_ERR(vi);
+ 		goto rollback;
+ 	}
+ 
+-	if (arg->sig_size)
++	if (desc->sig_size)
+ 		pr_debug("Storing a %u-byte PKCS#7 signature alongside the file\n",
+-			 arg->sig_size);
++			 le32_to_cpu(desc->sig_size));
+ 
+-	/*
+-	 * Tell the filesystem to finish enabling verity on the file.
+-	 * Serialized with ->begin_enable_verity() by the inode lock.
+-	 */
+ 	inode_lock(inode);
+ 	err = vops->end_enable_verity(filp, desc, desc_size, params.tree_size);
+ 	inode_unlock(inode);
+@@ -306,18 +352,10 @@ static int enable_verity(struct file *filp,
+ 		err = -EINVAL;
+ 		fsverity_free_info(vi);
+ 	} else {
+-		/* Successfully enabled verity */
+-
+-		/*
+-		 * Readers can start using ->i_verity_info immediately, so it
+-		 * can't be rolled back once set.  So don't set it until just
+-		 * after the filesystem has successfully enabled verity.
+-		 */
+ 		fsverity_set_info(inode, vi);
+ 	}
+ out:
+ 	kfree(params.hashstate);
+-	kfree(desc);
+ 	return err;
+ 
+ rollback:
+@@ -326,6 +364,7 @@ static int enable_verity(struct file *filp,
+ 	inode_unlock(inode);
+ 	goto out;
+ }
++EXPORT_SYMBOL_GPL(fsverity_enable_with_descriptor);
+ 
+ /**
+  * fsverity_ioctl_enable() - enable verity on a file
+@@ -339,9 +378,7 @@ static int enable_verity(struct file *filp,
+  */
+ int fsverity_ioctl_enable(struct file *filp, const void __user *uarg)
+ {
+-	struct inode *inode = file_inode(filp);
+ 	struct fsverity_enable_arg arg;
+-	int err;
+ 
+ 	if (copy_from_user(&arg, uarg, sizeof(arg)))
+ 		return -EFAULT;
+@@ -362,6 +399,16 @@ int fsverity_ioctl_enable(struct file *filp, const void __user *uarg)
+ 	if (arg.sig_size > FS_VERITY_MAX_SIGNATURE_SIZE)
+ 		return -EMSGSIZE;
+ 
++	return check_file_and_enable_verity(filp, &arg);
++}
++EXPORT_SYMBOL_GPL(fsverity_ioctl_enable);
++
++static int check_file_and_enable_verity(struct file *filp,
++					const struct fsverity_enable_arg *arg)
++{
++	struct inode *inode = file_inode(filp);
++	int err;
++
+ 	/*
+ 	 * Require a regular file with write access.  But the actual fd must
+ 	 * still be readonly so that we can lock out all writers.  This is
+@@ -390,23 +437,7 @@ int fsverity_ioctl_enable(struct file *filp, const void __user *uarg)
+ 	if (err) /* -ETXTBSY */
+ 		goto out_drop_write;
+ 
+-	err = enable_verity(filp, &arg);
+-
+-	/*
+-	 * We no longer drop the inode's pagecache after enabling verity.  This
+-	 * used to be done to try to avoid a race condition where pages could be
+-	 * evicted after being used in the Merkle tree construction, then
+-	 * re-instantiated by a concurrent read.  Such pages are unverified, and
+-	 * the backing storage could have filled them with different content, so
+-	 * they shouldn't be used to fulfill reads once verity is enabled.
+-	 *
+-	 * But, dropping the pagecache has a big performance impact, and it
+-	 * doesn't fully solve the race condition anyway.  So for those reasons,
+-	 * and also because this race condition isn't very important relatively
+-	 * speaking (especially for small-ish files, where the chance of a page
+-	 * being used, evicted, *and* re-instantiated all while enabling verity
+-	 * is quite small), we no longer drop the inode's pagecache.
+-	 */
++	err = enable_verity(filp, arg);
+ 
+ 	/*
+ 	 * allow_write_access() is needed to pair with deny_write_access().
+@@ -417,4 +448,146 @@ int fsverity_ioctl_enable(struct file *filp, const void __user *uarg)
+ 	mnt_drop_write_file(filp);
+ 	return err;
+ }
+-EXPORT_SYMBOL_GPL(fsverity_ioctl_enable);
++
++#ifdef CONFIG_SECURITY_CODE_SIGN
++static int code_sign_copy_merkle_tree(struct file *filp,
++				      const void *_desc,
++				      const struct merkle_tree_params *params)
++{
++	struct inode *inode = file_inode(filp);
++	const struct fsverity_operations *vops = inode->i_sb->s_vop;
++	u8 *tree_data;
++	u64 blocks, i;
++	int err = -ENOMEM;
++	struct file_ra_state ra = { 0 };
++	struct page *src_page;
++	void *addr;
++	u64 tree_offset, tree_start_index;
++
++	if (!is_inside_tree_compact(_desc))
++		return 0;
++
++	tree_offset = get_tree_offset_compact(_desc);
++
++	if (tree_offset > (u64)inode->i_size ||
++	    params->tree_size > (u64)inode->i_size - tree_offset) {
++		fsverity_err(inode, "File is too small to contain Merkle tree.");
++		return -EFAULT;
++	}
++
++	tree_data = kmalloc(PAGE_SIZE, GFP_KERNEL);
++	if (!tree_data)
++		goto out;
++
++	file_ra_state_init(&ra, filp->f_mapping);
++
++	tree_start_index = tree_offset >> PAGE_SHIFT;
++	blocks = params->tree_size >> PAGE_SHIFT;
++	for (i = 0; i < blocks; i++) {
++		src_page = read_file_data_page(filp, tree_start_index + i, &ra,
++					       blocks - i);
++		if (IS_ERR(src_page)) {
++			err = PTR_ERR(src_page);
++			fsverity_err(inode,
++				     "Error %d reading Merkle tree page %llu",
++				     err, tree_start_index + i);
++			goto out;
++		}
++
++		addr = kmap_atomic(src_page);
++		memcpy(tree_data, addr, PAGE_SIZE);
++		kunmap_atomic(addr);
++		put_page(src_page);
++		err = vops->write_merkle_tree_block(inode, tree_data, i,
++						    params->log_blocksize);
++		if (err) {
++			fsverity_err(inode,
++				     "Error %d writing Merkle tree block %llu",
++				     err, i);
++			goto out;
++		}
++	}
++	err = 1;
++out:
++	kfree(tree_data);
++	return err;
++}
++
++static int code_sign_init_descriptor(struct inode *inode,
++				     const struct fsverity_enable_arg *_arg,
++				     struct fsverity_descriptor *_desc)
++{
++	struct code_sign_descriptor *desc = CAST_CODE_SIGN_DESC(_desc);
++	const struct code_sign_enable_arg *arg =
++		(const struct code_sign_enable_arg *)_arg;
++	int algo_index;
++
++	if (!arg->cs_version)
++		return 0;
++
++	desc->flags = cpu_to_le32(arg->flags);
++	desc->data_size = cpu_to_le64(arg->data_size);
++	desc->tree_offset = cpu_to_le64(arg->tree_offset);
++	desc->cs_version = arg->cs_version;
++	desc->pgtypeinfo_size = cpu_to_le32(arg->pgtypeinfo_size);
++	desc->pgtypeinfo_off = cpu_to_le64(arg->pgtypeinfo_off);
++
++	if (!IS_INSIDE_TREE(desc))
++		return 0;
++
++	algo_index = desc->hash_algorithm;
++	if (algo_index >= g_fsverity_hash_algs_num ||
++	    !fsverity_hash_algs[algo_index].name) {
++		fsverity_err(inode, "Unknown hash algorithm: %u", algo_index);
++		return -EINVAL;
++	}
++
++	if (copy_from_user(desc->root_hash, u64_to_user_ptr(arg->root_hash_ptr),
++			   fsverity_hash_algs[algo_index].digest_size))
++		return -EFAULT;
++
++	return 0;
++}
++
++int fsverity_ioctl_enable_code_sign(struct file *filp, const void __user *uarg)
++{
++	struct inode *inode = file_inode(filp);
++	struct code_sign_enable_arg arg;
++	u32 pgtypeinfo_bytes;
++
++	BUILD_BUG_ON(sizeof(struct code_sign_enable_arg) != sizeof(struct fsverity_enable_arg));
++
++	if (copy_from_user(&arg, uarg, sizeof(arg)))
++		return -EFAULT;
++
++	if (arg.version != 1)
++		return -EINVAL;
++
++	if (arg.__reserved1 ||
++	    memchr_inv(arg.__reserved2, 0, sizeof(arg.__reserved2)))
++		return -EINVAL;
++
++	if (arg.data_size > (u64)inode->i_size)
++		return -EINVAL;
++
++	if (arg.tree_offset % PAGE_SIZE != 0)
++		return -EINVAL;
++
++	if (arg.block_size != PAGE_SIZE)
++		return -EINVAL;
++
++	if (arg.salt_size > sizeof_field(struct code_sign_descriptor, salt))
++		return -EMSGSIZE;
++
++	if (arg.sig_size > FS_VERITY_MAX_SIGNATURE_SIZE)
++		return -EMSGSIZE;
++
++	pgtypeinfo_bytes = arg.pgtypeinfo_size / 8;
++	if (pgtypeinfo_bytes > arg.data_size ||
++	    arg.pgtypeinfo_off > arg.data_size - pgtypeinfo_bytes)
++		return -EINVAL;
++
++	return check_file_and_enable_verity(filp, (const struct fsverity_enable_arg *)&arg);
++}
++EXPORT_SYMBOL_GPL(fsverity_ioctl_enable_code_sign);
++#endif /* CONFIG_SECURITY_CODE_SIGN */
+diff --git a/fs/verity/fsverity_private.h b/fs/verity/fsverity_private.h
+index a275cad15..6ab20d8a0 100644
+--- a/fs/verity/fsverity_private.h
++++ b/fs/verity/fsverity_private.h
+@@ -17,6 +17,8 @@
+ #include <crypto/sha.h>
+ #include <linux/fsverity.h>
+ #include <linux/mempool.h>
++#include <linux/xpm_types.h>
++#include <linux/code_sign.h>
+ 
+ struct ahash_request;
+ 
+@@ -75,6 +77,11 @@ struct fsverity_info {
+ 	u8 root_hash[FS_VERITY_MAX_DIGEST_SIZE];
+ 	u8 file_digest[FS_VERITY_MAX_DIGEST_SIZE];
+ 	const struct inode *inode;
++#ifdef CONFIG_SECURITY_CODE_SIGN
++	struct cs_info fcs_info;
++	u64 verified_data_size;
++	int cert_type;
++#endif
+ };
+ 
+ /* Arbitrary limit to bound the kmalloc() size.  Can be changed. */
+@@ -86,6 +93,7 @@ struct fsverity_info {
+ /* hash_algs.c */
+ 
+ extern struct fsverity_hash_alg fsverity_hash_algs[];
++extern int g_fsverity_hash_algs_num;
+ 
+ struct fsverity_hash_alg *fsverity_get_hash_alg(const struct inode *inode,
+ 						unsigned int num);
+@@ -119,7 +127,8 @@ int fsverity_init_merkle_tree_params(struct merkle_tree_params *params,
+ 				     const struct inode *inode,
+ 				     unsigned int hash_algorithm,
+ 				     unsigned int log_blocksize,
+-				     const u8 *salt, size_t salt_size);
++				     const u8 *salt, size_t salt_size,
++				     u64 data_size);
+ 
+ struct fsverity_info *fsverity_create_info(const struct inode *inode,
+ 					   struct fsverity_descriptor *desc,
+@@ -139,13 +148,13 @@ void __init fsverity_exit_info_cache(void);
+ /* signature.c */
+ 
+ #ifdef CONFIG_FS_VERITY_BUILTIN_SIGNATURES
+-int fsverity_verify_signature(const struct fsverity_info *vi,
++int fsverity_verify_signature(struct fsverity_info *vi,
+ 			      const u8 *signature, size_t sig_size);
+ 
+ int __init fsverity_init_signature(void);
+ #else /* !CONFIG_FS_VERITY_BUILTIN_SIGNATURES */
+ static inline int
+-fsverity_verify_signature(const struct fsverity_info *vi,
++fsverity_verify_signature(struct fsverity_info *vi,
+ 			  const u8 *signature, size_t sig_size)
+ {
+ 	return 0;
+diff --git a/fs/verity/hash_algs.c b/fs/verity/hash_algs.c
+index 71d0fccb6..16f22fca2 100644
+--- a/fs/verity/hash_algs.c
++++ b/fs/verity/hash_algs.c
+@@ -23,6 +23,7 @@ struct fsverity_hash_alg fsverity_hash_algs[] = {
+ 		.block_size = SHA512_BLOCK_SIZE,
+ 	},
+ };
++int g_fsverity_hash_algs_num = ARRAY_SIZE(fsverity_hash_algs);
+ 
+ static DEFINE_MUTEX(fsverity_hash_alg_init_mutex);
+ 
+diff --git a/fs/verity/open.c b/fs/verity/open.c
+index 92df87f5f..e386f53bb 100644
+--- a/fs/verity/open.c
++++ b/fs/verity/open.c
+@@ -29,7 +29,8 @@ int fsverity_init_merkle_tree_params(struct merkle_tree_params *params,
+ 				     const struct inode *inode,
+ 				     unsigned int hash_algorithm,
+ 				     unsigned int log_blocksize,
+-				     const u8 *salt, size_t salt_size)
++				     const u8 *salt, size_t salt_size,
++				     u64 data_size)
+ {
+ 	struct fsverity_hash_alg *hash_alg;
+ 	int err;
+@@ -89,8 +90,8 @@ int fsverity_init_merkle_tree_params(struct merkle_tree_params *params,
+ 	 */
+ 
+ 	/* Compute number of levels and the number of blocks in each level */
+-	blocks = ((u64)inode->i_size + params->block_size - 1) >> log_blocksize;
+-	pr_debug("Data is %lld bytes (%llu blocks)\n", inode->i_size, blocks);
++	blocks = (data_size + params->block_size - 1) >> log_blocksize;
++	pr_debug("Data is %llu bytes (%llu blocks)\n", data_size, blocks);
+ 	while (blocks > 1) {
+ 		if (params->num_levels >= FS_VERITY_MAX_LEVELS) {
+ 			fsverity_err(inode, "Too many levels in Merkle tree");
+@@ -132,11 +133,13 @@ static int compute_file_digest(struct fsverity_hash_alg *hash_alg,
+ 			       u8 *file_digest)
+ {
+ 	__le32 sig_size = desc->sig_size;
+-	int err;
++	int err, cs_version;
+ 
++	cs_version = code_sign_before_measurement_hook(desc);
+ 	desc->sig_size = 0;
+ 	err = fsverity_hash_buffer(hash_alg, desc, sizeof(*desc), file_digest);
+ 	desc->sig_size = sig_size;
++	code_sign_after_measurement_hook(desc, cs_version);
+ 
+ 	return err;
+ }
+@@ -153,15 +156,32 @@ struct fsverity_info *fsverity_create_info(const struct inode *inode,
+ 	struct fsverity_info *vi;
+ 	int err;
+ 
++	if (desc_size < sizeof(*desc)) {
++		fsverity_err(inode, "Unrecognized descriptor size: %zu bytes",
++			     desc_size);
++		return ERR_PTR(-EINVAL);
++	}
++
++	err = code_sign_check_descriptor_hook(inode, desc);
++	if (err < 0) {
++		fsverity_err(inode, "Invalid code sign descriptor: %d", err);
++		return ERR_PTR(err);
++	}
++
+ 	vi = kmem_cache_zalloc(fsverity_info_cachep, GFP_KERNEL);
+ 	if (!vi)
+ 		return ERR_PTR(-ENOMEM);
+ 	vi->inode = inode;
+ 
++#ifdef CONFIG_SECURITY_CODE_SIGN
++	vi->verified_data_size = le64_to_cpu(desc->data_size);
++#endif
++
+ 	err = fsverity_init_merkle_tree_params(&vi->tree_params, inode,
+ 					       desc->hash_algorithm,
+ 					       desc->log_blocksize,
+-					       desc->salt, desc->salt_size);
++					       desc->salt, desc->salt_size,
++					       le64_to_cpu(desc->data_size));
+ 	if (err) {
+ 		fsverity_err(inode,
+ 			     "Error %d initializing Merkle tree parameters",
+@@ -222,12 +242,25 @@ static bool validate_fsverity_descriptor(struct inode *inode,
+ 					 const struct fsverity_descriptor *desc,
+ 					 size_t desc_size)
+ {
++	int cs_err;
++
+ 	if (desc_size < sizeof(*desc)) {
+ 		fsverity_err(inode, "Unrecognized descriptor size: %zu bytes",
+ 			     desc_size);
+ 		return false;
+ 	}
+ 
++	if (le32_to_cpu(desc->sig_size) > desc_size - sizeof(*desc)) {
++		fsverity_err(inode, "Signature overflows verity descriptor");
++		return false;
++	}
++
++	cs_err = code_sign_check_descriptor_hook(inode, desc);
++	if (cs_err < 0)
++		return false;
++	if (cs_err == 1)
++		return true;
++
+ 	if (desc->version != 1) {
+ 		fsverity_err(inode, "Unrecognized descriptor version: %u",
+ 			     desc->version);
+@@ -251,11 +284,6 @@ static bool validate_fsverity_descriptor(struct inode *inode,
+ 		return false;
+ 	}
+ 
+-	if (le32_to_cpu(desc->sig_size) > desc_size - sizeof(*desc)) {
+-		fsverity_err(inode, "Signature overflows verity descriptor");
+-		return false;
+-	}
+-
+ 	return true;
+ }
+ 
+diff --git a/fs/verity/signature.c b/fs/verity/signature.c
+index f823fb3c0..6265fa0c8 100644
+--- a/fs/verity/signature.c
++++ b/fs/verity/signature.c
+@@ -26,6 +26,42 @@ static int fsverity_require_signatures;
+  */
+ static struct key *fsverity_keyring;
+ 
++#ifdef CONFIG_SECURITY_CODE_SIGN
++int code_sign_developer_mode;
++
++void fsverity_set_cert_type(struct fsverity_info *vi, int cert_type)
++{
++	vi->cert_type = cert_type;
++}
++
++int fsverity_get_cert_type(const struct inode *inode)
++{
++	const struct fsverity_info *vi = fsverity_get_info(inode);
++
++	return vi ? vi->cert_type : 0;
++}
++
++static int fsverity_verify_certchain(struct fsverity_info *vi,
++				     const void *raw_pkcs7, size_t pkcs7_len)
++{
++	int ret = 0;
++
++	code_sign_verify_certchain(raw_pkcs7, pkcs7_len, vi, &ret);
++	if (ret > 0) {
++		fsverity_set_cert_type(vi, ret);
++		return 0;
++	}
++	return ret;
++}
++#else
++static inline int fsverity_verify_certchain(struct fsverity_info *vi,
++					    const void *raw_pkcs7,
++					    size_t pkcs7_len)
++{
++	return 0;
++}
++#endif
++
+ /**
+  * fsverity_verify_signature() - check a verity file's signature
+  * @vi: the file's fsverity_info
+@@ -37,12 +73,28 @@ static struct key *fsverity_keyring;
+  *
+  * Return: 0 on success (signature valid or not required); -errno on failure
+  */
+-int fsverity_verify_signature(const struct fsverity_info *vi,
++int fsverity_verify_signature(struct fsverity_info *vi,
+ 			      const u8 *signature, size_t sig_size)
+ {
+ 	unsigned int digest_algorithm =
+ 		vi->tree_params.hash_alg - fsverity_hash_algs;
+ 
++	if (sig_size > 0) {
++		int err;
++
++		if (fsverity_keyring->keys.nr_leaves_on_tree == 0) {
++			fsverity_err(vi->inode,
++				     "fs-verity keyring is empty, rejecting signed file!");
++			return -ENOKEY;
++		}
++		err = fsverity_verify_certchain(vi, signature, sig_size);
++		if (err) {
++			fsverity_err(vi->inode,
++				     "verify cert chain failed, err = %d", err);
++			return err;
++		}
++	}
++
+ 	return __fsverity_verify_signature(vi->inode, signature, sig_size,
+ 					   vi->file_digest, digest_algorithm);
+ }
+@@ -150,6 +202,17 @@ static struct ctl_table fsverity_sysctl_table[] = {
+ 		.extra1         = SYSCTL_ZERO,
+ 		.extra2         = SYSCTL_ONE,
+ 	},
++#ifdef CONFIG_SECURITY_CODE_SIGN
++	{
++		.procname       = "developer_mode",
++		.data           = &code_sign_developer_mode,
++		.maxlen         = sizeof(int),
++		.mode           = 0644,
++		.proc_handler   = proc_dointvec_minmax,
++		.extra1         = SYSCTL_ZERO,
++		.extra2         = SYSCTL_ONE,
++	},
++#endif
+ 	{ }
+ };
+ 
+diff --git a/fs/verity/verify.c b/fs/verity/verify.c
+index 10e41883d..06211df3d 100644
+--- a/fs/verity/verify.c
++++ b/fs/verity/verify.c
+@@ -103,6 +103,14 @@ static bool verify_page(struct inode *inode, const struct fsverity_info *vi,
+ 
+ 	pr_debug_ratelimited("Verifying data page %lu...\n", index);
+ 
++#ifdef CONFIG_SECURITY_CODE_SIGN
++	if (index >= DIV_ROUND_UP(vi->verified_data_size, PAGE_SIZE)) {
++		pr_debug_ratelimited("Data out of verity range %llu\n",
++				     vi->verified_data_size >> PAGE_SHIFT);
++		return true;
++	}
++#endif
++
+ 	/*
+ 	 * Starting at the leaf level, ascend the tree saving hash pages along
+ 	 * the way until we find a verified hash page, indicated by PageChecked;
+@@ -264,6 +272,17 @@ void fsverity_verify_bio(struct bio *bio)
+ EXPORT_SYMBOL_GPL(fsverity_verify_bio);
+ #endif /* CONFIG_BLOCK */
+ 
++u64 fsverity_get_verified_data_size(const struct inode *inode)
++{
++#ifdef CONFIG_SECURITY_CODE_SIGN
++	const struct fsverity_info *vi = fsverity_get_info(inode);
++
++	return vi ? vi->verified_data_size : (u64)inode->i_size;
++#else
++	return inode->i_size;
++#endif
++}
++
+ /**
+  * fsverity_enqueue_verify_work() - enqueue work on the fs-verity workqueue
+  * @work: the work to enqueue
+diff --git a/include/crypto/ecdh.h b/include/crypto/ecdh.h
+index deaaa4822..a9f98078d 100644
+--- a/include/crypto/ecdh.h
++++ b/include/crypto/ecdh.h
+@@ -25,6 +25,7 @@
+ /* Curves IDs */
+ #define ECC_CURVE_NIST_P192	0x0001
+ #define ECC_CURVE_NIST_P256	0x0002
++#define ECC_CURVE_NIST_P384	0x0003
+ 
+ /**
+  * struct ecdh - define an ECDH private key
+diff --git a/include/linux/fsverity.h b/include/linux/fsverity.h
+index 19c118e5a..2a3c44eca 100644
+--- a/include/linux/fsverity.h
++++ b/include/linux/fsverity.h
+@@ -127,6 +127,8 @@ static inline struct fsverity_info *fsverity_get_info(const struct inode *inode)
+ /* enable.c */
+ 
+ int fsverity_ioctl_enable(struct file *filp, const void __user *arg);
++int fsverity_enable_with_descriptor(struct file *filp,
++				    void *desc, size_t desc_size);
+ 
+ /* measure.c */
+ 
+@@ -147,6 +149,7 @@ int fsverity_ioctl_read_metadata(struct file *filp, const void __user *uarg);
+ bool fsverity_verify_page(struct page *page);
+ void fsverity_verify_bio(struct bio *bio);
+ void fsverity_enqueue_verify_work(struct work_struct *work);
++u64 fsverity_get_verified_data_size(const struct inode *inode);
+ 
+ #else /* !CONFIG_FS_VERITY */
+ 
+@@ -163,6 +166,12 @@ static inline int fsverity_ioctl_enable(struct file *filp,
+ 	return -EOPNOTSUPP;
+ }
+ 
++static inline int fsverity_enable_with_descriptor(struct file *filp,
++						  void *desc, size_t desc_size)
++{
++	return -EOPNOTSUPP;
++}
++
+ /* measure.c */
+ 
+ static inline int fsverity_ioctl_measure(struct file *filp, void __user *arg)
+@@ -213,8 +222,34 @@ static inline void fsverity_enqueue_verify_work(struct work_struct *work)
+ 	WARN_ON(1);
+ }
+ 
++static inline u64 fsverity_get_verified_data_size(const struct inode *inode)
++{
++	WARN_ON(1);
++	return inode->i_size;
++}
++
+ #endif	/* !CONFIG_FS_VERITY */
+ 
++#ifdef CONFIG_SECURITY_CODE_SIGN
++
++int fsverity_ioctl_enable_code_sign(struct file *filp, const void __user *uarg);
++int fsverity_get_cert_type(const struct inode *inode);
++
++#else /* !CONFIG_SECURITY_CODE_SIGN */
++
++static inline int fsverity_ioctl_enable_code_sign(struct file *filp,
++						  const void __user *uarg)
++{
++	return -EOPNOTSUPP;
++}
++
++static inline int fsverity_get_cert_type(const struct inode *inode)
++{
++	return 0;
++}
++
++#endif /* !CONFIG_SECURITY_CODE_SIGN */
++
+ /**
+  * fsverity_active() - do reads from the inode need to go through fs-verity?
+  * @inode: inode to check
+diff --git a/include/linux/oid_registry.h b/include/linux/oid_registry.h
+index 4462ed2c1..334fd5034 100644
+--- a/include/linux/oid_registry.h
++++ b/include/linux/oid_registry.h
+@@ -19,8 +19,14 @@
+ enum OID {
+ 	OID_id_dsa_with_sha1,		/* 1.2.840.10030.4.3 */
+ 	OID_id_dsa,			/* 1.2.840.10040.4.1 */
+-	OID_id_ecdsa_with_sha1,		/* 1.2.840.10045.4.1 */
+ 	OID_id_ecPublicKey,		/* 1.2.840.10045.2.1 */
++	OID_id_prime192v1,		/* 1.2.840.10045.3.1.1 */
++	OID_id_prime256v1,		/* 1.2.840.10045.3.1.7 */
++	OID_id_ecdsa_with_sha1,		/* 1.2.840.10045.4.1 */
++	OID_id_ecdsa_with_sha224,	/* 1.2.840.10045.4.3.1 */
++	OID_id_ecdsa_with_sha256,	/* 1.2.840.10045.4.3.2 */
++	OID_id_ecdsa_with_sha384,	/* 1.2.840.10045.4.3.3 */
++	OID_id_ecdsa_with_sha512,	/* 1.2.840.10045.4.3.4 */
+ 
+ 	/* PKCS#1 {iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1) pkcs-1(1)} */
+ 	OID_rsaEncryption,		/* 1.2.840.113549.1.1.1 */
+@@ -58,6 +64,7 @@ enum OID {
+ 
+ 	OID_certAuthInfoAccess,		/* 1.3.6.1.5.5.7.1.1 */
+ 	OID_sha1,			/* 1.3.14.3.2.26 */
++	OID_id_ansip384r1,		/* 1.3.132.0.34 */
+ 	OID_sha256,			/* 2.16.840.1.101.3.4.2.1 */
+ 	OID_sha384,			/* 2.16.840.1.101.3.4.2.2 */
+ 	OID_sha512,			/* 2.16.840.1.101.3.4.2.3 */
+@@ -113,10 +120,14 @@ enum OID {
+ 	OID_SM2_with_SM3,		/* 1.2.156.10197.1.501 */
+ 	OID_sm3WithRSAEncryption,	/* 1.2.156.10197.1.504 */
+ 
++	/* Code signature defined OIDS */
++	OID_ownerid,			/* 1.3.6.1.4.1.2011.2.376.1.4.1 */
++
+ 	OID__NR
+ };
+ 
+ extern enum OID look_up_OID(const void *data, size_t datasize);
++extern int parse_OID(const void *data, size_t datasize, enum OID *oid);
+ extern int sprint_oid(const void *, size_t, char *, size_t);
+ extern int sprint_OID(enum OID, char *, size_t);
+ 
+diff --git a/include/uapi/linux/fsverity.h b/include/uapi/linux/fsverity.h
+index 15384e22e..21225e3f2 100644
+--- a/include/uapi/linux/fsverity.h
++++ b/include/uapi/linux/fsverity.h
+@@ -100,4 +100,26 @@ struct fsverity_read_metadata_arg {
+ #define FS_IOC_READ_VERITY_METADATA \
+ 	_IOWR('f', 135, struct fsverity_read_metadata_arg)
+ 
++struct code_sign_enable_arg {
++	__u32 version;
++	__u32 hash_algorithm;
++	__u32 block_size;
++	__u32 salt_size;
++	__u64 salt_ptr;
++	__u32 sig_size;
++	__u32 __reserved1;
++	__u64 sig_ptr;
++	__u64 __reserved2[5];
++	__u32 __reserved3;
++	__u32 pgtypeinfo_size;
++	__u64 pgtypeinfo_off;
++	__u64 tree_offset;
++	__u64 root_hash_ptr;
++	__u64 data_size;
++	__u32 flags;
++	__u32 cs_version;
++};
++
++#define FS_IOC_ENABLE_CODE_SIGN _IOW('f', 200, struct code_sign_enable_arg)
++
+ #endif /* _UAPI_LINUX_FSVERITY_H */
+diff --git a/lib/oid_registry.c b/lib/oid_registry.c
+index f7ad43f28..3dfaa836e 100644
+--- a/lib/oid_registry.c
++++ b/lib/oid_registry.c
+@@ -11,6 +11,7 @@
+ #include <linux/kernel.h>
+ #include <linux/errno.h>
+ #include <linux/bug.h>
++#include <linux/asn1.h>
+ #include "oid_registry_data.c"
+ 
+ MODULE_DESCRIPTION("OID Registry");
+@@ -92,6 +93,29 @@ enum OID look_up_OID(const void *data, size_t datasize)
+ }
+ EXPORT_SYMBOL_GPL(look_up_OID);
+ 
++/**
++ * parse_OID - Parse an OID from a bytestream
++ * @data: Binary representation of the header + OID
++ * @datasize: Size of the binary representation
++ * @oid: Pointer to oid to return result
++ *
++ * Parse an OID from a bytestream that holds the OID in the format
++ * ASN1_OID | length | oid. The length indicator must equal to datasize - 2.
++ * -EBADMSG is returned if the bytestream is too short.
++ */
++int parse_OID(const void *data, size_t datasize, enum OID *oid)
++{
++	const unsigned char *v = data;
++
++	/* we need 2 bytes of header and at least 1 byte for oid */
++	if (datasize < 3 || v[0] != ASN1_OID || v[1] != datasize - 2)
++		return -EBADMSG;
++
++	*oid = look_up_OID(data + 2, datasize - 2);
++	return 0;
++}
++EXPORT_SYMBOL_GPL(parse_OID);
++
+ /*
+  * sprint_OID - Print an Object Identifier into a buffer
+  * @data: The encoded OID to print

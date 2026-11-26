@@ -9,8 +9,8 @@
    - 移植新机型时优先通过构建宏或运行时探测复用 `compat/`，避免复制整套源码。
 
 2. **`devices/<codename>/` — 机型专属资产隔离区**
-   - 每个机型独立维护自己的 `device.json`、`kernel/`（GKI 配置与导出补丁）、`runtime/`（按 `anco/`、`aod/`、`audio/`、`bluetooth/`、`camera/`、`init/`、`location/`、`motion/`、`nfc/`、`pinauth/`、`power/`、`sensors/`、`telephony/`、`thermal/`、`touch/`、`vibrator/`、`wifi/` 细分）与 `scripts/`。
-   - `devices/sheng/` 为已验证参考实现；`devices/marble/` 为当前目标机型实现（已完成 Batch M5 实机闭环）。
+   - 每个机型独立维护自己的 `device.json`、`kernel/`（GKI 配置、导出补丁与内核 `code_sign`/`fs-verity` 补丁）、`runtime/`（按 `anco/`、`aod/`、`audio/`、`bluetooth/`、`camera/`、`codesign/`、`init/`、`location/`、`motion/`、`nfc/`、`pinauth/`、`power/`、`sensors/`、`telephony/`、`thermal/`、`touch/`、`vibrator/`、`wifi/` 细分）与 `scripts/`。
+   - `devices/sheng/` 为已验证参考实现；`devices/marble/` 为当前目标机型实现（已完成 Batch M6 实机闭环）。
 
 3. **`patches/` — 受守卫的二进制补丁配方**
    - 仅保留当前在用的 donor / display / init 补丁配方（全文件 SHA-256 + 指令前后文校验），不存放闭源二进制本身。

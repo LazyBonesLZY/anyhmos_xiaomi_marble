@@ -24,8 +24,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 8850,
-      "sha256": "2a0bfae4c231a6cb960cd61c73c7dbc5c61ecbd3de9d4d68587ad60a3a79871d"
+      "bytes": 9627,
+      "sha256": "5da3aafb1eb948665bf729f4bdf8f1ec1e999d7c55615cdf39e586d832f1c2c5"
     },
     {
       "path": "archive/sheng/README.sheng.en.md",
@@ -1743,6 +1743,11 @@
       "sha256": "5a0bd173073e041806ca6aff3609b6c834fdfc3dc6569a173a3527416b0218f5"
     },
     {
+      "path": "compat/services/marble_ext4_verity_enable.c",
+      "bytes": 6201,
+      "sha256": "4c5c37ef3ae951be9bc3a57714da9258d52343d8d93edf58477bd1a04113d2c6"
+    },
+    {
       "path": "compat/services/marble_vulkan_native_clear.c",
       "bytes": 18025,
       "sha256": "b7a68412c0dc8dc6f9fd7717f11ad5d3f642054019b4e6fbf88a7c5a362939e9"
@@ -2259,8 +2264,8 @@
     },
     {
       "path": "devices/marble/README.md",
-      "bytes": 4839,
-      "sha256": "afd41beb974135bba88df15ff83daa744d1f90093d46df54ebd626907fde262d"
+      "bytes": 5254,
+      "sha256": "0ccd5db12663402154fe468ab55e15517a0edf4fec6fd3db0fe0aa34bc113c0f"
     },
     {
       "path": "devices/marble/boot/marble_init_entry.c",
@@ -2271,6 +2276,81 @@
       "path": "devices/marble/device.json",
       "bytes": 4139,
       "sha256": "dbe8da12dcba5ff0fb80d5565bad4da08208880809f058ab3db0a65e4434383f"
+    },
+    {
+      "path": "devices/marble/kernel/marble-codesign/crypto/ecdsa.c",
+      "bytes": 9371,
+      "sha256": "d197cda3a900a3520f2be4f1ea80a3661ebd71109181c292bc5f1c932bbc43bc"
+    },
+    {
+      "path": "devices/marble/kernel/marble-codesign/crypto/ecdsasignature.asn1",
+      "bytes": 111,
+      "sha256": "a0f28bbb31143b365415d3389b50bcdabc827ed715cecee558490b8b1faa68aa"
+    },
+    {
+      "path": "devices/marble/kernel/marble-codesign/fs/code_sign/Kconfig",
+      "bytes": 547,
+      "sha256": "a69669cae3f183b9be1f06b689d9ebae7e13804bb236c8b6e6883396bad678cb"
+    },
+    {
+      "path": "devices/marble/kernel/marble-codesign/fs/code_sign/Makefile",
+      "bytes": 306,
+      "sha256": "14a295dde45d2f490f6ff92ac5137800293f5d219c030680b69ea0e013c7da8f"
+    },
+    {
+      "path": "devices/marble/kernel/marble-codesign/fs/code_sign/code_sign_ext.c",
+      "bytes": 3136,
+      "sha256": "19d3a48f18cbd188922988ad6a63fc9b7180e42966a2a0ab593e3f3c9f575156"
+    },
+    {
+      "path": "devices/marble/kernel/marble-codesign/fs/code_sign/code_sign_ext.h",
+      "bytes": 710,
+      "sha256": "e75636f7b4ad0f7c93517c5341918899c508486362c85f8342396c6adc104d99"
+    },
+    {
+      "path": "devices/marble/kernel/marble-codesign/fs/code_sign/code_sign_ioctl.c",
+      "bytes": 9086,
+      "sha256": "122380c52fee33cb084638320683467f6e6b1299eed08fbb3b97b15b23b71f31"
+    },
+    {
+      "path": "devices/marble/kernel/marble-codesign/fs/code_sign/code_sign_ioctl.h",
+      "bytes": 1348,
+      "sha256": "4b395e8cdeff326520b1def75d67799c0622652fdc000356b37800dd628387df"
+    },
+    {
+      "path": "devices/marble/kernel/marble-codesign/fs/code_sign/code_sign_log.h",
+      "bytes": 751,
+      "sha256": "5288c835015c039163de97754862abfff565170d7283243a4b228ce268959dad"
+    },
+    {
+      "path": "devices/marble/kernel/marble-codesign/fs/code_sign/code_sign_misc.c",
+      "bytes": 1112,
+      "sha256": "e9066c492a437ce1c9266eaca82d3ba7e4634a36f25e7aa417fee257c2c00953"
+    },
+    {
+      "path": "devices/marble/kernel/marble-codesign/fs/code_sign/verify_cert_chain.c",
+      "bytes": 5589,
+      "sha256": "d6a951cfd43feec80e4b4cffb282da93dead01de5e52cbda81a00a86a6849000"
+    },
+    {
+      "path": "devices/marble/kernel/marble-codesign/fs/code_sign/verify_cert_chain.h",
+      "bytes": 384,
+      "sha256": "6d00ac12cb335d6db86475999296df4507f8eb6607a5f4182db9a7ce8cfe9227"
+    },
+    {
+      "path": "devices/marble/kernel/marble-codesign/include/linux/code_sign.h",
+      "bytes": 3769,
+      "sha256": "be390aa0455335fce3c1e411bfdcc80c758fcfa723bf69d1e0b3a068a0388e4a"
+    },
+    {
+      "path": "devices/marble/kernel/marble-codesign/include/linux/xpm_types.h",
+      "bytes": 400,
+      "sha256": "f10f3e8af4f69fcb70e76e4c4767df20a537e0cb2b234fb5c0363b7fcff2207a"
+    },
+    {
+      "path": "devices/marble/kernel/marble-codesign.patch",
+      "bytes": 64802,
+      "sha256": "89bbfdbecd6383eba46949a279543df8fd92a480ab7d130e7f0e74e23915df42"
     },
     {
       "path": "devices/marble/kernel/marble-exports/drivers/android/hmos_ipc_api_v1.h",
@@ -2391,6 +2471,11 @@
       "path": "devices/marble/runtime/codec/start-venus-marble.sh",
       "bytes": 2884,
       "sha256": "d8c5ac8d66ccfbfe9dd1005ccd292e9b569487e6ef045729ed52ca6904b99ef9"
+    },
+    {
+      "path": "devices/marble/runtime/codesign/init-m6-codesign-marble.cfg",
+      "bytes": 1823,
+      "sha256": "d0ba98356d1a3492105d5d2b5751a8482e316cd3ba2b721845f703b125fd0642"
     },
     {
       "path": "devices/marble/runtime/dcm/init-dcm-marble.cfg",
@@ -3254,8 +3339,8 @@
     },
     {
       "path": "docs/ARCHITECTURE.md",
-      "bytes": 2637,
-      "sha256": "7a8e2bbf7f694b9dd3a2b7a78e72982b7108057fdf16138a994a84045cc000f3"
+      "bytes": 2691,
+      "sha256": "eb4eff3ab7d4f930cd904dc5f9f7ec161722bb62f3f1fb671388b6e6a70e34d8"
     },
     {
       "path": "docs/BUILDING.md",
@@ -3264,8 +3349,8 @@
     },
     {
       "path": "docs/MARBLE_BATCH_PLAN.md",
-      "bytes": 269679,
-      "sha256": "83ad883b544cd7415e4c12adf0691a73cbbe4800bbe034955570dd344eafad29"
+      "bytes": 273971,
+      "sha256": "540be2e6489dc8e13f33de7e7f8039961010cf15a70b493df8baf220df29afb7"
     },
     {
       "path": "docs/MARBLE_DCM_SOFT_TEE.md",
@@ -3274,8 +3359,8 @@
     },
     {
       "path": "docs/MARBLE_EXPECTED_AFTER_FLASH.md",
-      "bytes": 10407,
-      "sha256": "877c424f7b764f0d8b07f12100a768b53efc4aa38c1bb6fe3de1867942b4628b"
+      "bytes": 12195,
+      "sha256": "a198505ae6cac4d1595d86f6ed48ce2dd3e8c3f4d2c5079a424e80f3a233cf77"
     },
     {
       "path": "docs/MARBLE_FIX_MATRIX.md",
@@ -3284,8 +3369,8 @@
     },
     {
       "path": "docs/MARBLE_HANDOFF.md",
-      "bytes": 30641,
-      "sha256": "ab3f212e142c6ab854db5374ae36c9f998cbf8e65dd118e8b28c541f4f9735df"
+      "bytes": 34360,
+      "sha256": "e90e76b32234656204ad93b28f0b260a3aae5272902363081ce53a802f25cbca"
     },
     {
       "path": "docs/MARBLE_IDENTITY.md",
@@ -3299,8 +3384,8 @@
     },
     {
       "path": "docs/MARBLE_PORTING_PLAN.md",
-      "bytes": 5384,
-      "sha256": "6f6fe14393496a76bc5dbc1dbf0396d4decf0023358961b8b244f11abd7e87ea"
+      "bytes": 5650,
+      "sha256": "3cb9c9ee5a4eb996183fa536012db6b016376d6c6daedf5fefd8cd7ca36a88cc"
     },
     {
       "path": "docs/PACKAGING.md",
@@ -3324,8 +3409,8 @@
     },
     {
       "path": "docs/VERIFICATION.md",
-      "bytes": 55463,
-      "sha256": "d0c88f8177b1345742e3d30cf57186d02d310e5290d325bbe2f09a8fcd0c87a4"
+      "bytes": 57474,
+      "sha256": "9e4addb4367bb2f5f05a6600c633d9e0fd5130ba844485ba6d9393cd2f9e2e03"
     },
     {
       "path": "external/dependency-records/build-report.json",
@@ -4153,6 +4238,11 @@
       "sha256": "dce3feff072033f2c563a2d7daafedd672e2a16422647d5c5b5eaad355dd0e99"
     },
     {
+      "path": "tests/test_marble_m6.py",
+      "bytes": 7192,
+      "sha256": "8d3b433d038ee26ee00f4e62a99bfc46b69accd87d36a6702e0d1b28dd42a496"
+    },
+    {
       "path": "tests/test_marble_media_fixture.py",
       "bytes": 5162,
       "sha256": "067587b15e4305081a78dd80da0781518eeb8a5fddb3895fb83d48782bd2448a"
@@ -4509,8 +4599,8 @@
     },
     {
       "path": "tools/build/build_marble_kernel.sh",
-      "bytes": 11888,
-      "sha256": "4d98a1907b9e8d4278cfb46eb9829a7fd79cac27becb1111108b66fe8e67495d"
+      "bytes": 12247,
+      "sha256": "0ef94c13042d62b9c91daa606010b7984b120de63004ee318e835f608d5eb0b1"
     },
     {
       "path": "tools/build/build_sensors.py",
@@ -4786,6 +4876,11 @@
       "path": "tools/packaging/build_marble_h20_m5_fixes.py",
       "bytes": 25382,
       "sha256": "da15c2a94c83e887d9f077e0a87270917912968492b26ddfefa2abece0a47dea"
+    },
+    {
+      "path": "tools/packaging/build_marble_h20_m6_codesign.py",
+      "bytes": 25373,
+      "sha256": "23ff39909f92d5706dcf55892d208471240d088c814f09f79d725d96debacd0e"
     },
     {
       "path": "tools/packaging/build_marble_h20_u1_ux_security.py",

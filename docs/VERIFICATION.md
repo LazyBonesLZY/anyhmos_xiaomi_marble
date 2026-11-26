@@ -4,9 +4,18 @@
 
 The following summarizes local device tests. Private raw logs, app telemetry, network identifiers and screenshots are excluded. Build reports and hashes identify artifacts; they do not independently establish hardware functionality.
 
+## Marble Batch M6（2026-11-27）：内核 `code_sign` / `fs-verity` / ECDSA 移植与真机 HAP 完整验签安装
+
+当前真机基线 `boot_a = f80fe1b1e47dcae5c759beb7f8005279beb79804b6414da40f3379aea423ee6a` + `vendor_boot_a = 577e5a5eecf784580d64960757f5d7a271d186dac27f63358eb7d5c14281bc45`（冷启动 `BOOT_ID = 52d5c34b-ba82-46a6-8679-2b1099e2e688`，保留 `userdata` 及原厂底层分区）：
+
+- **KABI 与构建审计**：Linux `5.10.274-Bouquet-anyhmos #4` 移植 OpenHarmony `fs/code_sign/`、`FS_IOC_ENABLE_CODE_SIGN`（ext4 + f2fs）、ECDSA NIST P-256/P-384 与 PKCS#7 `OID_ownerid`；657 个厂商模块（31,941 条 `vmlinux` 符号链接）`crc_mismatches=0`、`vermagic_mismatches=0`，真机 `LSMOD_COUNT=242`、`MOD_ERRORS=0`。
+- **零旁路配置与 ext4 `verity`**：移除旧 Phase 3 `libcode_sign_utils.z.so` 旁路补丁，实机 `/system/lib64/libcode_sign_utils.z.so` 为原版供体（`2dd39556…`）；`marble_ext4_verity_enable` 经内核日志回放后无损置位 `userdata` `s_feature_ro_compat = 0x0000807b`；`/dev/code_sign` (`10:127`)、`/proc/sys/fs/verity/{require_signatures,developer_mode}=1`、`.fs-verity` 密钥环（`fs_verity_key0: X509.ecdsa-nist-p384`）与 `key_enable`/`local_code_sign` 均正常工作。
+- **正控实测**：华为 AGC 调试签名 HAP（`com.lazzyy.test`）经官方 `bm install` 返回 `install bundle successfully.` 并上线桌面；内核对主包 `entry.hap` 及全部 9 个 `libs/arm64/*.so` 均完成 `sha256-ce` + `code_sign_verify_certchain` 验签；`lsattr` 实测 10/10 文件均带 `V`（`FS_VERITY_FL`），全页读回 `sha256sum` 零错误且写入被内核拒绝（`Operation not permitted`）。
+- **负控实测**：未签名同包被严格拒绝（`code:9568320 error: no signature file.`）；1 字节篡改已签名包被严格拒绝（`code:9568324 error: signature verification failed due to out of integrity.`）。详见 [MARBLE_BATCH_PLAN.md](MARBLE_BATCH_PLAN.md) 与 [MARBLE_HANDOFF.md](MARBLE_HANDOFF.md)。
+
 ## Marble Batch M5（2026-11-26）：7 项实机问题集中修复与复验
 
-当前真机基线 `vendor_boot_a = c4b6a64f857fac5f144662b7240ef147c0687a77f87c0e60b6fac6fbf23a2f07`（冷启动 `BOOT_ID = f93f2eb6-4e82-49d9-ae5d-92fbd94b289b`，`boot_a = c83a8468…` 未动，保留 `userdata`）：
+历史基线 `vendor_boot_a = c4b6a64f857fac5f144662b7240ef147c0687a77f87c0e60b6fac6fbf23a2f07`（冷启动 `BOOT_ID = f93f2eb6-4e82-49d9-ae5d-92fbd94b289b`，`boot_a = c83a8468…` 未动，保留 `userdata`）：
 
 - **IMS 短信真实发包通过**：修正 `QMI_WMS_BIND_SUBSCRIPTION (0x004c)` 及 3GPP `SMS-SUBMIT` (`tech=1`) 路由后，冷启动真机自动发出 3GPP IMS 短信首包即通过运营商网络受理（`IMS_SMS_SEND slot=1 tech=1 att=0 fmt=0x06 ims=1 sc=9 tpdu=124 pdu=133 rc=0 qerr=0x0` → `IMS_SMS_CB_DONE ok=1 ref=193 err=0 ipc_rc=0`）。
 - **HD VoLTE/VoNR 通话接口就绪**：`ImsCallStub` 与 `libril_vendor_qmi` 去重上线，真机 `CellularCall` 回执 `RegisterImsCallCallback success`、`GetImsCallProxy success`、`[slot1] GetImsSwitchStatusResponse active 1, isVolteSupport 1`，`ImsCallRemoteObjectPtr is nullptr` 为 `0`；真实双端语音体验待人工拨打复测。
